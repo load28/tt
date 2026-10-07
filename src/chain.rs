@@ -64,9 +64,23 @@ impl<T> Chain<T> {
     pub(crate) fn identity(&self) -> usize {
         self.0.as_ref().map_or(0, |link| Arc::as_ptr(link) as usize)
     }
+
+    pub(crate) fn fresh(&self, seen: &mut std::collections::HashSet<usize>) -> Vec<&T> {
+        let mut found = Vec::new();
+        let mut at = self;
+        while let Some(link) = at.0.as_deref() {
+            if !seen.insert(at.identity()) {
+                break;
+            }
+            found.push(&link.item);
+            at = &link.rest;
+        }
+        found
+    }
 }
 
 impl<T: Clone> Chain<T> {
+    #[cfg(test)]
     pub(crate) fn from_vec(items: Vec<T>) -> Self {
         items
             .into_iter()
@@ -170,6 +184,25 @@ impl<T> ChainSlice<T> {
         Self { chain, len }
     }
 
+    pub(crate) fn chain(&self) -> &Chain<T> {
+        &self.chain
+    }
+
+    pub(crate) fn fresh(&self, covered: &mut std::collections::HashMap<usize, usize>) -> Vec<&T> {
+        let mut found = Vec::new();
+        for (identity, remaining, item) in self.links() {
+            if covered
+                .get(&identity)
+                .is_some_and(|&seen| seen >= remaining)
+            {
+                break;
+            }
+            covered.insert(identity, remaining);
+            found.push(item);
+        }
+        found
+    }
+
     pub(crate) fn len(&self) -> usize {
         self.len
     }
@@ -207,6 +240,33 @@ impl<T> ChainSlice<T> {
 
     pub(crate) fn is_whole(&self) -> bool {
         self.len == self.chain.len()
+    }
+
+    pub(crate) fn links(&self) -> Links<'_, T> {
+        Links {
+            chain: &self.chain,
+            left: self.len,
+        }
+    }
+}
+
+pub(crate) struct Links<'a, T> {
+    chain: &'a Chain<T>,
+    left: usize,
+}
+
+impl<'a, T> Iterator for Links<'a, T> {
+    type Item = (usize, usize, &'a T);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.left == 0 {
+            return None;
+        }
+        let link = self.chain.0.as_deref()?;
+        let item = (self.chain.identity(), self.left, &link.item);
+        self.chain = &link.rest;
+        self.left -= 1;
+        Some(item)
     }
 }
 
@@ -323,6 +383,21 @@ impl<T> Segments<T> {
 
     pub(crate) fn first(&self) -> Option<&T> {
         self.iter().next()
+    }
+
+    pub(crate) fn unseen(&self, seen: &std::collections::HashSet<usize>) -> (Vec<usize>, Vec<&T>) {
+        let mut found = Vec::new();
+        let mut identities = Vec::new();
+        let mut at = self;
+        while let Some(segment) = at.0.as_deref() {
+            if seen.contains(&at.identity()) {
+                break;
+            }
+            identities.push(at.identity());
+            found.push(segment.own.as_slice());
+            at = &segment.earlier;
+        }
+        (identities, found.into_iter().rev().flatten().collect())
     }
 
     pub(crate) fn fresh(&self, seen: &mut std::collections::HashSet<usize>) -> Vec<&T> {

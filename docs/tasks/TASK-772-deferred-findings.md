@@ -1,5 +1,9 @@
 # TASK-772: Fix the deferred findings of earlier audits
 
+> TASK-776 reverses the "Not changed" part of decision 2: an overlay's
+> ancestor path is now a shared parent chain whose facts are folded once per
+> edge, so recording it is no longer quadratic in depth.
+
 - **Status**: Complete
 - **Started**: 2026-10-06
 - **Completed**: 2026-10-06

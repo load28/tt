@@ -70,6 +70,34 @@ fn every_request_does_linear_work_in_the_number_of_expression_matches() {
     assert!(large["concise arrow scans"] > 0);
 }
 
+fn joined_matches(count: usize, separator: &str) -> String {
+    format!(
+        "variant V {{ A, B }}\ndeclare const v: V;\ndeclare const c: boolean;\nexport const x = [{}];\nexport function g() {{ {}0{} }}\n",
+        vec!["match (v) { A => 1, B => 2 }"; count].join(separator),
+        "if (c) { const y = match (v) { A => 1, B => 2 }; ".repeat(count),
+        " }".repeat(count),
+    )
+}
+
+#[test]
+fn compiling_does_linear_work_in_the_tt_values_of_one_expression() {
+    for separator in [", ", " + "] {
+        let compile = |count| {
+            crate::compile(
+                &joined_matches(count, separator),
+                &crate::Options::default(),
+            )
+            .expect("the file compiles")
+        };
+        let small = measure(|| compile(100));
+        let large = measure(|| compile(200));
+        assert_linear(&small, &large);
+        assert!(large["protocol step links"] > 0);
+        assert!(large["parent path edges"] > 0);
+        assert!(large["planned evaluation steps"] > 0);
+    }
+}
+
 fn nested_matches(depth: usize) -> String {
     format!(
         "export variant V {{ A(v: V), B }}\ndeclare const a: V;\nexport const x = {}1{};\nexport function f() {{ {}g();{} }}\n",

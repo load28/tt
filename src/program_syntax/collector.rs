@@ -211,8 +211,9 @@ pub(super) struct ParentCollector {
     pub(super) duplicates: Vec<TtNodeId>,
     pub(super) source_segments: ProjectionSegments,
     pub(super) projection_only_protocol_parents: HashSet<ProjectedSpan>,
-    pub(super) host_owners: Vec<ProjectedHostOwner>,
-    pub(super) protocol_frames: Vec<std::rc::Rc<ProjectedProtocolFrame>>,
+    pub(super) host_owners: Stack<ProjectedHostOwner>,
+    pub(super) protocol_frames: Stack<std::rc::Rc<ProjectedProtocolFrame>>,
+    pub(super) parent_marks: Vec<(usize, Option<super::parents::ParentPath>)>,
     pub(super) occupied_names: HashSet<String>,
     pub(super) function_depth: usize,
     pub(super) function_targets: Vec<EvaluationOwner>,
@@ -247,22 +248,48 @@ pub(super) struct CollectedProgramSyntax {
 }
 
 pub(super) struct FoundOverlay {
-    pub(super) ambient: bool,
-    pub(super) decorated_classes: Vec<usize>,
-    pub(super) decision_functions: Vec<usize>,
-    pub(super) parents: Vec<AstParentKind>,
-    pub(super) host_owners: Vec<ProjectedHostOwner>,
+    pub(super) parents: super::parents::ParentPath,
+    pub(super) host_owners: crate::chain::Chain<ProjectedHostOwner>,
     /// The frames enclosing the overlay, shared with every other overlay
     /// under them: a frame lists all of its positions, so copying it per
     /// overlay would cost each sibling the size of the whole list.
-    pub(super) protocol_frames: Vec<std::rc::Rc<ProjectedProtocolFrame>>,
+    pub(super) protocol_frames: Stack<std::rc::Rc<ProjectedProtocolFrame>>,
     pub(super) exits: Vec<ProjectedHostExit>,
     pub(super) function_target: Option<EvaluationOwner>,
     pub(super) contextual_type: Option<ProjectedSpan>,
     pub(super) assertion: Option<Option<ProjectedSpan>>,
-    pub(super) loop_head_reads: bool,
     pub(super) function_return_type: Option<ProjectedSpan>,
     pub(super) function_return_awaited: bool,
+}
+
+pub(super) struct Stack<T>(crate::chain::Chain<T>);
+
+impl<T> Default for Stack<T> {
+    fn default() -> Self {
+        Stack(crate::chain::Chain::new())
+    }
+}
+
+impl<T> Clone for Stack<T> {
+    fn clone(&self) -> Self {
+        Stack(self.0.clone())
+    }
+}
+
+impl<T> Stack<T> {
+    pub(super) fn push(&mut self, item: T) {
+        let rest = std::mem::take(&mut self.0);
+        self.0 = crate::chain::Chain::cons(item, rest);
+    }
+
+    pub(super) fn pop(&mut self) {
+        let rest = self.0.rest().cloned().unwrap_or_default();
+        self.0 = rest;
+    }
+
+    pub(super) fn chain(&self) -> &crate::chain::Chain<T> {
+        &self.0
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -327,6 +354,7 @@ pub(super) enum ProjectedProtocolFrame {
         /// For a call in an optional chain, the link that decides whether
         /// it is evaluated.
         optional: Option<OptionalCallTest>,
+        spread_free: bool,
     },
     Member {
         parent: ProjectedSpan,
@@ -418,6 +446,9 @@ pub(super) struct ProjectedHostOwner {
     /// a value's parent path here leaves exactly the edges between the owner
     /// and the value ([`owner_reach`]).
     pub(super) edge: usize,
+    pub(super) iteration: bool,
+    pub(super) labeled: bool,
+    pub(super) unbraced: bool,
     pub(super) split: Option<ProjectedDeclaratorSplit>,
 }
 

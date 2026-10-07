@@ -2,13 +2,93 @@
 
 use super::*;
 
+type ScopeKey = (ProjectedSpan, Option<ProjectedSpan>, bool);
+
+pub(super) struct ProtocolScope {
+    pub(super) owner: ProjectedSpan,
+    pub(super) overlay: Option<ProjectedSpan>,
+    pub(super) decision: bool,
+}
+
+#[derive(Clone, Copy)]
+struct CompletionTrack {
+    parent: ProjectedSpan,
+    argument: ProjectedSpan,
+    discarded: bool,
+    type_args: Option<ProjectedSpan>,
+    literal: bool,
+    target: ProjectedSpan,
+}
+
+#[derive(Clone, Default)]
+pub(super) struct OuterState {
+    steps: crate::chain::Chain<HostEvaluationStep>,
+    completion: Option<CompletionTrack>,
+}
+
 pub(super) fn evaluation_protocol(
     segments: &ProjectionSegments,
     value: ProjectedSpan,
     source_value: SourceSpan,
-    frames: &[std::rc::Rc<ProjectedProtocolFrame>],
+    frames: &crate::chain::Chain<std::rc::Rc<ProjectedProtocolFrame>>,
+    scope: ProtocolScope,
+    projection_only: &HashSet<ProjectedSpan>,
     links: &mut StepLinks,
 ) -> Result<HostEvaluationProtocol, ProgramSyntaxError> {
+    let scope_key = (scope.owner, scope.overlay, scope.decision);
+    let mut walked = Vec::new();
+    let mut state = OuterState::default();
+    let mut at = frames;
+    while let (Some(frame), Some(rest)) = (at.first(), at.rest()) {
+        let parent = frame.parent();
+        if !projected_contains(scope.owner, parent)
+            || scope
+                .overlay
+                .is_some_and(|ancestor| projected_contains(parent, ancestor))
+        {
+            break;
+        }
+        walked.push(at);
+        if let Some(found) = links.outer.get(&(at.identity(), scope_key)) {
+            state = found.clone();
+            break;
+        }
+        at = rest;
+    }
+    let mut shared = true;
+    for link in walked.into_iter().rev() {
+        if shared {
+            links
+                .outer
+                .entry((link.identity(), scope_key))
+                .or_insert_with(|| state.clone());
+        }
+        let Some(frame) = link.first() else {
+            continue;
+        };
+        if projection_only.contains(&frame.parent())
+            || (matches!(&**frame, ProjectedProtocolFrame::LoopTest { .. }) && !scope.decision)
+        {
+            continue;
+        }
+        let selection = step_selection(frame, value);
+        state.completion = advance_completion(state.completion, frame, value);
+        let Some(selection) = selection else {
+            continue;
+        };
+        state.steps = link_step(
+            segments,
+            value,
+            source_value,
+            frame,
+            selection,
+            std::mem::take(&mut state.steps),
+            links,
+        )?;
+        if selection == StepSelection::LoopTest {
+            shared = false;
+        }
+    }
     // The innermost call whose final non-spread argument contains the value.
     // Earlier arguments evaluate before the value and are captured by the
     // schedule; an argument after the value would have to run inside the
@@ -19,132 +99,124 @@ pub(super) fn evaluation_protocol(
     // each arm. Whether that is legal depends on what that text evaluates,
     // which is the schedule's answer, not syntax's: this records the
     // argument's extent and leaves the decision to target planning.
-    let call_completion = frames
-        .iter()
-        .enumerate()
-        .rev()
-        .find_map(|(index, frame)| match &**frame {
-            ProjectedProtocolFrame::Call {
-                discarded,
-                parent,
-                callee: Some(_),
-                arguments,
-                type_args,
-                optional: None,
-                ..
-            } if matches!(arguments.last(), Some((argument, false, _)) if projected_contains(*argument, value))
-                && arguments.iter().all(|(_, spread, _)| !*spread) =>
-            {
-                let argument = arguments
-                    .last()
-                    .unwrap_or_else(|| crate::ice::bug!("a matched final argument is present"))
-                    .0;
-                Some((index, *parent, argument, *discarded, *type_args))
-            }
-            _ => None,
-        })
-        .map(|(index, span, argument, discarded, type_args)| {
+    let call_completion = state
+        .completion
+        .map(|track| {
             Ok::<_, ProgramSyntaxError>(CallCompletionFacts {
-                call: map_structural_span(segments, span)?,
-                argument: map_structural_span(segments, argument)?,
-                literal_positions: literal_position_chain(&frames[index + 1..], argument, value),
-                consumed: !discarded,
-                type_args: type_args
+                call: map_structural_span(segments, track.parent)?,
+                argument: map_structural_span(segments, track.argument)?,
+                literal_positions: track.literal && track.target == value,
+                consumed: !track.discarded,
+                type_args: track
+                    .type_args
                     .map(|span| map_evaluation_span(segments, span))
                     .transpose()?,
             })
         })
         .transpose()?;
-    let mut steps = crate::chain::Chain::new();
-    for frame in frames {
-        let Some(selection) = step_selection(frame, value) else {
-            continue;
-        };
-        let key = (
-            steps.identity(),
-            std::rc::Rc::as_ptr(frame) as usize,
-            selection,
-            (selection == StepSelection::LoopTest).then_some(value),
-        );
-        steps = match links.links.get(&key) {
-            Some(link) => link.clone(),
-            None => {
-                let siblings = (key.0, key.1);
-                let earlier = match selection {
-                    StepSelection::Position(position) => links
-                        .siblings
-                        .get(&siblings)
-                        .filter(|(earlier, _)| *earlier <= position),
-                    _ => None,
-                };
-                let step = protocol_step(
-                    segments,
-                    value,
-                    source_value,
-                    frame,
-                    selection,
-                    earlier.map(|(position, inputs)| (*position, inputs)),
-                )?;
-                if let StepSelection::Position(position) = selection {
-                    links
-                        .siblings
-                        .insert(siblings, (position, step.inputs.clone()));
-                }
-                let link = crate::chain::Chain::cons(step, steps);
-                links.links.insert(key, link.clone());
-                link
-            }
-        };
-    }
     Ok(HostEvaluationProtocol {
-        steps,
+        steps: state.steps,
         call_completion,
     })
 }
 
-/// Whether the path from `argument` down to `value` runs only through whole
-/// object- and array-literal positions.
+fn link_step(
+    segments: &ProjectionSegments,
+    value: ProjectedSpan,
+    source_value: SourceSpan,
+    frame: &std::rc::Rc<ProjectedProtocolFrame>,
+    selection: StepSelection,
+    steps: crate::chain::Chain<HostEvaluationStep>,
+    links: &mut StepLinks,
+) -> Result<crate::chain::Chain<HostEvaluationStep>, ProgramSyntaxError> {
+    let key = (
+        steps.identity(),
+        std::rc::Rc::as_ptr(frame) as usize,
+        selection,
+        (selection == StepSelection::LoopTest).then_some(value),
+    );
+    if let Some(link) = links.links.get(&key) {
+        return Ok(link.clone());
+    }
+    crate::work::tick("protocol step links");
+    let siblings = (key.0, key.1);
+    let earlier = match selection {
+        StepSelection::Position(position) => links
+            .siblings
+            .get(&siblings)
+            .filter(|(earlier, _)| *earlier <= position),
+        _ => None,
+    };
+    let step = protocol_step(
+        segments,
+        value,
+        source_value,
+        frame,
+        selection,
+        earlier.map(|(position, inputs)| (*position, inputs)),
+    )?;
+    if let StepSelection::Position(position) = selection {
+        links
+            .siblings
+            .insert(siblings, (position, step.inputs.clone()));
+    }
+    let link = crate::chain::Chain::cons(step, steps);
+    links.links.insert(key, link.clone());
+    Ok(link)
+}
+
+/// Whether the path from the completed call's final argument down to the
+/// value runs only through whole object- and array-literal positions.
 ///
 /// That is what makes the text around the value re-emittable: a literal
 /// position holds one complete expression, so replacing it with an arm's
 /// value leaves the rest of the literal meaning what it meant. Anything else
 /// between them — a cast, an operator, a call — binds to the value, and
 /// re-emitting its text around a different expression would rebind it.
-///
-/// `frames` are the value's enclosing frames below the call, outermost
-/// first. Every one of them encloses the value, so a frame that is not the
-/// literal the walk expects ends the chain.
-fn literal_position_chain(
-    frames: &[std::rc::Rc<ProjectedProtocolFrame>],
-    argument: ProjectedSpan,
+fn advance_completion(
+    track: Option<CompletionTrack>,
+    frame: &ProjectedProtocolFrame,
     value: ProjectedSpan,
-) -> bool {
-    let mut target = argument;
-    for frame in frames {
-        if target == value {
-            return false;
-        }
-        let ProjectedProtocolFrame::Ordered {
+) -> Option<CompletionTrack> {
+    if let ProjectedProtocolFrame::Call {
+        discarded,
+        parent,
+        callee: Some(_),
+        arguments,
+        type_args,
+        optional: None,
+        spread_free: true,
+        ..
+    } = frame
+        && let Some((argument, false, _)) = arguments.last()
+        && projected_contains(*argument, value)
+    {
+        return Some(CompletionTrack {
+            parent: *parent,
+            argument: *argument,
+            discarded: *discarded,
+            type_args: *type_args,
+            literal: true,
+            target: *argument,
+        });
+    }
+    let mut track = track?;
+    if track.literal {
+        track.literal = false;
+        if let ProjectedProtocolFrame::Ordered {
             parent,
             positions,
             kind: OrderedEvaluationKind::Object | OrderedEvaluationKind::Array,
             spread_free: true,
-        } = &**frame
-        else {
-            return false;
-        };
-        if *parent != target {
-            return false;
+        } = frame
+            && *parent == track.target
+            && let Some(position) = position_holding(positions, |(span, ..)| *span, value)
+        {
+            track.literal = true;
+            track.target = positions[position].0;
         }
-        let Some((position, ..)) = positions
-            .iter()
-            .find(|(span, ..)| projected_contains(*span, value))
-        else {
-            return false;
-        };
-        target = *position;
     }
-    target == value
+    Some(track)
 }
 
 /// The projected shape of one conditional operation, before span mapping.
@@ -158,6 +230,7 @@ pub(super) struct ProjectedConditionalFacts {
 
 #[derive(Default)]
 pub(super) struct StepLinks {
+    outer: HashMap<(usize, ScopeKey), OuterState>,
     links: HashMap<
         (usize, usize, StepSelection, Option<ProjectedSpan>),
         crate::chain::Chain<HostEvaluationStep>,

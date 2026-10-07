@@ -87,8 +87,9 @@ impl ParentCollector {
                 .iter()
                 .copied()
                 .collect(),
-            host_owners: Vec::new(),
-            protocol_frames: Vec::new(),
+            host_owners: Stack::default(),
+            protocol_frames: Stack::default(),
+            parent_marks: Vec::new(),
             occupied_names: HashSet::new(),
             function_depth: 0,
             function_targets: Vec::new(),
@@ -142,64 +143,83 @@ impl ParentCollector {
         }
     }
 
-    pub(super) fn record_overlay(&mut self, id: TtNodeId, path: &AstNodePath<'_>) {
-        let ambient = path.iter().any(|parent| {
-            matches!(parent, swc_ecma_visit::AstParentNodeRef::TsModuleDecl(decl, _) if decl.declare)
-        });
-        let decorated_classes = path
-            .iter()
-            .enumerate()
-            .filter_map(|(index, parent)| match parent {
-                swc_ecma_visit::AstParentNodeRef::Class(class, _)
-                    if !class.decorators.is_empty() =>
-                {
-                    Some(index)
-                }
-                _ => None,
-            })
-            .collect();
-        let decision_functions = path
-            .iter()
-            .enumerate()
-            .filter_map(|(index, parent)| {
-                let span = match parent {
-                    swc_ecma_visit::AstParentNodeRef::ArrowExpr(
-                        arrow,
-                        swc_ecma_visit::fields::ArrowExprField::Body,
-                    ) => arrow.span,
-                    swc_ecma_visit::AstParentNodeRef::Function(
-                        function,
-                        swc_ecma_visit::fields::FunctionField::Body,
-                    ) => function.span,
-                    _ => return None,
-                };
+    fn edge_node(&self, parent: &swc_ecma_visit::AstParentNodeRef<'_>) -> EdgeNode {
+        use swc_ecma_visit::AstParentNodeRef;
+        let decision_span = match parent {
+            AstParentNodeRef::ArrowExpr(arrow, swc_ecma_visit::fields::ArrowExprField::Body) => {
+                Some(arrow.span)
+            }
+            AstParentNodeRef::Function(function, swc_ecma_visit::fields::FunctionField::Body) => {
+                Some(function.span)
+            }
+            _ => None,
+        };
+        EdgeNode {
+            ambient: matches!(parent, AstParentNodeRef::TsModuleDecl(decl, _) if decl.declare),
+            decorated_class: matches!(
+                parent,
+                AstParentNodeRef::Class(class, _) if !class.decorators.is_empty()
+            ),
+            decision_function: decision_span.is_some_and(|span| {
                 self.decision_functions
                     .contains(&projected_span(span, self.source_start))
-                    .then_some(index)
-            })
-            .collect();
-        let loop_head_reads = path
-            .iter()
-            .rev()
-            .find_map(|parent| match parent {
-                swc_ecma_visit::AstParentNodeRef::ForStmt(
-                    head,
-                    swc_ecma_visit::fields::ForStmtField::Init,
-                ) => Some(*head),
+            }),
+            loop_head_reads: match parent {
+                AstParentNodeRef::ForStmt(head, swc_ecma_visit::fields::ForStmtField::Init) => {
+                    Some(self.loop_head_reads(head))
+                }
                 _ => None,
-            })
-            .is_some_and(|head| self.loop_head_reads(head));
+            },
+        }
+    }
+
+    fn extend_parents(
+        &self,
+        mut parents: ParentPath,
+        path: &AstNodePath<'_>,
+        depth: usize,
+    ) -> ParentPath {
+        for index in parents.len()..depth {
+            parents = parents.push(path.kinds()[index], self.edge_node(&path[index]));
+        }
+        parents
+    }
+
+    fn parents(&mut self, path: &AstNodePath<'_>) -> ParentPath {
+        let mut marks = std::mem::take(&mut self.parent_marks);
+        let first = marks
+            .iter()
+            .rposition(|(_, parents)| parents.is_some())
+            .map_or(0, |index| index + 1);
+        let mut parents = first
+            .checked_sub(1)
+            .and_then(|index| marks[index].1.clone())
+            .unwrap_or_default();
+        for (depth, mark) in &mut marks[first..] {
+            parents = self.extend_parents(parents, path, *depth);
+            *mark = Some(parents.clone());
+        }
+        self.parent_marks = marks;
+        self.extend_parents(parents, path, path.len())
+    }
+
+    pub(super) fn enter_parents(&mut self, path: &AstNodePath<'_>) {
+        self.parent_marks.push((path.len(), None));
+    }
+
+    pub(super) fn leave_parents(&mut self) {
+        self.parent_marks.pop();
+    }
+
+    pub(super) fn record_overlay(&mut self, id: TtNodeId, path: &AstNodePath<'_>) {
+        let parents = self.parents(path);
         if self
             .found
             .insert(
                 id,
                 FoundOverlay {
-                    loop_head_reads,
-                    ambient,
-                    decorated_classes,
-                    decision_functions,
-                    parents: path.kinds().to_vec(),
-                    host_owners: self.host_owners.clone(),
+                    parents,
+                    host_owners: self.host_owners.chain().clone(),
                     protocol_frames: self.protocol_frames.clone(),
                     exits: Vec::new(),
                     function_target: self.function_targets.last().copied(),
@@ -245,30 +265,30 @@ impl ParentCollector {
                 .found
                 .remove(&entry.id)
                 .ok_or(ProgramSyntaxError::MissingOverlay { id: entry.id })?;
-            let (owner_index, projected_owner, kind, span) = found
-                .host_owners
-                .iter()
-                .enumerate()
-                .rev()
-                .filter(|(_, owner)| {
-                    owner.span.start <= entry.projected.start
-                        && entry.projected.end <= owner.span.end
-                })
-                .find_map(|(index, owner)| {
-                    source_span_for_projection(&self.source_segments, owner.span)
-                        .map(|span| (index, *owner, owner.kind, span))
-                })
+            let (owner_chain, projected_owner, kind, span) =
+                std::iter::successors(Some(&found.host_owners), |owners| owners.rest())
+                    .find_map(|owners| {
+                        let owner = owners.first().filter(|owner| {
+                            owner.span.start <= entry.projected.start
+                                && entry.projected.end <= owner.span.end
+                        })?;
+                        source_span_for_projection(&self.source_segments, owner.span)
+                            .map(|span| (owners, *owner, owner.kind, span))
+                    })
+                    .ok_or(ProgramSyntaxError::MissingOverlay { id: entry.id })?;
+            let projected_anchor = prelude_anchor(owner_chain)
                 .ok_or(ProgramSyntaxError::MissingOverlay { id: entry.id })?;
-            let projected_anchor =
-                prelude_anchor(&found.host_owners[..=owner_index], &found.parents);
             let anchor = source_span_for_projection(&self.source_segments, projected_anchor.span)
                 .ok_or(ProgramSyntaxError::MissingOverlay { id: entry.id })?;
-            let statement_index = found.host_owners[..=owner_index]
-                .iter()
-                .rposition(|owner| owner.kind != HostOwnerKind::Declarator)
-                .unwrap_or(owner_index);
-            let projected_statement =
-                prelude_anchor(&found.host_owners[..=statement_index], &found.parents);
+            let statement_chain = std::iter::successors(Some(owner_chain), |owners| owners.rest())
+                .find(|owners| {
+                    owners
+                        .first()
+                        .is_some_and(|owner| owner.kind != HostOwnerKind::Declarator)
+                })
+                .unwrap_or(owner_chain);
+            let projected_statement = prelude_anchor(statement_chain)
+                .ok_or(ProgramSyntaxError::MissingOverlay { id: entry.id })?;
             let statement =
                 source_span_for_projection(&self.source_segments, projected_statement.span)
                     .ok_or(ProgramSyntaxError::MissingOverlay { id: entry.id })?;
@@ -286,9 +306,7 @@ impl ParentCollector {
                 })
                 .transpose()?;
             let requires_block = projected_statement.kind == HostOwnerKind::Statement
-                && is_unbraced_body(
-                    &found.parents[..projected_statement.edge.min(found.parents.len())],
-                );
+                && projected_statement.unbraced;
             let owner_id = if let Some(owner_id) = owner_ids.get(&projected_owner).copied() {
                 owner_id
             } else {
@@ -348,7 +366,6 @@ impl ParentCollector {
                             .function_return_type
                             .map(|span| map_evaluation_span(&self.source_segments, span))
                             .transpose()?,
-                        loop_head_reads: found.loop_head_reads,
                         assertion: found
                             .assertion
                             .map(|span| {
@@ -357,9 +374,6 @@ impl ParentCollector {
                             })
                             .transpose()?,
                         function_return_awaited: found.function_return_awaited,
-                        ambient: found.ambient,
-                        decorated_classes: found.decorated_classes,
-                        decision_functions: found.decision_functions,
                         value_is_owner: span == entry.source,
                     },
                 ),
@@ -368,36 +382,19 @@ impl ParentCollector {
                 // body) can sit inside an outer expression only across a
                 // function boundary, and the rewrite happens where the owner
                 // executes, not where the enclosing expression does.
-                protocol: {
-                    let frames: Vec<std::rc::Rc<ProjectedProtocolFrame>> = found
-                        .protocol_frames
-                        .iter()
-                        .filter(|frame| {
-                            projected_contains(projected_owner.span, frame.parent())
-                                && !self
-                                    .projection_only_protocol_parents
-                                    .contains(&frame.parent())
-                                // A source operation outside an enclosing TT
-                                // value belongs to that value's protocol. If
-                                // the nested value inherited it as well, both
-                                // lowering schedules would own and emit the
-                                // same source range.
-                                && !enclosing_overlay.is_some_and(|ancestor| {
-                                    projected_contains(frame.parent(), ancestor)
-                                })
-                                && (!matches!(&***frame, ProjectedProtocolFrame::LoopTest { .. })
-                                    || entry.marker == OverlayMarker::DecisionCallExpression)
-                        })
-                        .cloned()
-                        .collect();
-                    evaluation_protocol(
-                        &self.source_segments,
-                        entry.projected,
-                        entry.source,
-                        &frames,
-                        &mut step_links,
-                    )?
-                },
+                protocol: evaluation_protocol(
+                    &self.source_segments,
+                    entry.projected,
+                    entry.source,
+                    found.protocol_frames.chain(),
+                    ProtocolScope {
+                        owner: projected_owner.span,
+                        overlay: enclosing_overlay,
+                        decision: entry.marker == OverlayMarker::DecisionCallExpression,
+                    },
+                    &self.projection_only_protocol_parents,
+                    &mut step_links,
+                )?,
                 core_root: entry.core_root,
                 parents: found.parents,
                 host_owner: owners[owner_id.0 as usize].owner,
@@ -450,11 +447,31 @@ impl VisitAstPath for ParentCollector {
         node: &'ast swc_ecma_ast::Expr,
         path: &mut AstNodePath<'r>,
     ) {
+        self.enter_parents(path);
         crate::stack::grow(|| {
             <swc_ecma_ast::Expr as VisitWithAstPath<Self>>::visit_children_with_ast_path(
                 node, self, path,
             );
         });
+        self.leave_parents();
+    }
+
+    fn visit_pat<'ast: 'r, 'r>(&mut self, node: &'ast Pat, path: &mut AstNodePath<'r>) {
+        self.enter_parents(path);
+        <Pat as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
+        self.leave_parents();
+    }
+
+    fn visit_jsx_element_child<'ast: 'r, 'r>(
+        &mut self,
+        node: &'ast swc_ecma_ast::JSXElementChild,
+        path: &mut AstNodePath<'r>,
+    ) {
+        self.enter_parents(path);
+        <swc_ecma_ast::JSXElementChild as VisitWithAstPath<Self>>::visit_children_with_ast_path(
+            node, self, path,
+        );
+        self.leave_parents();
     }
 
     fn visit_var_declarator<'ast: 'r, 'r>(
@@ -484,6 +501,12 @@ impl VisitAstPath for ParentCollector {
                 kind: HostOwnerKind::Declarator,
                 span: projected_span(node.span, self.source_start),
                 edge: path.kinds().len(),
+                iteration: false,
+                labeled: matches!(
+                    path.kinds().last(),
+                    Some(AstParentKind::LabeledStmt(fields::LabeledStmtField::Body))
+                ),
+                unbraced: is_unbraced_body(path.kinds()),
                 split: Some(split),
             });
         }
@@ -503,6 +526,12 @@ impl VisitAstPath for ParentCollector {
             kind: HostOwnerKind::ModuleItem,
             span: projected_span(item.span(), self.source_start),
             edge: path.kinds().len(),
+            iteration: false,
+            labeled: matches!(
+                path.kinds().last(),
+                Some(AstParentKind::LabeledStmt(fields::LabeledStmtField::Body))
+            ),
+            unbraced: is_unbraced_body(path.kinds()),
             split: None,
         });
         <ModuleItem as VisitWithAstPath<Self>>::visit_children_with_ast_path(item, self, path);
@@ -514,9 +543,20 @@ impl VisitAstPath for ParentCollector {
             kind: HostOwnerKind::Statement,
             span: projected_span(statement.span(), self.source_start),
             edge: path.kinds().len(),
+            iteration: matches!(
+                statement,
+                Stmt::For(_) | Stmt::ForIn(_) | Stmt::ForOf(_) | Stmt::While(_) | Stmt::DoWhile(_)
+            ),
+            labeled: matches!(
+                path.kinds().last(),
+                Some(AstParentKind::LabeledStmt(fields::LabeledStmtField::Body))
+            ),
+            unbraced: is_unbraced_body(path.kinds()),
             split: None,
         });
+        self.enter_parents(path);
         <Stmt as VisitWithAstPath<Self>>::visit_children_with_ast_path(statement, self, path);
+        self.leave_parents();
         self.host_owners.pop();
     }
 
@@ -821,6 +861,7 @@ impl VisitAstPath for ParentCollector {
                     .as_ref()
                     .map(|args| projected_span(args.span(), self.source_start)),
                 optional: None,
+                spread_free: node.args.iter().all(|argument| argument.spread.is_none()),
             }));
         <CallExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
@@ -944,6 +985,12 @@ impl VisitAstPath for ParentCollector {
             kind: HostOwnerKind::ArrowExpression,
             span: projected_span(node.body.span(), self.source_start),
             edge: path.kinds().len(),
+            iteration: false,
+            labeled: matches!(
+                path.kinds().last(),
+                Some(AstParentKind::LabeledStmt(fields::LabeledStmtField::Body))
+            ),
+            unbraced: is_unbraced_body(path.kinds()),
             split: None,
         });
         <ArrowExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
@@ -1150,6 +1197,7 @@ impl VisitAstPath for ParentCollector {
                     .as_ref()
                     .map(|args| projected_span(args.span(), self.source_start)),
                 optional: Some(optional),
+                spread_free: node.args.iter().all(|argument| argument.spread.is_none()),
             }));
         <OptCall as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();

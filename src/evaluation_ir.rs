@@ -6,6 +6,7 @@
 mod builder;
 mod evaluation;
 mod planning;
+mod summary;
 mod validation;
 
 #[cfg(test)]
@@ -29,6 +30,7 @@ use crate::program_syntax::{
 
 use builder::*;
 use planning::*;
+use summary::*;
 
 /// A failure of one of the lowering validators, already carrying the stage,
 /// the named invariant, and the identities it failed on.
@@ -124,10 +126,102 @@ pub(crate) struct EvaluationFile {
     /// Source spans of every tt node in the file. A schedule's source
     /// capture must not overlap one: the capture copies raw source bytes,
     /// and a tt node inside them is lowered elsewhere.
-    tt_spans: Vec<SourceSpan>,
+    tt_spans: TtSpans,
     script: bool,
     commonjs: bool,
     globals: HashMap<SourceSpan, GlobalStatement>,
+}
+
+#[derive(Debug)]
+pub(crate) struct TtSpans {
+    spans: Vec<SourceSpan>,
+    index: crate::span_index::SpanIndex,
+    starts: Vec<usize>,
+    by_start: Vec<usize>,
+    least_end: Vec<Vec<usize>>,
+}
+
+impl TtSpans {
+    fn new(spans: Vec<SourceSpan>) -> Self {
+        let index =
+            crate::span_index::SpanIndex::new(spans.iter().map(|span| (span.start, span.end)));
+        let mut by_start: Vec<usize> = (0..spans.len()).collect();
+        by_start.sort_by_key(|&at| spans[at].start);
+        let starts = by_start.iter().map(|&at| spans[at].start).collect();
+        let mut least_end = vec![by_start.iter().map(|&at| spans[at].end).collect::<Vec<_>>()];
+        let mut width = 1;
+        while width * 2 <= by_start.len() {
+            let previous = &least_end[least_end.len() - 1];
+            let next = (0..=by_start.len() - width * 2)
+                .map(|at| previous[at].min(previous[at + width]))
+                .collect();
+            least_end.push(next);
+            width *= 2;
+        }
+        Self {
+            spans,
+            index,
+            starts,
+            by_start,
+            least_end,
+        }
+    }
+
+    pub(crate) fn iter(&self) -> std::slice::Iter<'_, SourceSpan> {
+        self.spans.iter()
+    }
+
+    pub(crate) fn overlapping(&self, span: SourceSpan) -> Vec<SourceSpan> {
+        let mut found = self.index.containing(span.start);
+        found.extend(self.index.starting_in(span.start, span.end));
+        found.sort_unstable();
+        found.dedup();
+        found
+            .into_iter()
+            .map(|index| self.spans[index])
+            .filter(|other| planning::overlaps(span, *other))
+            .collect()
+    }
+
+    pub(crate) fn any_within(&self, span: SourceSpan) -> bool {
+        let low = self.starts.partition_point(|&start| start < span.start);
+        let high = self.starts.partition_point(|&start| start <= span.end);
+        if low >= high {
+            return false;
+        }
+        let level = (usize::BITS - 1 - (high - low).leading_zeros()) as usize;
+        let width = 1 << level;
+        self.least_end[level][low].min(self.least_end[level][high - width]) <= span.end
+    }
+
+    pub(crate) fn within(&self, span: SourceSpan) -> Vec<(usize, SourceSpan)> {
+        let low = self.starts.partition_point(|&start| start < span.start);
+        let high = self.starts.partition_point(|&start| start <= span.end);
+        let mut found: Vec<_> = self.by_start[low..high.max(low)]
+            .iter()
+            .map(|&at| (at, self.spans[at]))
+            .filter(|(_, other)| other.end <= span.end)
+            .collect();
+        found.sort_unstable_by_key(|(at, _)| *at);
+        found
+    }
+
+    pub(crate) fn straddling(&self, span: SourceSpan) -> Vec<(usize, SourceSpan)> {
+        let mut found = self.index.containing(span.start);
+        if let Some(last) = span.end.checked_sub(1) {
+            found.extend(self.index.containing(last));
+        }
+        found.sort_unstable();
+        found.dedup();
+        found
+            .into_iter()
+            .map(|at| (at, self.spans[at]))
+            .filter(|(_, other)| {
+                planning::overlaps(span, *other)
+                    && !(span.start <= other.start && other.end <= span.end)
+            })
+            .collect()
+    }
 }
 
 #[derive(Debug, Default)]
@@ -435,6 +529,14 @@ impl EvaluationSchedule {
         &self.steps
     }
 
+    pub(crate) fn outermost_step(&self) -> Option<&PlannedEvaluationStep> {
+        outermost_step(&self.steps)
+    }
+
+    pub(crate) fn loop_test_count(&self) -> usize {
+        loop_test_count(&self.steps)
+    }
+
     #[cfg(test)]
     pub(crate) fn edit_steps(&mut self, edit: impl FnOnce(&mut Vec<PlannedEvaluationStep>)) {
         let mut steps = self.steps.to_vec();
@@ -452,6 +554,7 @@ pub(crate) struct PlannedEvaluationStep {
     /// step is conditional ([`crate::program_syntax::ConditionalFacts`]).
     pub(crate) conditional: Option<ConditionalFacts>,
     pub(crate) loop_test: Option<crate::program_syntax::LoopTestFacts>,
+    summary: StepsSummary,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

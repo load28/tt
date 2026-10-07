@@ -289,7 +289,7 @@ fn a_match_argument_keeps_its_call_parent_path() {
     assert!(
         entry
             .parents
-            .iter()
+            .kinds()
             .any(|parent| matches!(parent, AstParentKind::CallExpr(_))),
         "{:?}",
         entry.parents

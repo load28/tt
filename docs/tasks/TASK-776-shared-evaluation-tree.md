@@ -51,28 +51,116 @@ pass, guided by a subtree flag (`transformers/generators.ts`,
   value has is the step it had before, so every consumer reads the same
   sequence.
 
+### Decision 2: Facts about a value's steps are summarized on the shared links
+
+- **Context**: With the steps shared, the stages that read a schedule still
+  walked every step of every value: the conditional count, the sole
+  conditional step, reference loss, capture admission, the outermost step,
+  the loop-test count, and the order validation.
+- **Alternatives considered**: (a) Caching each answer per value: the walk
+  that fills the cache is the quadratic part. (b) A summary stored on each
+  link when it is built, combined from the step and the summary of the link
+  outside it, the way TypeScript's `TransformFlags` aggregate a subtree's
+  facts bottom-up (`computeTransformFlagsForNode`).
+- **Decision and rationale**: (b). `src/evaluation_ir/summary.rs` holds
+  `StepsSummary` and `InputsSummary`; each reader takes the summary when the
+  schedule is a whole chain and walks the steps otherwise, so the answer is
+  the same either way. A summary built from a chain that was not summarized
+  (a test's edited schedule) is marked unknown and never read. The order
+  validation and the reference validation remember the links and input
+  segments they already checked.
+
+### Decision 3: A value's parent path is a shared chain with folded facts
+
+- **Context**: Every overlay copied its whole AST parent path, and
+  `EvaluationContext::from_path`, `owner_reach`, `frequency_within_owner`,
+  `value_role`, and `host_continuation` scanned it: quadratic in depth (the
+  part TASK-772 decision 2 left unchanged).
+- **Alternatives considered**: (a) Comparing the cached path with the
+  current one: finding where they diverge is itself a walk. (b) A parent
+  chain like TypeScript's `Node.parent`, each edge carrying the facts of the
+  path down to it, folded from its parent's facts the way a parser's
+  `contextFlags` are carried down as it descends.
+- **Decision and rationale**: (b). `src/program_syntax/parents.rs` holds
+  `ParentPath`. The collector marks the path depth at every expression,
+  statement, pattern, and JSX child and builds the chain for a mark only
+  when a value under it is recorded, so a subtree without values costs
+  nothing and every edge is folded once. Each fact the scans computed is a
+  fold: the evaluation owner is the last owner edge, the facts local to it
+  restart at that edge, and the reach from a host owner compares the last
+  loop and unmodeled-conditional edge indices with the owner's edge (an
+  optional chain's base waits two edges to learn whether it is modeled).
+  The host owners are a shared chain as well, and the facts that read the
+  edges around a host owner (an iteration statement, a label, an unbraced
+  body) are taken when the owner is entered.
+
+### Decision 4: Span and step queries over an owner's values are indexed
+
+- **Context**: Planning an owner compared every value with every enclosing
+  statement-capable value, and the target plan and nested relocations listed
+  the inputs of every step of every value.
+- **Decision and rationale**: `span_index::innermost_containers` answers
+  the shortest strictly enclosing span for all values at once (a sweep with
+  a Fenwick tree keyed by span end, ties broken by list order as
+  `min_by_key` does). The steps a child keeps inside its outer value are
+  counted once per shared link. The relocated spans are a set, so each
+  shared link and input segment contributes once (`Chain::fresh`,
+  `ChainSlice::fresh`, `Segments::fresh`).
+
 ## Work log
 
 - 2026-10-07: Implemented decision 1. Release timings with line tables:
   1,600 matches joined by `+` take 0.92 s (1.5 s before); the flat shapes
   (1,600 matches in one array) stay quadratic, because the step for an
   operand still lists every earlier operand.
+- 2026-10-07: Shared each frame's input segments (`Segments`) and the
+  sibling chain of an ordered frame, so an operand's step extends the one
+  before it.
+- 2026-10-07: Implemented decision 2.
+- 2026-10-07: Implemented decision 3 and decision 4. Instruction counts
+  (callgrind, release with line tables) for 400 and 1,600 matches: a flat
+  array 146M and 589M, a `+` chain 158M and 638M, call arguments 147M and
+  590M — 4.0 times the work for 4 times the values in each shape (before
+  the task: 180M and 1,163M for the array, 312M and 3,156M for the chain).
+- 2026-10-07: Added `compiling_does_linear_work_in_the_tt_values_of_one_expression`
+  with work counters on protocol links, parent edges, and planned steps.
 
 ## Issues and resolutions
 
-None.
+### Issue 1: The disk filled during the full suite
+
+- **Symptom**: `No space left on device` while compiling the test binary.
+- **Cause**: Stale build directories from earlier tasks.
+- **Resolution**: Removed them and ran the suite again.
+
+### Issue 2: Shapes this task does not make linear
+
+- **Symptom**: 200 and 800 matches nested as `f(match, f(match, …))` take
+  341M and 4,548M instructions; 200 and 800 matches nested in arms take
+  259M and 3,304M.
+- **Cause**: A value whose call may complete reserves a name for every
+  inert input on its whole path (`resolve_schedule`), so the names, and the
+  numbering of every later name, are quadratic in the nesting; keeping the
+  output byte for byte requires them. Nested arms indent each level, so the
+  output itself is quadratic in size (1.8 MB for depth 200).
+- **Resolution**: Recorded. Reserving names only for the inputs a completed
+  call re-reads changes generated names in the output, so it is left to a
+  separate decision.
 
 ## Regression test (fails before the fix)
 
-- **Path**: pending
-- **Observed failure**: pending
+Not applicable: the task changes no output. The scaling test
+`src/lib/scaling_tests.rs::compiling_does_linear_work_in_the_tt_values_of_one_expression`
+pins the linear work; with the collector rebuilding each value's parent path
+from the root it fails with `parent path edges: 45216 units for n matches
+but 170416 for 2n`.
 
 ## Verification
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] Every case baseline unchanged
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test` (`--test-threads=4`): every suite passes
+- [x] Every case baseline, snapshot, and fixture unchanged
 
 ## Result
 

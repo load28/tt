@@ -516,6 +516,7 @@ impl ProgramSyntax {
     fn validate(&self) -> Result<(), ProgramSyntaxError> {
         let _module_span = self.module.span;
         let projection_len = self.projection.len();
+        let mut checked_steps = HashSet::new();
         for entry in &self.overlay {
             let start = entry.projected.start.0;
             let end = entry.projected.end.0;
@@ -542,13 +543,20 @@ impl ProgramSyntax {
                 | HostContinuation::Discard
                 | HostContinuation::Compose => {}
             }
-            for step in entry.protocol.steps() {
+            let mut steps = entry.protocol.steps();
+            while let Some(step) = steps.first()
+                && checked_steps.insert(steps.identity())
+            {
                 if step.parent.start >= step.parent.end || step.parent.end > self.source_len {
                     return Err(ProgramSyntaxError::InvalidSourceSpan {
                         start: SourceByte(step.parent.start),
                         end: SourceByte(step.parent.end),
                     });
                 }
+                let Some(rest) = steps.rest() else {
+                    break;
+                };
+                steps = rest;
             }
         }
         for (index, owner) in self.owners.iter().enumerate() {

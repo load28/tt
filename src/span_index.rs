@@ -111,6 +111,89 @@ impl SpanIndex {
     }
 }
 
+pub(crate) fn innermost_containers(
+    spans: &[(usize, usize)],
+    queries: &[(usize, usize)],
+) -> Vec<Option<usize>> {
+    let mut ends: Vec<usize> = spans.iter().map(|&(_, end)| end).collect();
+    ends.sort_unstable();
+    ends.dedup();
+    let mut by_start: Vec<usize> = (0..spans.len()).collect();
+    by_start.sort_by_key(|&index| spans[index].0);
+    let mut order: Vec<usize> = (0..queries.len()).collect();
+    order.sort_by_key(|&query| queries[query].0);
+    let mut shortest = ShortestByEnd::new(ends.len());
+    let mut inserted = 0;
+    let mut answers = vec![None; queries.len()];
+    let mut group = 0;
+    while group < order.len() {
+        let start = queries[order[group]].0;
+        let last = group + order[group..].partition_point(|&query| queries[query].0 == start);
+        while inserted < by_start.len() && spans[by_start[inserted]].0 < start {
+            let index = by_start[inserted];
+            shortest.insert(&ends, spans[index], index);
+            inserted += 1;
+        }
+        for &query in &order[group..last] {
+            answers[query] = shortest.ending_from(&ends, queries[query].1);
+        }
+        while inserted < by_start.len() && spans[by_start[inserted]].0 == start {
+            let index = by_start[inserted];
+            shortest.insert(&ends, spans[index], index);
+            inserted += 1;
+        }
+        for &query in &order[group..last] {
+            let (_, end) = queries[query];
+            let after = end
+                .checked_add(1)
+                .and_then(|after| shortest.ending_from(&ends, after));
+            answers[query] = [answers[query], after]
+                .into_iter()
+                .flatten()
+                .min_by_key(|&index| (spans[index].1 - spans[index].0, index));
+        }
+        group = last;
+    }
+    answers
+}
+
+struct ShortestByEnd {
+    tree: Vec<Option<(usize, usize)>>,
+}
+
+impl ShortestByEnd {
+    fn new(len: usize) -> Self {
+        ShortestByEnd {
+            tree: vec![None; len + 1],
+        }
+    }
+
+    fn insert(&mut self, ends: &[usize], (start, end): (usize, usize), index: usize) {
+        let key = (end - start, index);
+        let mut position = ends.len() - ends.partition_point(|&at| at < end);
+        while position < self.tree.len() {
+            if self.tree[position].is_none_or(|current| key < current) {
+                self.tree[position] = Some(key);
+            }
+            position += position.isolate_lowest_one();
+        }
+    }
+
+    fn ending_from(&self, ends: &[usize], end: usize) -> Option<usize> {
+        let mut position = ends.len() - ends.partition_point(|&at| at < end);
+        let mut best: Option<(usize, usize)> = None;
+        while position > 0 {
+            if let Some(key) = self.tree[position]
+                && best.is_none_or(|current| key < current)
+            {
+                best = Some(key);
+            }
+            position -= position.isolate_lowest_one();
+        }
+        best.map(|(_, index)| index)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -162,6 +245,23 @@ mod tests {
                     scan(|_, end| at <= end && end < to)
                 );
             }
+        }
+    }
+
+    #[test]
+    fn the_innermost_container_is_what_a_scan_of_the_spans_answers() {
+        let queries: Vec<_> = (0..65)
+            .flat_map(|start| (start..65).map(move |end| (start, end)))
+            .collect();
+        let answers = innermost_containers(&SPANS, &queries);
+        for (&(at, to), answer) in queries.iter().zip(answers) {
+            let scanned = (0..SPANS.len())
+                .filter(|&index| {
+                    let (start, end) = SPANS[index];
+                    start <= at && to <= end && (start, end) != (at, to)
+                })
+                .min_by_key(|&index| SPANS[index].1 - SPANS[index].0);
+            assert_eq!(answer, scanned, "{at}..{to}");
         }
     }
 

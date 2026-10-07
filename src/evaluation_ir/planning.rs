@@ -5,7 +5,7 @@ use super::*;
 #[allow(clippy::too_many_arguments)]
 pub(super) fn resolve_schedule(
     protocol: HostEvaluationProtocol,
-    tt_spans: &[SourceSpan],
+    tt_spans: &TtSpans,
     slots: &HashMap<SourceSpan, ValueSlotId>,
     source_slots: &mut HashMap<SourceSpan, PlannedSourceSlot>,
     links: &mut PlannedLinks,
@@ -49,7 +49,7 @@ pub(super) fn resolve_schedule(
 
 #[derive(Clone, Copy)]
 pub(super) struct Elision<'a> {
-    pub(super) tt_spans: &'a [SourceSpan],
+    pub(super) tt_spans: &'a TtSpans,
     pub(super) reserve_names: bool,
 }
 
@@ -63,6 +63,42 @@ pub(super) struct PlannedLinks {
         ),
     >,
     inputs: InputLinks,
+    summaries: HashMap<
+        usize,
+        (
+            crate::chain::Segments<PlannedEvaluationInput>,
+            InputsSummary,
+        ),
+    >,
+}
+
+impl PlannedLinks {
+    pub(super) fn summarize(
+        &mut self,
+        inputs: &crate::chain::Segments<PlannedEvaluationInput>,
+        tt_spans: &TtSpans,
+    ) -> InputsSummary {
+        let mut pending = Vec::new();
+        let mut at = inputs;
+        let mut summary = InputsSummary::default();
+        while !at.is_empty() {
+            if let Some((_, found)) = self.summaries.get(&at.identity()) {
+                summary = *found;
+                break;
+            }
+            pending.push(at.clone());
+            let Some(earlier) = at.earlier() else {
+                break;
+            };
+            at = earlier;
+        }
+        for segment in pending.into_iter().rev() {
+            summary = InputsSummary::of(summary, segment.own(), tt_spans);
+            self.summaries
+                .insert(segment.identity(), (segment, summary));
+        }
+        summary
+    }
 }
 
 type InputLinks = HashMap<
@@ -112,7 +148,9 @@ pub(super) fn resolve_schedule_steps(
         ));
         rest = next;
     }
-    for (host, step) in resolved.into_iter().rev() {
+    for (host, mut step) in resolved.into_iter().rev() {
+        let inputs = links.summarize(&step.inputs, elision.tt_spans);
+        step.summary = StepsSummary::link(&step, inputs, &tail);
         tail = crate::chain::Chain::cons(step, tail);
         if shared {
             links.steps.insert(host.identity(), (host, tail.clone()));
@@ -135,7 +173,9 @@ fn resolve_step(
     slot_names: &mut Vec<String>,
     occupied_names: &mut HashSet<String>,
 ) -> Result<PlannedEvaluationStep, EvaluationError> {
+    crate::work::tick("planned evaluation steps");
     Ok(PlannedEvaluationStep {
+        summary: StepsSummary::default(),
         parent: step.parent,
         operation: step.operation,
         conditional: step.conditional.clone(),
@@ -233,10 +273,7 @@ fn resolve_input(
                     | EvaluationInputMode::ObjectSpread
                     | EvaluationInputMode::TemplateSubstitution
             ) && input.effects.is_inert()
-                && !elision
-                    .tt_spans
-                    .iter()
-                    .any(|span| input.source.start <= span.start && span.end <= input.source.end)
+                && !elision.tt_spans.any_within(input.source)
             {
                 return Ok(PlannedEvaluationInput::Stable {
                     source: input.source,
@@ -298,6 +335,20 @@ fn resolve_input(
     )
 }
 
+pub(super) fn planned_chain(
+    steps: Vec<PlannedEvaluationStep>,
+    tt_spans: &TtSpans,
+) -> crate::chain::Chain<PlannedEvaluationStep> {
+    let mut links = PlannedLinks::default();
+    let mut tail = crate::chain::Chain::new();
+    for mut step in steps.into_iter().rev() {
+        let inputs = links.summarize(&step.inputs, tt_spans);
+        step.summary = StepsSummary::link(&step, inputs, &tail);
+        tail = crate::chain::Chain::cons(step, tail);
+    }
+    tail
+}
+
 pub(super) fn overlaps(left: SourceSpan, right: SourceSpan) -> bool {
     left.start < right.end && right.start < left.end
 }
@@ -308,13 +359,7 @@ pub(super) fn overlaps(left: SourceSpan, right: SourceSpan) -> bool {
 pub(super) fn whole_operation_step(
     schedule: &EvaluationSchedule,
 ) -> Option<(usize, &PlannedEvaluationStep)> {
-    let steps = schedule.steps();
-    let mut conditional = steps
-        .iter()
-        .enumerate()
-        .filter(|(_, step)| matches!(step.operation, HostEvaluationOperation::Conditional(_)));
-    let found = conditional.next()?;
-    conditional.next().is_none().then_some(found)
+    sole_conditional(schedule.steps())
 }
 
 /// Groups the owner's conditional-candidate values into whole conditional
@@ -322,7 +367,7 @@ pub(super) fn whole_operation_step(
 /// downgraded to the expression boundary — never half-lowered.
 pub(super) fn plan_conditional_operations(
     values: &mut [PlannedValue],
-    tt_spans: &[SourceSpan],
+    tt_spans: &TtSpans,
     next_slot: &mut u32,
     slot_names: &mut Vec<String>,
     occupied_names: &mut HashSet<String>,
@@ -370,7 +415,7 @@ pub(super) fn plan_one_operation(
     values: &[PlannedValue],
     members: &[usize],
     parent: SourceSpan,
-    tt_spans: &[SourceSpan],
+    tt_spans: &TtSpans,
     next_slot: &mut u32,
     slot_names: &mut Vec<String>,
     occupied_names: &mut HashSet<String>,
@@ -401,9 +446,16 @@ pub(super) fn plan_one_operation(
     // An enclosing tt region owns this operation; it is not syntax inside
     // a relocated operand. Only descendants can make that operand opaque.
     let overlaps_tt = |span: SourceSpan| {
+        let encloses = |tt: &SourceSpan| tt.start <= parent.start && parent.end <= tt.end;
         tt_spans
+            .straddling(span)
             .iter()
-            .any(|tt| !(tt.start <= parent.start && parent.end <= tt.end) && overlaps(span, *tt))
+            .any(|(_, tt)| !encloses(tt))
+            || (tt_spans.any_within(span)
+                && tt_spans
+                    .within(span)
+                    .iter()
+                    .any(|(_, tt)| overlaps(span, *tt) && !encloses(tt)))
     };
     let mut active = Vec::new();
     let kind = match step.operation {
@@ -676,7 +728,7 @@ pub(super) fn plan_one_operation(
 /// independently.
 pub(super) fn target_capability(
     core: &CoreFile,
-    tt_spans: &[SourceSpan],
+    tt_spans: &TtSpans,
     expr: ExprId,
     source: SourceSpan,
     context: &EvaluationContext,
@@ -707,13 +759,8 @@ pub(super) fn target_capability(
             if !matches!(core.exprs[expr.index()], Expr::Decision(_)) {
                 return TargetCapability::ExpressionBoundary(Reason::RepeatedInOwner);
             }
-            let loop_steps = schedule
-                .steps()
-                .iter()
-                .filter(|step| step.operation == HostEvaluationOperation::LoopTest)
-                .count();
-            if loop_steps != 1
-                || schedule.steps().last().is_none_or(|step| {
+            if schedule.loop_test_count() != 1
+                || schedule.outermost_step().is_none_or(|step| {
                     step.operation != HostEvaluationOperation::LoopTest || step.loop_test.is_none()
                 })
             {
@@ -725,23 +772,33 @@ pub(super) fn target_capability(
         }
     }
     let steps = schedule.steps();
-    for step in steps {
-        for input in &step.inputs {
-            match input {
-                PlannedEvaluationInput::Source {
-                    mode: EvaluationInputMode::MemberReference,
-                    receiver: None,
-                    ..
+    match reference_lost(steps) {
+        Some(true) => {
+            return TargetCapability::ExpressionBoundary(Reason::ReferenceNotPreservable);
+        }
+        Some(false) => {}
+        None => {
+            for step in steps {
+                for input in &step.inputs {
+                    match input {
+                        PlannedEvaluationInput::Source {
+                            mode: EvaluationInputMode::MemberReference,
+                            receiver: None,
+                            ..
+                        }
+                        | PlannedEvaluationInput::Slot {
+                            mode: EvaluationInputMode::MemberReference,
+                            ..
+                        } => {
+                            return TargetCapability::ExpressionBoundary(
+                                Reason::ReferenceNotPreservable,
+                            );
+                        }
+                        PlannedEvaluationInput::Source { .. }
+                        | PlannedEvaluationInput::Slot { .. }
+                        | PlannedEvaluationInput::Stable { .. } => {}
+                    }
                 }
-                | PlannedEvaluationInput::Slot {
-                    mode: EvaluationInputMode::MemberReference,
-                    ..
-                } => {
-                    return TargetCapability::ExpressionBoundary(Reason::ReferenceNotPreservable);
-                }
-                PlannedEvaluationInput::Source { .. }
-                | PlannedEvaluationInput::Slot { .. }
-                | PlannedEvaluationInput::Stable { .. } => {}
             }
         }
     }
@@ -750,10 +807,7 @@ pub(super) fn target_capability(
     // eager steps inside its active branch are kept there by the operation
     // plan. Anything else takes the boundary — never a promoted value under
     // the original syntax.
-    let conditional_steps = steps
-        .iter()
-        .filter(|step| matches!(step.operation, HostEvaluationOperation::Conditional(_)))
-        .count();
+    let conditional_steps = conditional_count(steps);
     if conditional_steps > 0 {
         let Some((index, step)) = whole_operation_step(schedule) else {
             return TargetCapability::ExpressionBoundary(
@@ -781,6 +835,9 @@ pub(super) fn target_capability(
             );
         }
     }
+    if captures_admit(steps, source) {
+        return TargetCapability::StatementRegion;
+    }
     let mut captured: Vec<SourceSpan> = Vec::new();
     for step in steps {
         for input in &step.inputs {
@@ -797,9 +854,8 @@ pub(super) fn target_capability(
             // them is lowered or relocated elsewhere.
             // An enclosing tt root is different: its structured lowering
             // owns this schedule and composes the captured source into it.
-            if tt_spans.iter().any(|span| {
-                overlaps(*capture, *span)
-                    && !(span.start <= source.start && source.end <= span.end)
+            if tt_spans.overlapping(*capture).iter().any(|span| {
+                !(span.start <= source.start && source.end <= span.end)
                     && !(span.end <= source.start
                         && capture.start <= span.start
                         && span.end <= capture.end)

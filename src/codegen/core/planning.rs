@@ -891,16 +891,15 @@ impl TargetRewritePlan {
                 let first = rewrite.values.iter().find(|value| {
                     value
                         .schedule
-                        .steps()
-                        .last()
+                        .outermost_step()
                         .is_some_and(|step| step.loop_test.is_some())
                 })?;
-                let facts = first.schedule.steps().last()?.loop_test?;
+                let facts = first.schedule.outermost_step()?.loop_test?;
                 let values: Vec<_> = rewrite
                     .values
                     .iter()
                     .filter(|value| {
-                        value.schedule.steps().last().is_some_and(|step| {
+                        value.schedule.outermost_step().is_some_and(|step| {
                             step.operation == HostEvaluationOperation::LoopTest
                                 && step.loop_test == Some(facts)
                         })
@@ -944,7 +943,7 @@ impl TargetRewritePlan {
                             None => {
                                 let ValueTarget::Slot(slot) = value.target;
                                 let loop_step =
-                                    value.schedule.steps().last().cloned().unwrap_or_else(|| {
+                                    value.schedule.outermost_step().cloned().unwrap_or_else(|| {
                                         crate::ice::bug!("loop value lost its loop step")
                                     });
                                 let steps = value
@@ -989,11 +988,7 @@ impl TargetRewritePlan {
                         (value.context.continuation == HostContinuation::Compose
                             || (value.context.continuation == HostContinuation::ForInitialize
                                 && !value.schedule.steps().is_empty()))
-                            && !value
-                                .schedule
-                                .steps()
-                                .iter()
-                                .any(|step| step.operation == HostEvaluationOperation::LoopTest)
+                            && value.schedule.loop_test_count() == 0
                             && !recovered.contains(&value.expr)
                             && value.capability == TargetCapability::StatementRegion
                     })
@@ -1219,60 +1214,50 @@ impl TargetRewritePlan {
                 .flat_map(|(_, exits)| exits.iter().filter_map(|exit| exit.argument)),
         );
         relocated_values.extend(all_operations().map(|operation| operation.parent));
-        relocated_values.extend(lowering.nested_operations().iter().flat_map(|operation| {
-            let condition = match operation.condition {
-                PlannedEvaluationInput::Source { source, .. }
-                | PlannedEvaluationInput::Stable { source, .. } => Some(source),
-                PlannedEvaluationInput::Slot { .. } => None,
-            };
-            let branches = match &operation.kind {
-                PlannedConditionalKind::Ternary {
-                    consequent,
-                    alternate,
-                } => [consequent, alternate]
-                    .into_iter()
-                    .filter_map(|branch| match branch {
+        let mut covered_steps = HashMap::new();
+        let mut covered_inputs = HashSet::new();
+        for operation in lowering.nested_operations() {
+            relocated_values.push(operation.parent);
+            if let PlannedEvaluationInput::Source { source, .. }
+            | PlannedEvaluationInput::Stable { source, .. } = operation.condition
+            {
+                relocated_values.push(source);
+            }
+            if let PlannedConditionalKind::Ternary {
+                consequent,
+                alternate,
+            } = &operation.kind
+            {
+                relocated_values.extend([consequent, alternate].into_iter().filter_map(|branch| {
+                    match branch {
                         PlannedBranch::Source(span) => Some(*span),
                         PlannedBranch::Values(_) => None,
-                    })
-                    .collect(),
-                _ => Vec::new(),
-            };
-            std::iter::once(operation.parent)
-                .chain(condition)
-                .chain(branches)
-                .chain(
-                    operation
-                        .active
-                        .iter()
-                        .flat_map(|active| &active.steps)
-                        .chain(&operation.outer)
-                        .flat_map(|step| {
-                            std::iter::once(step.parent).chain(step.inputs.iter().filter_map(
-                                |input| match input {
-                                    PlannedEvaluationInput::Source { source, .. }
-                                    | PlannedEvaluationInput::Stable { source, .. } => {
-                                        Some(*source)
-                                    }
-                                    PlannedEvaluationInput::Slot { .. } => None,
-                                },
-                            ))
-                        }),
-                )
-                .collect::<Vec<_>>()
-        }));
+                    }
+                }));
+            }
+            for steps in operation
+                .active
+                .iter()
+                .map(|active| &active.steps)
+                .chain([&operation.outer])
+            {
+                step_sources(
+                    steps,
+                    &mut covered_steps,
+                    &mut covered_inputs,
+                    &mut relocated_values,
+                );
+            }
+        }
         relocated_values.extend(loop_tests.iter().filter_map(|rewrite| rewrite.update));
-        relocated_values.extend(lowering.nested_value_schedules().flat_map(|(_, schedule)| {
-            schedule.steps().iter().flat_map(|step| {
-                std::iter::once(step.parent).chain(step.inputs.iter().filter_map(
-                    |input| match input {
-                        PlannedEvaluationInput::Source { source, .. }
-                        | PlannedEvaluationInput::Stable { source, .. } => Some(*source),
-                        PlannedEvaluationInput::Slot { .. } => None,
-                    },
-                ))
-            })
-        }));
+        for (_, schedule) in lowering.nested_value_schedules() {
+            step_sources(
+                schedule.steps(),
+                &mut covered_steps,
+                &mut covered_inputs,
+                &mut relocated_values,
+            );
+        }
         // The operator frame of a lowered conditional operation (its tokens
         // between the fragments the region re-emits) is claimed source.
         let arrow_return_frames = arrow_returns.iter().flat_map(|rewrite| {
@@ -1814,5 +1799,23 @@ impl TargetRewritePlan {
             structurally_nested_values,
             expression_boundary_name,
         }
+    }
+}
+
+fn step_sources(
+    steps: &crate::chain::ChainSlice<PlannedEvaluationStep>,
+    covered_steps: &mut HashMap<usize, usize>,
+    covered_inputs: &mut HashSet<usize>,
+    sources: &mut Vec<SourceSpan>,
+) {
+    for step in steps.fresh(covered_steps) {
+        sources.push(step.parent);
+        sources.extend(step.inputs.fresh(covered_inputs).into_iter().filter_map(
+            |input| match input {
+                PlannedEvaluationInput::Source { source, .. }
+                | PlannedEvaluationInput::Stable { source, .. } => Some(*source),
+                PlannedEvaluationInput::Slot { .. } => None,
+            },
+        ));
     }
 }
