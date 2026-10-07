@@ -335,15 +335,32 @@ defects. This task fixes them in the layer that owns each one.
   ECMAScript's NamedEvaluation does for an assignment. A conditional
   expression names nothing, but the forms that avoid naming (`(0, f)`) are
   TS2695 in TypeScript. Proposed to the user.
-- **K7** (plain `ttc` leaves a call to a name declared twice unjudged):
-  `--check-types` resolves the callee's symbol and reports it. The
-  documentation now says plain `ttc` judges by name.
 - **K8** (time for many matches in one expression): measured on a debug
   build at 200, 400, and 800 matches in one expression, 0.24 s, 0.75 s,
   and 3.2 s; let-else statements in one body are linear (0.04 s at 100,
   0.10 s at 400). Samples put the expression cost in the evaluation-order
   validation, which compares each captured span with every earlier one.
   Not changed in this task.
+
+### Decision 19: Plain `ttc` judges the declaration a callee resolves to (K7)
+
+- **Context**: Decision 18 first recorded K7 as a documented difference.
+  The user asked for every finding to be fixed in its structure instead.
+  `function h(y) { y.a = 1 }` called with a `val` binding was not reported
+  by plain `ttc` when another `function h` existed in an inner block,
+  because the untyped path keyed signatures by name and dropped a name
+  declared twice. `--check-types` reported it.
+- **Decision and rationale**: The untyped path already walks a lexical
+  scope model of its own (`Frame`, `Var`). A call's callee is now looked up
+  in that model, and the binding found names a declaration by the offset
+  of its identifier, the key the delegated path uses for symbols. A
+  parameter or any other binding of the name shadows a declaration, and an
+  inner declaration is visible only in its block. Lexical declarations are
+  now bound on entry to their block, as ECMA-262 BlockDeclarationInstantiation
+  binds them before the block's first statement, so a call written before a
+  `const f = (...) =>` it resolves to (inside a function called later)
+  resolves as it does at run time. A declaration reached by the walk does
+  not bind the same identifier twice, and reports its `val` binding once.
 
 ## Work log
 
@@ -379,6 +396,7 @@ defects. This task fixes them in the layer that owns each one.
   regenerated every case baseline (only `tsDirectiveBeforeLoweredStatement`
   changed; its later-line match is now written on one line), and recorded
   the remaining compiler findings (decision 18).
+- 2026-10-07: Resolved val-pass callees in the scope model (decision 19).
 
 ## Issues and resolutions
 
@@ -432,6 +450,8 @@ Each test below was run against the code before this task (the parent of
 - **Observed failure**: `zz/bad.ts` listed.
 - **Path**: `tests/cases/compiler/aDirectiveAboveAMultiLineMatchGovernsItsFirstLineOnly.tt` (K1)
 - **Observed failure**: no diagnostics; the arm's TS2322 was suppressed by the directive.
+- **Path**: `tests/cases/compiler/aValPassJudgesTheDeclarationTheCalleeResolvesTo.tt` (K7, fix reverted)
+- **Observed failure**: the build reported no `val-pass` error for `outer`'s call to `h`.
 
 ## Verification
 

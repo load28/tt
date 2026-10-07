@@ -2911,6 +2911,9 @@ impl Unpin for LineBreaks
 impl UnsafeUnpin for LineBreaks
 impl UnwindSafe for LineBreaks
 
+// fn ttc::lines::typescript_text
+pub fn typescript_text(bytes: Vec<u8>) -> String
+
 // struct ttc::lines::LineMap
 pub struct LineMap<'a> { /* private fields */ }
 impl<'a> LineMap<'a>

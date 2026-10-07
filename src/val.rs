@@ -44,7 +44,7 @@ mod targets;
 pub(crate) use calls::method_calls;
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::SourceKind;
 use crate::ast::{Span, ValModifier, ValModifierKind};
@@ -503,11 +503,16 @@ fn run(
     }
     let mut declarations = Vec::new();
     collect_declarations(src, tokens, modifiers, &mut declarations);
-    let mut signatures: HashMap<&str, Option<Vec<ParamSig>>> = HashMap::new();
-    collect_signatures(&declarations, &mut signatures);
+    let declared: HashSet<&str> = declarations
+        .iter()
+        .map(|declaration| declaration.name)
+        .collect();
+    let functions: HashMap<usize, Vec<ParamSig>> = declarations
+        .iter()
+        .map(|declaration| (declaration.ident, declaration.params.clone()))
+        .collect();
     // The delegated form hands every declaration over as a node: which
-    // call names which declaration is then the symbol's answer, so a name
-    // that is ambiguous here need not be ambiguous there.
+    // call names which declaration is then the symbol's answer.
     if let Sink::Probes(sink) = sink {
         sink.borrow_mut()
             .functions
@@ -531,7 +536,8 @@ fn run(
         src,
         source_kind,
         modifiers,
-        signatures: &signatures,
+        declared: &declared,
+        functions: &functions,
         applications: &applications,
         arm_scopes: arms,
         sink,
@@ -649,11 +655,6 @@ fn is_identifier_char(c: char) -> bool {
     }
 }
 
-/// Collects the parameter signatures of the file's named functions —
-/// `function f(...)`, `const f = (...) => ...`, `const f = function (...)`
-/// — which is what makes the call-site capability check possible. A name
-/// declared twice with different signatures maps to `None` and is not
-/// checked.
 /// One collected declaration, before any pairing: the declared name, the
 /// byte offset of its identifier, and the parameter list.
 struct FnDecl<'a> {
@@ -718,28 +719,6 @@ fn collect_declarations_grown<'a>(
                 }
             }
             _ => {}
-        }
-    }
-}
-
-/// The name-keyed view of the file's declarations — what the untyped path
-/// pairs a call with. A name declared twice with different signatures maps
-/// to `None` and is not checked; the delegated path does better, pairing
-/// each call with the declaration its callee *symbol* names
-/// ([`crate::val_probes`]).
-fn collect_signatures<'a>(
-    declarations: &[FnDecl<'a>],
-    out: &mut HashMap<&'a str, Option<Vec<ParamSig>>>,
-) {
-    for declaration in declarations {
-        match out.get(declaration.name) {
-            Some(Some(prev)) if *prev == declaration.params => {}
-            Some(_) => {
-                out.insert(declaration.name, None); // ambiguous — stop checking it
-            }
-            None => {
-                out.insert(declaration.name, Some(declaration.params.clone()));
-            }
         }
     }
 }

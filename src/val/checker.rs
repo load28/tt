@@ -13,7 +13,12 @@ pub(super) struct Checker<'a> {
     pub(super) source_kind: SourceKind,
     /// The parser's `val` modifiers.
     pub(super) modifiers: &'a Modifiers,
-    pub(super) signatures: &'a HashMap<&'a str, Option<Vec<ParamSig>>>,
+    /// The names the file's named function declarations bind.
+    pub(super) declared: &'a HashSet<&'a str>,
+    /// Each named function declaration's parameters, keyed by the byte
+    /// offset of its declared identifier: the binding a call's callee
+    /// resolves to in the scope model names one of these or none.
+    pub(super) functions: &'a HashMap<usize, Vec<ParamSig>>,
     pub(super) applications: &'a Applications,
     pub(super) arm_scopes: &'a [ArmScope],
     /// Probe mode: collect method calls instead of reporting violations.
@@ -42,12 +47,15 @@ impl<'a> Checker<'a> {
     /// when the innermost binding of that name is an ordinary one (or
     /// there is none). Innermost wins — that is the shadowing rule.
     fn lookup(&self, frames: &[Frame<'a>], name: &str) -> Option<usize> {
-        for frame in frames.iter().rev() {
-            if let Some(var) = frame.vars.iter().rev().find(|v| v.name == name) {
-                return var.val_at;
-            }
-        }
-        None
+        self.binding(frames, name).and_then(|var| var.val_at)
+    }
+
+    /// The innermost binding of `name` in scope.
+    fn binding<'f>(&self, frames: &'f [Frame<'a>], name: &str) -> Option<&'f Var<'a>> {
+        frames
+            .iter()
+            .rev()
+            .find_map(|frame| frame.vars.iter().rev().find(|v| v.name == name))
     }
 
     /// Walks one token stream (the file, or one template interpolation),
@@ -319,15 +327,17 @@ impl<'a> Checker<'a> {
         match self.sink {
             // Which declaration a call names is the checker's question:
             // every call to a name the file declares is collected, and
-            // the pairing is by symbol identity, so a name the untyped
-            // path has to call ambiguous is settled per call site. The
-            // name gate only skips calls no same-file declaration
-            // could possibly match.
-            Sink::Probes(_) if self.signatures.contains_key(word) => {
+            // the pairing is by symbol identity. The name gate only skips
+            // calls no same-file declaration could possibly match. The
+            // untyped path resolves the callee in its own scope model.
+            Sink::Probes(_) if self.declared.contains(word) => {
                 self.probe_call(tokens, entries, callee.start, word);
             }
             _ => {
-                if let Some(Some(params)) = self.signatures.get(word) {
+                if let Some(params) = self
+                    .binding(frames, word)
+                    .and_then(|var| self.functions.get(&var.ident))
+                {
                     self.check_call(tokens, entries, word, params, frames);
                 }
             }
@@ -370,6 +380,20 @@ impl<'a> Checker<'a> {
                     {
                         self.declare(frames, vec![self.text(t)], None);
                     }
+                }
+                TokenKind::Ident
+                    if matches!(self.text(&tokens[k]), "const" | "let")
+                        && !dotted_at(tokens, 0, k) =>
+                {
+                    let val_at = k
+                        .checked_sub(1)
+                        .filter(|&at| {
+                            modifier_of(self.modifiers, &tokens[at])
+                                == Some(ValModifierKind::Declaration)
+                        })
+                        .map(|at| tokens[at].span.start);
+                    let names = collect_decl_names(self.src, tokens, k + 1);
+                    self.declare_quietly(frames, names, val_at);
                 }
                 _ => {}
             }
@@ -534,7 +558,16 @@ impl<'a> Checker<'a> {
     }
 
     /// Registers bindings in the innermost scope.
-    fn declare(&self, frames: &mut [Frame<'a>], names: Vec<&'a str>, val_at: Option<usize>) {
+    /// Binds `names` on entry to their block, as BlockDeclarationInstantiation
+    /// binds every lexical declaration of a block before its first
+    /// statement runs; the declaration itself reports its `val` binding
+    /// when the walk reaches it.
+    fn declare_quietly(
+        &self,
+        frames: &mut [Frame<'a>],
+        names: Vec<&'a str>,
+        val_at: Option<usize>,
+    ) {
         let src = self.src;
         if let Some(frame) = frames.last_mut() {
             frame.vars.extend(names.into_iter().map(|name| Var {
@@ -543,20 +576,34 @@ impl<'a> Checker<'a> {
                 ident: offset_in(src, name),
             }));
         }
+    }
+
+    fn declare(&self, frames: &mut [Frame<'a>], names: Vec<&'a str>, val_at: Option<usize>) {
+        let src = self.src;
+        let vars: Vec<Var<'a>> = names
+            .into_iter()
+            .map(|name| Var {
+                name,
+                val_at,
+                ident: offset_in(src, name),
+            })
+            .collect();
         if val_at.is_some()
             && let Sink::Probes(sink) = self.sink
-            && let Some(frame) = frames.last()
         {
             // Every `val` binding is a node the checker can resolve; which
             // mutations belong to it is then a question of symbol identity,
             // not of this file's scope model.
-            sink.borrow_mut().bindings.extend(
-                frame
-                    .vars
-                    .iter()
-                    .filter(|v| v.val_at == val_at)
-                    .map(|v| self.val_binding(v)),
-            );
+            sink.borrow_mut()
+                .bindings
+                .extend(vars.iter().map(|v| self.val_binding(v)));
+        }
+        if let Some(frame) = frames.last_mut() {
+            for var in vars {
+                if !frame.vars.iter().any(|bound| bound.ident == var.ident) {
+                    frame.vars.push(var);
+                }
+            }
         }
     }
 
