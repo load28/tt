@@ -200,6 +200,28 @@ pub(crate) fn report(
             Some((file.source_path.clone(), anchor.src, anchor.kind))
         })
         .collect();
+    // A pattern the checker proves the value cannot be (TS2678 on a case
+    // label, TS2367 on a test) owns what the checker then says about that
+    // alternative's bindings: their fields are read from the value's
+    // narrowed type, which the alternative is not.
+    let impossible_alternatives: HashSet<(PathBuf, usize)> = type_diagnostics
+        .iter()
+        .filter_map(|diagnostic| {
+            let file = files
+                .iter()
+                .find(|file| file.module_path == diagnostic.file)?;
+            if typescript_owned(file, diagnostic) {
+                return None;
+            }
+            let (start, end) = diagnostic_span(diagnostic);
+            let DiagnosticOrigin::Anchor(anchor) = projection::diagnostic_origin(file, start, end)?
+            else {
+                return None;
+            };
+            (translation_class(anchor.kind, diagnostic.code) == Some("impossible-case"))
+                .then(|| (file.source_path.clone(), anchor.display().0))
+        })
+        .collect();
     let mut translated_seen: HashSet<(PathBuf, usize, AnchorKind, &'static str)> = HashSet::new();
     let lowered: HashMap<&std::path::Path, &Arc<ProjectedDocument>> = files
         .iter()
@@ -310,6 +332,16 @@ pub(crate) fn report(
         {
             continue;
         }
+        if let DiagnosticOrigin::Exact { start, .. } = origin
+            && semantics
+                .get(&file.source_path)
+                .and_then(|semantics| semantics.analyses.binding_at(start))
+                .is_some_and(|binding| {
+                    impossible_alternatives.contains(&(file.source_path.clone(), binding.alt_start))
+                })
+        {
+            continue;
+        }
         if let DiagnosticOrigin::Exact { start, end } = origin
             && resolution_spans
                 .get(&file.source_path)
@@ -387,13 +419,43 @@ pub(crate) fn report(
                 && let Some(said) =
                     translate(anchor.kind, diagnostic.code, &diagnostic.message, declared)
             {
+                // tt requires every declared case, which a value narrowed
+                // before the match does not have: `_` covers the rest
+                // without writing a case the checker rejects.
+                let (tag_start, tag_end) = anchor.display();
+                let narrowed_case = anchor.kind == AnchorKind::Match
+                    && translation_class(anchor.kind, diagnostic.code) == Some("impossible-case")
+                    && file.source.get(tag_start..tag_end).is_some_and(|tag| {
+                        semantics.get(&file.source_path).is_some_and(|semantics| {
+                            semantics
+                                .analyses
+                                .matches
+                                .iter()
+                                .filter(|analysis| analysis.keyword_off == anchor.src)
+                                .flat_map(|analysis| analysis.subjects.iter().flatten())
+                                .any(|subject| {
+                                    subject.constructors.iter().any(|case| case.tag == tag)
+                                })
+                        })
+                    });
+                let suggestions = if narrowed_case {
+                    vec![crate::Suggestion {
+                        message: "the value is narrowed before the match, so this case cannot \
+                                  occur here; cover the cases it can no longer be with a final \
+                                  `_` arm instead of naming them"
+                            .to_string(),
+                        edit: None,
+                    }]
+                } else {
+                    Vec::new()
+                };
                 let entry = Diagnostic {
                     path: file.source_path.clone(),
                     position: Some(file.line_col(anchor.display().0)),
                     end: Some(file.line_col(anchor.display().1)),
                     message: said,
                     code: Some(format!("ts{}", diagnostic.code)),
-                    suggestions: Vec::new(),
+                    suggestions,
                     labels: checker_labels(files, file, Some(&anchor), diagnostic),
                 };
                 // One construct's glue can draw several TypeScript errors

@@ -1,0 +1,9 @@
+variant Shape { Circle(r: number), Rect(w: number) }
+export function f(s: Shape): number {
+  if (s.kind === "Rect") return 0;
+  return match (s) { Circle(r) => r, Rect(w) => w };
+}
+export function g(s: Shape): number {
+  if (s.kind === "Rect") return 0;
+  return match (s) { Circle(r) => r, _ => 0 };
+}

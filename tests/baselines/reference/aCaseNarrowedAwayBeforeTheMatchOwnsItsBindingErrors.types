@@ -1,0 +1,56 @@
+=== aCaseNarrowedAwayBeforeTheMatchOwnsItsBindingErrors.tt ===
+variant Shape { Circle(r: number), Rect(w: number) }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>   }
+>Circle : (property) Circle: (r: number) => Shape
+>r : (property) r: number
+>Rect : (property) Rect: (w: number) => Shape
+>w : (property) w: number
+export function f(s: Shape): number {
+>f : function f(s: Shape): number
+>s : (parameter) s: Shape
+>Shape : type Shape = {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>   }
+  if (s.kind === "Rect") return 0;
+>s : (parameter) s: Shape
+>kind : (property) kind: "Circle" | "Rect"
+  return match (s) { Circle(r) => r, Rect(w) => w };
+>s : (parameter) s: {
+>       kind: "Circle";
+>       r: number;
+>   }
+>r : const r: number
+>r : const r: number
+>w : const w: any
+>w : const w: any
+export function g(s: Shape): number {
+>g : function g(s: Shape): number
+>s : (parameter) s: Shape
+>Shape : type Shape = {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>   }
+  if (s.kind === "Rect") return 0;
+>s : (parameter) s: Shape
+>kind : (property) kind: "Circle" | "Rect"
+  return match (s) { Circle(r) => r, _ => 0 };
+>s : (parameter) s: {
+>       kind: "Circle";
+>       r: number;
+>   }
+>r : const r: number
+>r : const r: number
+

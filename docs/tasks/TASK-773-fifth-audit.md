@@ -322,14 +322,6 @@ defects. This task fixes them in the layer that owns each one.
 
 ### Decision 18: Findings recorded without a change (K3, K4, K6, K7, K8)
 
-- **K3, K4** (the scrutinee variable is not narrowed inside an arm; an arm
-  for a case narrowed away before the match is TS2678): both follow from
-  testing a `const` copy of the scrutinee, which keeps the single
-  evaluation the documentation promises and takes the narrowed type of
-  the subject at the match. Narrowing the subject itself, or typing the
-  copy with the declared variant (which a generic variant cannot spell),
-  changes every match's emission and is proposed to the user rather than
-  decided here.
 - **K8** (time for many matches in one expression): measured on a debug
   build at 200, 400, and 800 matches in one expression, 0.24 s, 0.75 s,
   and 3.2 s; let-else statements in one body are linear (0.04 s at 100,
@@ -382,6 +374,31 @@ defects. This task fixes them in the layer that owns each one.
   function values this way; `anAnnotationNeverNamesTheStorageTheLoweringDeclared.types`
   now shows `(Anonymous class)` where it showed the slot `$tt_v0`.
 
+### Decision 21: An arm for a narrowed-away case is TypeScript's error alone (K4)
+
+- **Context**: After `if (s.kind === "Rect") return 0;`, tt requires a
+  `Rect` arm (the declared cases, since a build has no types), and
+  `--check-types` reported the arm as TS2678 and its binding `w` as TS2339.
+  The documentation said "Add the arm or `_`", and the arm cannot pass.
+- **Alternatives**: Type the scrutinee copy with the declared variant so
+  TypeScript sees every case: TypeScript has no syntax for a reference's
+  declared type (`typeof s` is the narrowed one), and a generic variant's
+  type arguments are not known to ttc. Use the narrowed type for
+  exhaustiveness on the typed paths: a program the typed check accepts
+  would then fail the build, against the documented invariant.
+- **Decision and rationale**: `_` is the only arm that both layers accept,
+  and the documentation now says so. The checker's verdict on the arm
+  stays (it is the user's arm and TypeScript's fact), with a help line that
+  says why the case cannot occur and what to write. What the checker then
+  says about that alternative's bindings is a consequence of the same fact
+  (their fields are read from a type the alternative is not), so an
+  alternative with an impossible-case diagnostic owns those diagnostics, as
+  a duplicate arm owns its glue's (decision 6). The help line is added only
+  when the tag is a declared case of the match's variant; a tag the
+  variant does not have (`Zzz`) is the same TS2678 without it.
+  `rewriteComposesWithTtConstructsInTheSameFile` (a match over
+  `Shape.Point`) loses its `ts2339` on `radius` and gains the help line.
+
 ## Work log
 
 - 2026-10-06: Ran the fifth audit as three read-only agents (CLI,
@@ -418,6 +435,7 @@ defects. This task fixes them in the layer that owns each one.
   the remaining compiler findings (decision 18).
 - 2026-10-07: Resolved val-pass callees in the scope model (decision 19).
 - 2026-10-07: Stopped generated storage from naming functions (decision 20).
+- 2026-10-07: Let an impossible arm own its binding diagnostics (decision 21).
 
 ## Issues and resolutions
 
@@ -475,6 +493,8 @@ Each test below was run against the code before this task (the parent of
 - **Observed failure**: the build reported no `val-pass` error for `outer`'s call to `h`.
 - **Path**: `tests/cases/compiler/aFunctionWrittenAsAMatchOrResultValueIsNotNamed.tt` (K6, fix reverted)
 - **Observed failure**: `.stdout` was `["value","$tt_v1","value","own","$tt_v4","","value",""]` instead of `["","","","own","","","",""]`.
+- **Path**: `tests/cases/compiler/aCaseNarrowedAwayBeforeTheMatchOwnsItsBindingErrors.tt` (K4, fix reverted)
+- **Observed failure**: an extra `ts2339` on `w`, and no help line.
 
 ## Verification
 
