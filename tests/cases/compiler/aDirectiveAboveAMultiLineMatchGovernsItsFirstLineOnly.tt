@@ -1,0 +1,12 @@
+variant S { A(n: number), B }
+declare const s: S;
+export function f() {
+  // @ts-expect-error
+  const v: string = match (s) {
+    A(n) => n,
+    B => "b",
+  };
+  // @ts-expect-error
+  const w: number = match (s) { A(n) => n, B => "b" };
+  return [v, w];
+}

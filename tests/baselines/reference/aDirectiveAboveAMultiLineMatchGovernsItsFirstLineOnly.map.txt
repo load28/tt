@@ -1,0 +1,17 @@
+//// [aDirectiveAboveAMultiLineMatchGovernsItsFirstLineOnly.tt] 15 mapping(s)
+1:18 -> 20:21 len 6  "number"
+1:18 -> 23:10 len 6  "number"
+1:30 -> 25:3 len 67  "\ndeclare const s: S;\nexport function f() {\n  // "...
+5:3 -> 31:122 len 18  "const v: string = "
+5:28 -> 29:39 len 1  "s"
+6:7 -> 30:25 len 1  "n"
+6:13 -> 30:47 len 1  "n"
+7:10 -> 31:26 len 3  "\"b\""
+8:4 -> 31:146 len 26  ";\n  // @ts-expect-error\n  "
+10:3 -> 33:235 len 18  "const w: number = "
+10:28 -> 33:39 len 1  "s"
+10:35 -> 33:84 len 1  "n"
+10:41 -> 33:106 len 1  "n"
+10:49 -> 33:139 len 3  "\"b\""
+10:54 -> 33:259 len 21  ";\n  return [v, w];\n}\n"
+

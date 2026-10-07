@@ -41,10 +41,8 @@ function letElse(s: S) {
 }
 function laterLine(s: S) {
   // @ts-expect-error -- the declaration, on the first line, is a string
-  const u: number = match (s) {
-    A(n) => n,
-    B => 0,
-  } + "";
+  const u: number = match (s) { A(n) => n, B => 0 }
+    + "";
   return u;
 }
 /** The documented value. */
@@ -130,7 +128,8 @@ function letElse(s: S) {
 }
 function laterLine(s: S) {
   // @ts-expect-error -- the declaration, on the first line, is a string
-  let $tt_v3: number; { const $tt_m = s; switch ($tt_m.kind) { case "A": { const { n } = $tt_m; $tt_v3 = n; break; } case "B": { $tt_v3 = 0; break; } default: { throw new Error("tt match: unexpected case " + $tt_show($tt_m)); } } } const u: number = $tt_v3 + "";
+  let $tt_v3: number; { const $tt_m = s; switch ($tt_m.kind) { case "A": { const { n } = $tt_m; $tt_v3 = n; break; } case "B": { $tt_v3 = 0; break; } default: { throw new Error("tt match: unexpected case " + $tt_show($tt_m)); } } } const u: number = $tt_v3
+    + "";
   return u;
 }
 let $tt_v4: number;

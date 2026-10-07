@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./aDirectiveAboveAMultiLineMatchGovernsItsFirstLineOnly.tt → $DIR/out/aDirectiveAboveAMultiLineMatchGovernsItsFirstLineOnly.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2578]: Unused '@ts-expect-error' directive.
+ --> aDirectiveAboveAMultiLineMatchGovernsItsFirstLineOnly.tt:4:3
+  |
+4 |   // @ts-expect-error
+  |   ^^^^^^^^^^^^^^^^^^^
+error[ts2322]: type mismatch: expected `string`, found `number`
+ --> aDirectiveAboveAMultiLineMatchGovernsItsFirstLineOnly.tt:6:13
+  |
+6 |     A(n) => n,
+  |             ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+aDirectiveAboveAMultiLineMatchGovernsItsFirstLineOnly.ts(28,3): error TS2578: Unused '@ts-expect-error' directive.
+aDirectiveAboveAMultiLineMatchGovernsItsFirstLineOnly.ts(30,38): error TS2322: Type 'number' is not assignable to type 'string'.

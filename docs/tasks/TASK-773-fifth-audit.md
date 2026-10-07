@@ -297,6 +297,54 @@ defects. This task fixes them in the layer that owns each one.
   `./tt/option.js`). The bundler adapter asks with `rewriteImports: "off"`
   and serves `@tt/std` virtually.
 
+### Decision 17: A governed statement keeps the line breaks between its arms (K1)
+
+- **Context**: `// @ts-expect-error` above a match written over several
+  lines suppressed a type error in an arm two lines below it. The lowering
+  of a statement that starts on a governed line was written on one output
+  line, arms included, so the directive governed every arm.
+- **Decision and rationale**: TypeScript applies a directive to the next
+  line only (`Program.getDiagnosticsWithPrecedingDirectives` in tsgo's
+  `compiler/program.go` looks up the directive on the line before each
+  diagnostic's line). The printer now writes a line break where the source's
+  next written piece (a copied span or a pattern's source point) starts on
+  a later source line than the last copied one, once per gap, indented as
+  the source line is. Each arm then sits on its own line and a directive
+  governs only the arms on the line after it. What the lowering writes
+  after the arms, the declaration the match initializes, follows the last
+  arm's line; `tsDirectiveBeforeLoweredStatement` now writes that match on
+  one line, the form in which a directive governs its declaration, and
+  `docs/ai/tt.md` says so.
+- **Not changed (K2)**: in a let-else whose `else` block spans lines, the
+  bindings are declared after the block, so a binding error is reported
+  after it. Destructuring before the divergence test would read a field
+  of a value that has not been tested.
+
+### Decision 18: Findings recorded without a change (K3, K4, K6, K7, K8)
+
+- **K3, K4** (the scrutinee variable is not narrowed inside an arm; an arm
+  for a case narrowed away before the match is TS2678): both follow from
+  testing a `const` copy of the scrutinee, which keeps the single
+  evaluation the documentation promises and takes the narrowed type of
+  the subject at the match. Narrowing the subject itself, or typing the
+  copy with the declared variant (which a generic variant cannot spell),
+  changes every match's emission and is proposed to the user rather than
+  decided here.
+- **K6** (`Function.name` of an anonymous function or class written as an
+  arm value): the value is stored through a slot, which names it as
+  ECMAScript's NamedEvaluation does for an assignment. A conditional
+  expression names nothing, but the forms that avoid naming (`(0, f)`) are
+  TS2695 in TypeScript. Proposed to the user.
+- **K7** (plain `ttc` leaves a call to a name declared twice unjudged):
+  `--check-types` resolves the callee's symbol and reports it. The
+  documentation now says plain `ttc` judges by name.
+- **K8** (time for many matches in one expression): measured on a debug
+  build at 200, 400, and 800 matches in one expression, 0.24 s, 0.75 s,
+  and 3.2 s; let-else statements in one body are linear (0.04 s at 100,
+  0.10 s at 400). Samples put the expression cost in the evaluation-order
+  validation, which compares each captured span with every earlier one.
+  Not changed in this task.
+
 ## Work log
 
 - 2026-10-06: Ran the fifth audit as three read-only agents (CLI,

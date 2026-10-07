@@ -104,10 +104,9 @@ function laterLine(s: S) {
 >   } | {
 >       kind: "B";
 >   }
-  const u: number = match (s) {
+  const u: number = match (s) { A(n) => n, B => 0 }
 >u : const u: number
 >s : (parameter) s: S
-    A(n) => n,
 >n : const n: number
 >n : const n: number
   return u;

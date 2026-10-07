@@ -34,26 +34,26 @@
 38:45 -> 62:89 len 138  " const t: string = m;\n  return t;\n}\nfunction lat"...
 43:3 -> 67:225 len 18  "const u: number = "
 43:28 -> 67:31 len 1  "s"
-44:7 -> 67:76 len 1  "n"
-44:13 -> 67:98 len 1  "n"
-45:10 -> 67:131 len 1  "0"
-46:4 -> 67:249 len 21  " + \"\";\n  return u;\n}\n"
-49:1 -> 88:1 len 55  "/** The documented value. */\nexport const docume"...
-50:34 -> 72:17 len 11  "S.A(2) as S"
-50:51 -> 75:15 len 1  "n"
-50:57 -> 76:16 len 1  "n"
-50:65 -> 80:16 len 1  "0"
-50:68 -> 89:33 len 2  ";\n"
-51:1 -> 94:1 len 69  "/**\n * The documented binding.\n */\n// a note aft"...
-55:9 -> 98:9 len 1  "n"
-55:12 -> 98:12 len 17  "documentedBinding"
-55:33 -> 90:16 len 11  "S.A(3) as S"
-55:52 -> 92:3 len 21  "throw new Error(\"B\");"
-55:76 -> 98:41 len 57  "\n// a plain comment stays above the generated st"...
-57:1 -> 118:1 len 21  "export const plain = "
-57:29 -> 102:17 len 8  "S.B as S"
-57:43 -> 105:15 len 1  "n"
-57:49 -> 106:16 len 1  "n"
-57:57 -> 110:16 len 2  "-1"
-57:61 -> 118:28 len 274  ";\nconsole.log(documented, documentedBinding, pla"...
+43:35 -> 67:76 len 1  "n"
+43:41 -> 67:98 len 1  "n"
+43:49 -> 67:131 len 1  "0"
+43:52 -> 67:249 len 25  "\n    + \"\";\n  return u;\n}\n"
+47:1 -> 89:1 len 55  "/** The documented value. */\nexport const docume"...
+48:34 -> 73:17 len 11  "S.A(2) as S"
+48:51 -> 76:15 len 1  "n"
+48:57 -> 77:16 len 1  "n"
+48:65 -> 81:16 len 1  "0"
+48:68 -> 90:33 len 2  ";\n"
+49:1 -> 95:1 len 69  "/**\n * The documented binding.\n */\n// a note aft"...
+53:9 -> 99:9 len 1  "n"
+53:12 -> 99:12 len 17  "documentedBinding"
+53:33 -> 91:16 len 11  "S.A(3) as S"
+53:52 -> 93:3 len 21  "throw new Error(\"B\");"
+53:76 -> 99:41 len 57  "\n// a plain comment stays above the generated st"...
+55:1 -> 119:1 len 21  "export const plain = "
+55:29 -> 103:17 len 8  "S.B as S"
+55:43 -> 106:15 len 1  "n"
+55:49 -> 107:16 len 1  "n"
+55:57 -> 111:16 len 2  "-1"
+55:61 -> 119:28 len 274  ";\nconsole.log(documented, documentedBinding, pla"...
 

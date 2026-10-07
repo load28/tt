@@ -716,24 +716,36 @@ impl<'a> TargetFile<'a> {
                 .any(|statement| statement.start <= at && at <= statement.line_end)
         };
         let mut following: Vec<(Option<usize>, Option<usize>)> = Vec::new();
+        let mut line_breaks: Vec<Option<usize>> = Vec::new();
         if !governed.is_empty() {
             following = vec![(None, None); self.pieces.len()];
+            line_breaks = vec![None; self.pieces.len()];
             let mut next = (None, None);
+            let mut point = None;
             for (index, piece) in self.pieces.iter().enumerate().rev() {
                 following[index] = next;
-                if let TargetPiece::Source {
-                    origin: ExactOrigin { start, .. },
-                    ..
-                } = piece
-                {
-                    next.0 = Some(*start);
-                    if governed_line(*start) {
-                        next.1 = Some(*start);
+                match piece {
+                    TargetPiece::Source {
+                        origin: ExactOrigin { start, .. },
+                        ..
+                    } => {
+                        next.0 = Some(*start);
+                        if governed_line(*start) {
+                            next.1 = Some(*start);
+                        }
+                        point = Some(*start);
                     }
+                    TargetPiece::Mark {
+                        src,
+                        kind: MarkKind::SourcePoint,
+                    } => point = Some(*src),
+                    TargetPiece::Break { .. } => line_breaks[index] = point.take(),
+                    _ => {}
                 }
             }
         }
         let mut previous_source_end: Option<usize> = None;
+        let mut crossed: Option<(usize, usize)> = None;
         let mut single_line_breaks = Vec::new();
         let mut out = String::with_capacity(self.len + self.len / 8);
         let mut scopes: Vec<String> = Vec::new();
@@ -1009,9 +1021,32 @@ impl<'a> TargetFile<'a> {
                     scopes.pop();
                 }
                 TargetPiece::Break { .. } if single_line => {
-                    single_line_breaks.push(out.len());
-                    if !out.ends_with(' ') {
-                        out.push(' ');
+                    let gap = previous_source_end.zip(line_breaks[index]);
+                    let source_lines = match (self.source, gap) {
+                        (Some(source), Some((previous, next)))
+                            if previous < next && crossed != gap =>
+                        {
+                            source[previous..next].matches('\n').count()
+                        }
+                        _ => 0,
+                    };
+                    if source_lines > 0 {
+                        crossed = gap;
+                        let (_, next) = gap.unwrap_or_default();
+                        let source = self.source.unwrap_or_default();
+                        let line = source[..next].rfind('\n').map_or(0, |at| at + 1);
+                        let indent = &source[line..next];
+                        let indent =
+                            &indent[..indent.len() - indent.trim_start_matches([' ', '\t']).len()];
+                        for _ in 0..source_lines {
+                            out.push_str(newline);
+                        }
+                        out.push_str(indent);
+                    } else {
+                        single_line_breaks.push(out.len());
+                        if !out.ends_with(' ') {
+                            out.push(' ');
+                        }
                     }
                 }
                 TargetPiece::Break { depth } => {
