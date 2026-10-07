@@ -814,7 +814,8 @@
 | TASK-771 | Keep a logical test's narrowing and fix the fourth audit's remaining editor findings | Complete | 2026-10-06 | 2026-10-06 | [TASK-771](./TASK-771-narrowing-and-editor-cost.md) |
 | TASK-772 | Fix the deferred findings of earlier audits | Complete | 2026-10-06 | 2026-10-06 | [TASK-772](./TASK-772-deferred-findings.md) |
 | TASK-773 | Fix defects found by the fifth audit | Complete | 2026-10-06 | 2026-10-07 | [TASK-773](./TASK-773-fifth-audit.md) |
+| TASK-774 | Make the evaluation protocol linear in the tt values of an expression | In progress | 2026-10-07 | — | [TASK-774](./TASK-774-linear-evaluation-protocol.md) |
 
 ## Next task number
 
-**TASK-774**
+**TASK-775**

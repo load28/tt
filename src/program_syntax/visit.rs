@@ -231,6 +231,16 @@ impl ParentCollector {
         let mut globals = HashMap::new();
         let mut overlay: Vec<OverlayEntry> = Vec::with_capacity(pending.len());
         let mut owner_sources: HashMap<ProjectedSpan, Option<SourceSpan>> = HashMap::new();
+        // The position of the latest tt value listed under each frame of
+        // each owner ([`evaluation_protocol`]'s `earlier`).
+        let mut listed_values: HashMap<
+            (
+                HostOwnerId,
+                ProjectedSpan,
+                std::mem::Discriminant<ProjectedProtocolFrame>,
+            ),
+            (usize, ProjectedByte),
+        > = HashMap::new();
         let overlay_spans: Vec<_> = pending
             .iter()
             .map(|entry| (entry.id, entry.projected))
@@ -375,11 +385,8 @@ impl ParentCollector {
                 // body) can sit inside an outer expression only across a
                 // function boundary, and the rewrite happens where the owner
                 // executes, not where the enclosing expression does.
-                protocol: evaluation_protocol(
-                    &self.source_segments,
-                    entry.projected,
-                    entry.source,
-                    &found
+                protocol: {
+                    let frames: Vec<std::rc::Rc<ProjectedProtocolFrame>> = found
                         .protocol_frames
                         .iter()
                         .filter(|frame| {
@@ -395,12 +402,45 @@ impl ParentCollector {
                                 && !enclosing_overlay.is_some_and(|ancestor| {
                                     projected_contains(frame.parent(), ancestor)
                                 })
-                                && (!matches!(frame, ProjectedProtocolFrame::LoopTest { .. })
+                                && (!matches!(&***frame, ProjectedProtocolFrame::LoopTest { .. })
                                     || entry.marker == OverlayMarker::DecisionCallExpression)
                         })
                         .cloned()
-                        .collect::<Vec<_>>(),
-                )?,
+                        .collect();
+                    let positions: Vec<Option<usize>> = frames
+                        .iter()
+                        .map(|frame| listed_position(frame, entry.projected))
+                        .collect();
+                    let earlier: Vec<Option<usize>> = frames
+                        .iter()
+                        .zip(&positions)
+                        .map(|(frame, position)| {
+                            let position = (*position)?;
+                            listed_values
+                                .get(&(owner_id, frame.parent(), std::mem::discriminant(&**frame)))
+                                .copied()
+                                .filter(|&(earlier, start)| {
+                                    earlier <= position && start < entry.projected.start
+                                })
+                                .map(|(earlier, _)| earlier)
+                        })
+                        .collect();
+                    for (frame, position) in frames.iter().zip(&positions) {
+                        if let Some(position) = *position {
+                            listed_values.insert(
+                                (owner_id, frame.parent(), std::mem::discriminant(&**frame)),
+                                (position, entry.projected.start),
+                            );
+                        }
+                    }
+                    evaluation_protocol(
+                        &self.source_segments,
+                        entry.projected,
+                        entry.source,
+                        &frames,
+                        &earlier,
+                    )?
+                },
                 core_root: entry.core_root,
                 parents: found.parents,
                 host_owner: owners[owner_id.0 as usize].owner,
@@ -534,32 +574,33 @@ impl VisitAstPath for ParentCollector {
     }
 
     fn visit_array_lit<'ast: 'r, 'r>(&mut self, node: &'ast ArrayLit, path: &mut AstNodePath<'r>) {
-        self.protocol_frames.push(ProjectedProtocolFrame::Ordered {
-            parent: projected_span(node.span, self.source_start),
-            positions: node
-                .elems
-                .iter()
-                .flatten()
-                .map(|element| {
-                    (
-                        operand_span(
-                            &element.expr,
-                            self.source_start,
-                            &self.placeholders,
-                            &self.source_segments,
-                        ),
-                        expression_effects(&element.expr),
-                        if element.spread.is_some() {
-                            EvaluationInputMode::SpreadElement
-                        } else {
-                            EvaluationInputMode::Value
-                        },
-                    )
-                })
-                .collect(),
-            kind: OrderedEvaluationKind::Array,
-            spread_free: node.elems.iter().flatten().all(|e| e.spread.is_none()),
-        });
+        self.protocol_frames
+            .push(std::rc::Rc::new(ProjectedProtocolFrame::Ordered {
+                parent: projected_span(node.span, self.source_start),
+                positions: node
+                    .elems
+                    .iter()
+                    .flatten()
+                    .map(|element| {
+                        (
+                            operand_span(
+                                &element.expr,
+                                self.source_start,
+                                &self.placeholders,
+                                &self.source_segments,
+                            ),
+                            expression_effects(&element.expr),
+                            if element.spread.is_some() {
+                                EvaluationInputMode::SpreadElement
+                            } else {
+                                EvaluationInputMode::Value
+                            },
+                        )
+                    })
+                    .collect(),
+                kind: OrderedEvaluationKind::Array,
+                spread_free: node.elems.iter().flatten().all(|e| e.spread.is_none()),
+            }));
         <ArrayLit as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
     }
@@ -569,20 +610,21 @@ impl VisitAstPath for ParentCollector {
         node: &'ast ObjectLit,
         path: &mut AstNodePath<'r>,
     ) {
-        self.protocol_frames.push(ProjectedProtocolFrame::Ordered {
-            parent: projected_span(node.span, self.source_start),
-            positions: object_evaluation_positions(
-                node,
-                self.source_start,
-                &self.placeholders,
-                &self.source_segments,
-            ),
-            kind: OrderedEvaluationKind::Object,
-            spread_free: !node
-                .props
-                .iter()
-                .any(|property| matches!(property, PropOrSpread::Spread(_))),
-        });
+        self.protocol_frames
+            .push(std::rc::Rc::new(ProjectedProtocolFrame::Ordered {
+                parent: projected_span(node.span, self.source_start),
+                positions: object_evaluation_positions(
+                    node,
+                    self.source_start,
+                    &self.placeholders,
+                    &self.source_segments,
+                ),
+                kind: OrderedEvaluationKind::Object,
+                spread_free: !node
+                    .props
+                    .iter()
+                    .any(|property| matches!(property, PropOrSpread::Spread(_))),
+            }));
         <ObjectLit as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
     }
@@ -593,7 +635,7 @@ impl VisitAstPath for ParentCollector {
         path: &mut AstNodePath<'r>,
     ) {
         self.protocol_frames
-            .push(ProjectedProtocolFrame::Assignment {
+            .push(std::rc::Rc::new(ProjectedProtocolFrame::Assignment {
                 parent: projected_span(node.span, self.source_start),
                 operator: node.op,
                 target: projected_span(node.left.span(), self.source_start),
@@ -634,28 +676,29 @@ impl VisitAstPath for ParentCollector {
                     &self.placeholders,
                     &self.source_segments,
                 ),
-            });
+            }));
         <AssignExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
     }
 
     fn visit_seq_expr<'ast: 'r, 'r>(&mut self, node: &'ast SeqExpr, path: &mut AstNodePath<'r>) {
-        self.protocol_frames.push(ProjectedProtocolFrame::Ordered {
-            parent: projected_span(node.span, self.source_start),
-            positions: node
-                .exprs
-                .iter()
-                .map(|expression| {
-                    (
-                        projected_span(expression.span(), self.source_start),
-                        expression_effects(expression),
-                        EvaluationInputMode::Discarded,
-                    )
-                })
-                .collect(),
-            kind: OrderedEvaluationKind::Sequence,
-            spread_free: true,
-        });
+        self.protocol_frames
+            .push(std::rc::Rc::new(ProjectedProtocolFrame::Ordered {
+                parent: projected_span(node.span, self.source_start),
+                positions: node
+                    .exprs
+                    .iter()
+                    .map(|expression| {
+                        (
+                            projected_span(expression.span(), self.source_start),
+                            expression_effects(expression),
+                            EvaluationInputMode::Discarded,
+                        )
+                    })
+                    .collect(),
+                kind: OrderedEvaluationKind::Sequence,
+                spread_free: true,
+            }));
         <SeqExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
     }
@@ -665,52 +708,54 @@ impl VisitAstPath for ParentCollector {
         node: &'ast UnaryExpr,
         path: &mut AstNodePath<'r>,
     ) {
-        self.protocol_frames.push(ProjectedProtocolFrame::Ordered {
-            parent: projected_span(node.span, self.source_start),
-            positions: vec![(
-                operand_span(
-                    &node.arg,
-                    self.source_start,
-                    &self.placeholders,
-                    &self.source_segments,
-                ),
-                expression_effects(&node.arg),
-                EvaluationInputMode::Value,
-            )],
-            kind: OrderedEvaluationKind::Unary,
-            spread_free: true,
-        });
+        self.protocol_frames
+            .push(std::rc::Rc::new(ProjectedProtocolFrame::Ordered {
+                parent: projected_span(node.span, self.source_start),
+                positions: vec![(
+                    operand_span(
+                        &node.arg,
+                        self.source_start,
+                        &self.placeholders,
+                        &self.source_segments,
+                    ),
+                    expression_effects(&node.arg),
+                    EvaluationInputMode::Value,
+                )],
+                kind: OrderedEvaluationKind::Unary,
+                spread_free: true,
+            }));
         <UnaryExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
     }
 
     fn visit_bin_expr<'ast: 'r, 'r>(&mut self, node: &'ast BinExpr, path: &mut AstNodePath<'r>) {
-        self.protocol_frames.push(ProjectedProtocolFrame::Binary {
-            parent: projected_span(node.span, self.source_start),
-            operator: node.op,
-            left: (
-                operand_span(
-                    &node.left,
+        self.protocol_frames
+            .push(std::rc::Rc::new(ProjectedProtocolFrame::Binary {
+                parent: projected_span(node.span, self.source_start),
+                operator: node.op,
+                left: (
+                    operand_span(
+                        &node.left,
+                        self.source_start,
+                        &self.placeholders,
+                        &self.source_segments,
+                    ),
+                    expression_effects(&node.left),
+                ),
+                right: operand_span(
+                    &node.right,
                     self.source_start,
                     &self.placeholders,
                     &self.source_segments,
                 ),
-                expression_effects(&node.left),
-            ),
-            right: operand_span(
-                &node.right,
-                self.source_start,
-                &self.placeholders,
-                &self.source_segments,
-            ),
-        });
+            }));
         <BinExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
     }
 
     fn visit_cond_expr<'ast: 'r, 'r>(&mut self, node: &'ast CondExpr, path: &mut AstNodePath<'r>) {
         self.protocol_frames
-            .push(ProjectedProtocolFrame::Conditional {
+            .push(std::rc::Rc::new(ProjectedProtocolFrame::Conditional {
                 parent: projected_span(node.span, self.source_start),
                 test: (
                     operand_span(
@@ -733,7 +778,7 @@ impl VisitAstPath for ParentCollector {
                     &self.placeholders,
                     &self.source_segments,
                 ),
-            });
+            }));
         <CondExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
     }
@@ -778,49 +823,58 @@ impl VisitAstPath for ParentCollector {
                 (EvaluationInputMode::MemberReference, [None, None])
             }
         };
-        self.protocol_frames.push(ProjectedProtocolFrame::Call {
-            discarded: path
-                .kinds()
-                .iter()
-                .rev()
-                .find(|kind| !matches!(kind, AstParentKind::Expr(fields::ExprField::Call)))
-                .is_some_and(|kind| matches!(kind, AstParentKind::ExprStmt(_))),
-            parent: span,
-            callee: (!read_at_call(&node.callee)).then(|| {
-                projected_span(
-                    match &node.callee {
-                        // A method is captured with the TypeScript wrappers
-                        // around it (`o.m!`, `(o.m as F)`), so the call binds
-                        // the method as its author typed it.
-                        swc_ecma_ast::Callee::Expr(expression)
-                            if callee_mode == EvaluationInputMode::MemberReference =>
-                        {
-                            expression.span()
-                        }
-                        swc_ecma_ast::Callee::Expr(expression) => reference_value_span(expression),
-                        swc_ecma_ast::Callee::Super(_) | swc_ecma_ast::Callee::Import(_) => {
-                            node.callee.span()
-                        }
+        self.protocol_frames
+            .push(std::rc::Rc::new(ProjectedProtocolFrame::Call {
+                discarded: path
+                    .kinds()
+                    .iter()
+                    .rev()
+                    .find(|kind| !matches!(kind, AstParentKind::Expr(fields::ExprField::Call)))
+                    .is_some_and(|kind| matches!(kind, AstParentKind::ExprStmt(_))),
+                parent: span,
+                callee: (!read_at_call(&node.callee)).then(|| {
+                    projected_span(
+                        match &node.callee {
+                            // A method is captured with the TypeScript wrappers
+                            // around it (`o.m!`, `(o.m as F)`), so the call binds
+                            // the method as its author typed it.
+                            swc_ecma_ast::Callee::Expr(expression)
+                                if callee_mode == EvaluationInputMode::MemberReference =>
+                            {
+                                expression.span()
+                            }
+                            swc_ecma_ast::Callee::Expr(expression) => {
+                                reference_value_span(expression)
+                            }
+                            swc_ecma_ast::Callee::Super(_) | swc_ecma_ast::Callee::Import(_) => {
+                                node.callee.span()
+                            }
+                        },
+                        self.source_start,
+                    )
+                }),
+                callee_mode,
+                callee_reference: (callee_mode == EvaluationInputMode::MemberReference).then(
+                    || {
+                        projected_member_reference(
+                            callee_parts,
+                            self.source_start,
+                            &self.source_segments,
+                        )
                     },
+                ),
+                arguments: argument_positions(
+                    &node.args,
                     self.source_start,
-                )
-            }),
-            callee_mode,
-            callee_reference: (callee_mode == EvaluationInputMode::MemberReference).then(|| {
-                projected_member_reference(callee_parts, self.source_start, &self.source_segments)
-            }),
-            arguments: argument_positions(
-                &node.args,
-                self.source_start,
-                &self.placeholders,
-                &self.source_segments,
-            ),
-            type_args: node
-                .type_args
-                .as_ref()
-                .map(|args| projected_span(args.span(), self.source_start)),
-            optional: None,
-        });
+                    &self.placeholders,
+                    &self.source_segments,
+                ),
+                type_args: node
+                    .type_args
+                    .as_ref()
+                    .map(|args| projected_span(args.span(), self.source_start)),
+                optional: None,
+            }));
         <CallExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
     }
@@ -832,16 +886,17 @@ impl VisitAstPath for ParentCollector {
     ) {
         self.break_capture_depth += 1;
         if let Some(test) = &node.test {
-            self.protocol_frames.push(ProjectedProtocolFrame::LoopTest {
-                parent: projected_span(node.span, self.source_start),
-                kind: LoopTestKind::For,
-                test: projected_span(test.span(), self.source_start),
-                body: projected_span(node.body.span(), self.source_start),
-                update: node
-                    .update
-                    .as_ref()
-                    .map(|update| projected_span(update.span(), self.source_start)),
-            });
+            self.protocol_frames
+                .push(std::rc::Rc::new(ProjectedProtocolFrame::LoopTest {
+                    parent: projected_span(node.span, self.source_start),
+                    kind: LoopTestKind::For,
+                    test: projected_span(test.span(), self.source_start),
+                    body: projected_span(node.body.span(), self.source_start),
+                    update: node
+                        .update
+                        .as_ref()
+                        .map(|update| projected_span(update.span(), self.source_start)),
+                }));
         }
         <swc_ecma_ast::ForStmt as VisitWithAstPath<Self>>::visit_children_with_ast_path(
             node, self, path,
@@ -882,18 +937,19 @@ impl VisitAstPath for ParentCollector {
         path: &mut AstNodePath<'r>,
     ) {
         self.break_capture_depth += 1;
-        self.protocol_frames.push(ProjectedProtocolFrame::LoopTest {
-            parent: projected_span(node.span, self.source_start),
-            kind: LoopTestKind::While,
-            test: operand_span(
-                &node.test,
-                self.source_start,
-                &self.placeholders,
-                &self.source_segments,
-            ),
-            body: projected_span(node.body.span(), self.source_start),
-            update: None,
-        });
+        self.protocol_frames
+            .push(std::rc::Rc::new(ProjectedProtocolFrame::LoopTest {
+                parent: projected_span(node.span, self.source_start),
+                kind: LoopTestKind::While,
+                test: operand_span(
+                    &node.test,
+                    self.source_start,
+                    &self.placeholders,
+                    &self.source_segments,
+                ),
+                body: projected_span(node.body.span(), self.source_start),
+                update: None,
+            }));
         <swc_ecma_ast::WhileStmt as VisitWithAstPath<Self>>::visit_children_with_ast_path(
             node, self, path,
         );
@@ -1118,29 +1174,36 @@ impl VisitAstPath for ParentCollector {
             _ => None,
         });
         let optional = optional_call_test(own_link == Some(true), &node.callee);
-        self.protocol_frames.push(ProjectedProtocolFrame::Call {
-            discarded: false,
-            parent: projected_span(node.span, self.source_start),
-            callee: Some(projected_span(
-                reference_value_span(&node.callee),
-                self.source_start,
-            )),
-            callee_mode,
-            callee_reference: (callee_mode == EvaluationInputMode::MemberReference).then(|| {
-                projected_member_reference(callee_parts, self.source_start, &self.source_segments)
-            }),
-            arguments: argument_positions(
-                &node.args,
-                self.source_start,
-                &self.placeholders,
-                &self.source_segments,
-            ),
-            type_args: node
-                .type_args
-                .as_ref()
-                .map(|args| projected_span(args.span(), self.source_start)),
-            optional: Some(optional),
-        });
+        self.protocol_frames
+            .push(std::rc::Rc::new(ProjectedProtocolFrame::Call {
+                discarded: false,
+                parent: projected_span(node.span, self.source_start),
+                callee: Some(projected_span(
+                    reference_value_span(&node.callee),
+                    self.source_start,
+                )),
+                callee_mode,
+                callee_reference: (callee_mode == EvaluationInputMode::MemberReference).then(
+                    || {
+                        projected_member_reference(
+                            callee_parts,
+                            self.source_start,
+                            &self.source_segments,
+                        )
+                    },
+                ),
+                arguments: argument_positions(
+                    &node.args,
+                    self.source_start,
+                    &self.placeholders,
+                    &self.source_segments,
+                ),
+                type_args: node
+                    .type_args
+                    .as_ref()
+                    .map(|args| projected_span(args.span(), self.source_start)),
+                optional: Some(optional),
+            }));
         <OptCall as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
     }
@@ -1156,21 +1219,22 @@ impl VisitAstPath for ParentCollector {
             }
             MemberProp::Ident(_) | MemberProp::PrivateName(_) => None,
         };
-        self.protocol_frames.push(ProjectedProtocolFrame::Member {
-            parent: projected_span(node.span, self.source_start),
-            object: (
-                projected_span(node.obj.span(), self.source_start),
-                expression_effects(&node.obj),
-            ),
-            property,
-        });
+        self.protocol_frames
+            .push(std::rc::Rc::new(ProjectedProtocolFrame::Member {
+                parent: projected_span(node.span, self.source_start),
+                object: (
+                    projected_span(node.obj.span(), self.source_start),
+                    expression_effects(&node.obj),
+                ),
+                property,
+            }));
         <MemberExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
     }
 
     fn visit_new_expr<'ast: 'r, 'r>(&mut self, node: &'ast NewExpr, path: &mut AstNodePath<'r>) {
         self.protocol_frames
-            .push(ProjectedProtocolFrame::Construct {
+            .push(std::rc::Rc::new(ProjectedProtocolFrame::Construct {
                 parent: projected_span(node.span, self.source_start),
                 callee: projected_span(reference_value_span(&node.callee), self.source_start),
                 arguments: node
@@ -1185,7 +1249,7 @@ impl VisitAstPath for ParentCollector {
                         )
                     })
                     .unwrap_or_default(),
-            });
+            }));
         <NewExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
     }
@@ -1197,7 +1261,7 @@ impl VisitAstPath for ParentCollector {
     ) {
         let (tag_mode, tag_parts) = call_callee_mode(&node.tag);
         self.protocol_frames
-            .push(ProjectedProtocolFrame::TaggedTemplate {
+            .push(std::rc::Rc::new(ProjectedProtocolFrame::TaggedTemplate {
                 parent: projected_span(node.span, self.source_start),
                 tag: projected_span(reference_value_span(&node.tag), self.source_start),
                 tag_mode,
@@ -1220,7 +1284,7 @@ impl VisitAstPath for ParentCollector {
                         )
                     })
                     .collect(),
-            });
+            }));
         <TaggedTpl as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
     }
@@ -1233,24 +1297,25 @@ impl VisitAstPath for ParentCollector {
             <Tpl as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
             return;
         }
-        self.protocol_frames.push(ProjectedProtocolFrame::Template {
-            parent: projected_span(node.span, self.source_start),
-            expressions: node
-                .exprs
-                .iter()
-                .map(|expression| {
-                    (
-                        operand_span(
-                            expression,
-                            self.source_start,
-                            &self.placeholders,
-                            &self.source_segments,
-                        ),
-                        expression_effects(expression),
-                    )
-                })
-                .collect(),
-        });
+        self.protocol_frames
+            .push(std::rc::Rc::new(ProjectedProtocolFrame::Template {
+                parent: projected_span(node.span, self.source_start),
+                expressions: node
+                    .exprs
+                    .iter()
+                    .map(|expression| {
+                        (
+                            operand_span(
+                                expression,
+                                self.source_start,
+                                &self.placeholders,
+                                &self.source_segments,
+                            ),
+                            expression_effects(expression),
+                        )
+                    })
+                    .collect(),
+            }));
         <Tpl as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
     }
@@ -1260,13 +1325,14 @@ impl VisitAstPath for ParentCollector {
         node: &'ast JSXElement,
         path: &mut AstNodePath<'r>,
     ) {
-        self.protocol_frames.push(ProjectedProtocolFrame::Jsx {
-            parent: projected_span(node.span, self.source_start),
-            expressions: jsx_evaluation_positions(node, self.source_start)
-                .into_iter()
-                .map(|(span, child)| (span, Effects::ANY, child))
-                .collect(),
-        });
+        self.protocol_frames
+            .push(std::rc::Rc::new(ProjectedProtocolFrame::Jsx {
+                parent: projected_span(node.span, self.source_start),
+                expressions: jsx_evaluation_positions(node, self.source_start)
+                    .into_iter()
+                    .map(|(span, child)| (span, Effects::ANY, child))
+                    .collect(),
+            }));
         <JSXElement as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
     }
@@ -1276,13 +1342,14 @@ impl VisitAstPath for ParentCollector {
         node: &'ast JSXFragment,
         path: &mut AstNodePath<'r>,
     ) {
-        self.protocol_frames.push(ProjectedProtocolFrame::Jsx {
-            parent: projected_span(node.span, self.source_start),
-            expressions: jsx_fragment_positions(node, self.source_start)
-                .into_iter()
-                .map(|(span, child)| (span, Effects::ANY, child))
-                .collect(),
-        });
+        self.protocol_frames
+            .push(std::rc::Rc::new(ProjectedProtocolFrame::Jsx {
+                parent: projected_span(node.span, self.source_start),
+                expressions: jsx_fragment_positions(node, self.source_start)
+                    .into_iter()
+                    .map(|(span, child)| (span, Effects::ANY, child))
+                    .collect(),
+            }));
         <JSXFragment as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
     }
@@ -1292,16 +1359,17 @@ impl VisitAstPath for ParentCollector {
         node: &'ast AwaitExpr,
         path: &mut AstNodePath<'r>,
     ) {
-        self.protocol_frames.push(ProjectedProtocolFrame::Suspend {
-            parent: projected_span(node.span, self.source_start),
-            kind: SuspensionKind::Await,
-            value: Some(operand_span(
-                &node.arg,
-                self.source_start,
-                &self.placeholders,
-                &self.source_segments,
-            )),
-        });
+        self.protocol_frames
+            .push(std::rc::Rc::new(ProjectedProtocolFrame::Suspend {
+                parent: projected_span(node.span, self.source_start),
+                kind: SuspensionKind::Await,
+                value: Some(operand_span(
+                    &node.arg,
+                    self.source_start,
+                    &self.placeholders,
+                    &self.source_segments,
+                )),
+            }));
         <AwaitExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
     }
@@ -1311,18 +1379,19 @@ impl VisitAstPath for ParentCollector {
         node: &'ast YieldExpr,
         path: &mut AstNodePath<'r>,
     ) {
-        self.protocol_frames.push(ProjectedProtocolFrame::Suspend {
-            parent: projected_span(node.span, self.source_start),
-            kind: if node.delegate {
-                SuspensionKind::YieldDelegate
-            } else {
-                SuspensionKind::Yield
-            },
-            value: node
-                .arg
-                .as_ref()
-                .map(|value| projected_span(value.span(), self.source_start)),
-        });
+        self.protocol_frames
+            .push(std::rc::Rc::new(ProjectedProtocolFrame::Suspend {
+                parent: projected_span(node.span, self.source_start),
+                kind: if node.delegate {
+                    SuspensionKind::YieldDelegate
+                } else {
+                    SuspensionKind::Yield
+                },
+                value: node
+                    .arg
+                    .as_ref()
+                    .map(|value| projected_span(value.span(), self.source_start)),
+            }));
         <YieldExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
     }

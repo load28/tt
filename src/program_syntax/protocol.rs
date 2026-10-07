@@ -2,20 +2,20 @@
 
 use super::*;
 
+/// `earlier` gives, for each of `frames`, the position of the nearest
+/// earlier tt value of the same owner under that frame, when there is one:
+/// that value's own step there already lists every input before its
+/// position, so this value's step lists the inputs from that position on
+/// and the schedules of all the frame's values together list each input
+/// once. A value whose call the dispatch may complete keeps every input,
+/// because the completion re-reads the whole argument list from its step.
 pub(super) fn evaluation_protocol(
     segments: &ProjectionSegments,
     value: ProjectedSpan,
     source_value: SourceSpan,
-    frames: &[ProjectedProtocolFrame],
+    frames: &[std::rc::Rc<ProjectedProtocolFrame>],
+    earlier: &[Option<usize>],
 ) -> Result<HostEvaluationProtocol, ProgramSyntaxError> {
-    let steps = frames
-        .iter()
-        .rev()
-        .map(|frame| protocol_step(segments, value, source_value, frame))
-        .collect::<Result<Vec<_>, ProgramSyntaxError>>()?
-        .into_iter()
-        .flatten()
-        .collect();
     // The innermost call whose final non-spread argument contains the value.
     // Earlier arguments evaluate before the value and are captured by the
     // schedule; an argument after the value would have to run inside the
@@ -30,7 +30,7 @@ pub(super) fn evaluation_protocol(
         .iter()
         .enumerate()
         .rev()
-        .find_map(|(index, frame)| match frame {
+        .find_map(|(index, frame)| match &**frame {
             ProjectedProtocolFrame::Call {
                 discarded,
                 parent,
@@ -62,6 +62,24 @@ pub(super) fn evaluation_protocol(
             })
         })
         .transpose()?;
+    let complete = call_completion.is_some();
+    let steps = frames
+        .iter()
+        .zip(earlier)
+        .rev()
+        .map(|(frame, &from)| {
+            protocol_step(
+                segments,
+                value,
+                source_value,
+                frame,
+                from.filter(|_| !complete),
+            )
+        })
+        .collect::<Result<Vec<_>, ProgramSyntaxError>>()?
+        .into_iter()
+        .flatten()
+        .collect();
     Ok(HostEvaluationProtocol {
         steps,
         call_completion,
@@ -81,7 +99,7 @@ pub(super) fn evaluation_protocol(
 /// first. Every one of them encloses the value, so a frame that is not the
 /// literal the walk expects ends the chain.
 fn literal_position_chain(
-    frames: &[ProjectedProtocolFrame],
+    frames: &[std::rc::Rc<ProjectedProtocolFrame>],
     argument: ProjectedSpan,
     value: ProjectedSpan,
 ) -> bool {
@@ -95,7 +113,7 @@ fn literal_position_chain(
             positions,
             kind: OrderedEvaluationKind::Object | OrderedEvaluationKind::Array,
             spread_free: true,
-        } = frame
+        } = &**frame
         else {
             return false;
         };
@@ -127,7 +145,9 @@ pub(super) fn protocol_step(
     value: ProjectedSpan,
     source_value: SourceSpan,
     frame: &ProjectedProtocolFrame,
+    from: Option<usize>,
 ) -> Result<Option<HostEvaluationStep>, ProgramSyntaxError> {
+    let first = from.unwrap_or(0);
     let mut conditional: Option<ProjectedConditionalFacts> = None;
     let mut loop_test: Option<(
         LoopTestKind,
@@ -142,10 +162,7 @@ pub(super) fn protocol_step(
             kind,
             ..
         } => {
-            let Some(position) = positions
-                .iter()
-                .position(|(span, ..)| projected_contains(*span, value))
-            else {
+            let Some(position) = position_holding(positions, |(span, ..)| *span, value) else {
                 return Ok(None);
             };
             let index =
@@ -156,7 +173,7 @@ pub(super) fn protocol_step(
                 OrderedEvaluationKind::Sequence => EagerPosition::SequenceElement(index),
                 OrderedEvaluationKind::Unary => EagerPosition::UnaryOperand,
             });
-            let inputs = positions[..position]
+            let inputs = positions[first.min(position)..position]
                 .iter()
                 .copied()
                 .map(|(span, effects, mode)| (span, mode, None, effects))
@@ -333,9 +350,7 @@ pub(super) fn protocol_step(
             optional,
             ..
         } => {
-            let Some(position) = arguments
-                .iter()
-                .position(|(argument, _, _)| projected_contains(*argument, value))
+            let Some(position) = position_holding(arguments, |(argument, ..)| *argument, value)
             else {
                 return Ok(None);
             };
@@ -358,20 +373,19 @@ pub(super) fn protocol_step(
             };
             let inputs = callee
                 .iter()
+                .filter(|_| from.is_none())
                 .copied()
                 .map(|callee| (callee, *callee_mode, *callee_reference, Effects::ANY))
-                .chain(
-                    arguments[..position]
-                        .iter()
-                        .map(|(argument, spread, effects)| {
-                            let mode = if *spread {
-                                EvaluationInputMode::SpreadElement
-                            } else {
-                                EvaluationInputMode::Value
-                            };
-                            (*argument, mode, None, *effects)
-                        }),
-                )
+                .chain(arguments[first.min(position)..position].iter().map(
+                    |(argument, spread, effects)| {
+                        let mode = if *spread {
+                            EvaluationInputMode::SpreadElement
+                        } else {
+                            EvaluationInputMode::Value
+                        };
+                        (*argument, mode, None, *effects)
+                    },
+                ))
                 .collect();
             (*parent, operation, inputs)
         }
@@ -407,27 +421,24 @@ pub(super) fn protocol_step(
             callee,
             arguments,
         } => {
-            let Some(position) = arguments
-                .iter()
-                .position(|(argument, _, _)| projected_contains(*argument, value))
+            let Some(position) = position_holding(arguments, |(argument, ..)| *argument, value)
             else {
                 return Ok(None);
             };
             let index =
                 u32::try_from(position).map_err(|_| ProgramSyntaxError::NodeCountOverflow)?;
             let inputs = std::iter::once((*callee, EvaluationInputMode::Value, None, Effects::ANY))
-                .chain(
-                    arguments[..position]
-                        .iter()
-                        .map(|(argument, spread, effects)| {
-                            let mode = if *spread {
-                                EvaluationInputMode::SpreadElement
-                            } else {
-                                EvaluationInputMode::Value
-                            };
-                            (*argument, mode, None, *effects)
-                        }),
-                )
+                .filter(|_| from.is_none())
+                .chain(arguments[first.min(position)..position].iter().map(
+                    |(argument, spread, effects)| {
+                        let mode = if *spread {
+                            EvaluationInputMode::SpreadElement
+                        } else {
+                            EvaluationInputMode::Value
+                        };
+                        (*argument, mode, None, *effects)
+                    },
+                ))
                 .collect();
             (
                 *parent,
@@ -451,17 +462,15 @@ pub(super) fn protocol_step(
             tag_reference,
             expressions,
         } => {
-            let Some(position) = expressions
-                .iter()
-                .position(|(span, _)| projected_contains(*span, value))
-            else {
+            let Some(position) = position_holding(expressions, |(span, _)| *span, value) else {
                 return Ok(None);
             };
             let index =
                 u32::try_from(position).map_err(|_| ProgramSyntaxError::NodeCountOverflow)?;
             let inputs = std::iter::once((*tag, *tag_mode, *tag_reference, Effects::ANY))
+                .filter(|_| from.is_none())
                 .chain(
-                    expressions[..position]
+                    expressions[first.min(position)..position]
                         .iter()
                         .copied()
                         .map(|(expression, effects)| {
@@ -479,15 +488,12 @@ pub(super) fn protocol_step(
             parent,
             expressions,
         } => {
-            let Some(position) = expressions
-                .iter()
-                .position(|(span, _)| projected_contains(*span, value))
-            else {
+            let Some(position) = position_holding(expressions, |(span, _)| *span, value) else {
                 return Ok(None);
             };
             let index =
                 u32::try_from(position).map_err(|_| ProgramSyntaxError::NodeCountOverflow)?;
-            let inputs = expressions[..position]
+            let inputs = expressions[first.min(position)..position]
                 .iter()
                 .copied()
                 .map(|(expression, effects)| {
@@ -509,15 +515,12 @@ pub(super) fn protocol_step(
             parent,
             expressions,
         } => {
-            let Some(position) = expressions
-                .iter()
-                .position(|(span, _, _)| projected_contains(*span, value))
-            else {
+            let Some(position) = position_holding(expressions, |(span, ..)| *span, value) else {
                 return Ok(None);
             };
             let index =
                 u32::try_from(position).map_err(|_| ProgramSyntaxError::NodeCountOverflow)?;
-            let inputs = expressions[..position]
+            let inputs = expressions[first.min(position)..position]
                 .iter()
                 .copied()
                 .map(|(expression, effects, child)| {
@@ -566,6 +569,7 @@ pub(super) fn protocol_step(
     let inputs = inputs
         .into_iter()
         .map(|(source, mode, reference, effects)| {
+            crate::work::tick("evaluation protocol inputs");
             let reference: ProjectedMemberReference = reference.unwrap_or_default();
             let part = |part: Option<ProjectedReferencePart>| {
                 part.map(|part| {
@@ -1041,4 +1045,53 @@ fn in_segment_order(mut first: Vec<usize>, second: Vec<usize>) -> impl Iterator<
     first.sort_unstable();
     first.dedup();
     first.into_iter()
+}
+
+/// The index of the position in `positions` (in source order, disjoint)
+/// that contains `value`.
+fn position_holding<T>(
+    positions: &[T],
+    span: impl Fn(&T) -> ProjectedSpan,
+    value: ProjectedSpan,
+) -> Option<usize> {
+    let index = positions.partition_point(|position| span(position).end <= value.start);
+    positions
+        .get(index)
+        .filter(|position| projected_contains(span(position), value))
+        .map(|_| index)
+}
+
+/// Where `value` sits in `frame` when the frame lists earlier positions as
+/// inputs: the position's index, or `None` for any other place.
+pub(super) fn listed_position(
+    frame: &ProjectedProtocolFrame,
+    value: ProjectedSpan,
+) -> Option<usize> {
+    match frame {
+        ProjectedProtocolFrame::Ordered { positions, .. } => {
+            position_holding(positions, |(span, ..)| *span, value)
+        }
+        ProjectedProtocolFrame::Call {
+            callee, arguments, ..
+        } if !callee.is_some_and(|callee| projected_contains(callee, value)) => {
+            position_holding(arguments, |(argument, ..)| *argument, value)
+        }
+        ProjectedProtocolFrame::Construct {
+            callee, arguments, ..
+        } if !projected_contains(*callee, value) => {
+            position_holding(arguments, |(argument, ..)| *argument, value)
+        }
+        ProjectedProtocolFrame::TaggedTemplate {
+            tag, expressions, ..
+        } if !projected_contains(*tag, value) => {
+            position_holding(expressions, |(span, _)| *span, value)
+        }
+        ProjectedProtocolFrame::Template { expressions, .. } => {
+            position_holding(expressions, |(span, _)| *span, value)
+        }
+        ProjectedProtocolFrame::Jsx { expressions, .. } => {
+            position_holding(expressions, |(span, ..)| *span, value)
+        }
+        _ => None,
+    }
 }

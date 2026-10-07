@@ -212,7 +212,7 @@ pub(super) struct ParentCollector {
     pub(super) source_segments: ProjectionSegments,
     pub(super) projection_only_protocol_parents: HashSet<ProjectedSpan>,
     pub(super) host_owners: Vec<ProjectedHostOwner>,
-    pub(super) protocol_frames: Vec<ProjectedProtocolFrame>,
+    pub(super) protocol_frames: Vec<std::rc::Rc<ProjectedProtocolFrame>>,
     pub(super) occupied_names: HashSet<String>,
     pub(super) function_depth: usize,
     pub(super) function_targets: Vec<EvaluationOwner>,
@@ -252,7 +252,10 @@ pub(super) struct FoundOverlay {
     pub(super) decision_functions: Vec<usize>,
     pub(super) parents: Vec<AstParentKind>,
     pub(super) host_owners: Vec<ProjectedHostOwner>,
-    pub(super) protocol_frames: Vec<ProjectedProtocolFrame>,
+    /// The frames enclosing the overlay, shared with every other overlay
+    /// under them: a frame lists all of its positions, so copying it per
+    /// overlay would cost each sibling the size of the whole list.
+    pub(super) protocol_frames: Vec<std::rc::Rc<ProjectedProtocolFrame>>,
     pub(super) exits: Vec<ProjectedHostExit>,
     pub(super) function_target: Option<EvaluationOwner>,
     pub(super) contextual_type: Option<ProjectedSpan>,
