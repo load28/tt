@@ -40,7 +40,7 @@ removes that growth from the structure that causes it.
    callee or tag is listed only by the first value, which is where it
    evaluates. This decision is reversed: values that share a conditional
    operation must carry the same steps above it, and trimming broke that
-   (Issue 1). The flat-breadth cost moves to TASK-777.
+   (Issue 1). The flat-breadth cost moves to TASK-776.
 2. **Frames are shared, and positions are found by binary search.** The
    collector cloned every enclosing frame (with its position lists) into
    each value's path; frames are now `Rc`-shared. Positions in a frame are
@@ -64,7 +64,7 @@ removes that growth from the structure that causes it.
    The plan now keeps each capture's owner group and span and each group's
    span-to-slot map, and `LoweringPlan::capture_depends_on` answers the
    same membership question in constant time.
-5. **Superseded by TASK-777: a value's steps stay one per enclosing
+5. **Superseded by TASK-776: a value's steps stay one per enclosing
    operation.** A schedule lists
    each operation between the value and its owner, and the planner and
    emitter index, slice, and compare those lists (`steps()[..index]`,
@@ -77,7 +77,7 @@ removes that growth from the structure that causes it.
    and 4, 1,600 matches in one `+` chain compile in 1.5 s (from 2.9 s) and
    800 in 0.47 s (from 0.63 s); the remaining time is copying the step
    lists. The user chose to restructure lowering as TypeScript does
-   (TASK-777): one top-down pass per owner over the subtrees that contain
+   (TASK-776): one top-down pass per owner over the subtrees that contain
    tt values, as `transformers/generators.ts` spills operands before a
    `yield` using `TransformFlags.ContainsYield`.
 6. **Decision 1 is reverted; decisions 2 to 4 stay.** Restoring every
@@ -85,7 +85,7 @@ removes that growth from the structure that causes it.
    one conditional operation carry equal steps outside it. Sharing frames
    (decision 2), the span memo (decision 3), and the capture relation
    (decision 4) do not change any step, so they stay. The flat-breadth
-   cost is quadratic again until TASK-777 replaces the per-value schedules,
+   cost is quadratic again until TASK-776 replaces the per-value schedules,
    and `compiling_does_linear_work_in_the_tt_values_one_expression_lists`
    is removed with decision 1.
 
@@ -118,7 +118,7 @@ removes that growth from the structure that causes it.
   `compiling_maps_each_projected_span_once_for_nested_tt_values`, which
   fails without the memo (`projection span lookups: 5651 units for n
   matches but 21301 for 2n`).
-- 2026-10-07: While designing TASK-777, found that decision 1 rejects
+- 2026-10-07: While designing TASK-776, found that decision 1 rejects
   valid code (Issue 1). Confirmed with a release build of 2074893c, which
   compiles the program, against the current branch, which reports
   `match-placement`. Reverted decision 1 (decision 6) and added
@@ -169,4 +169,4 @@ and capture dependencies are a relation (`src/evaluation_ir.rs`,
 `compiling_maps_each_projected_span_once_for_nested_tt_values`. Decision 1
 is reverted after Issue 1, pinned by
 `aConditionalBeforeALaterArgumentIsLoweredWhole`. The remaining
-quadratic cost of many tt values in one expression moves to TASK-777.
+quadratic cost of many tt values in one expression moves to TASK-776.
