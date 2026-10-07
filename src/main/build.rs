@@ -252,10 +252,12 @@ pub(super) fn build_jobs(
         .map(|(_, out)| out)
         .collect();
     let mut index = 0;
-    jobs.retain(|_| {
+    jobs.retain(|job| {
         let (file, out) = &identities[index];
         index += 1;
-        !(file == out && compiled_outputs.contains(file))
+        !(file == out
+            && compiled_outputs.contains(file)
+            && ttc::ownership::record(&job.file).is_some())
     });
     Ok(jobs)
 }
@@ -354,6 +356,7 @@ pub(super) fn compile_jobs(jobs: &[Job], support_root: Option<&Path>, opts: &Bui
         let mut claims: HashMap<&Path, &Path> = HashMap::with_capacity(jobs.len());
         let mut outputs: HashMap<PathBuf, &Path> = HashMap::with_capacity(jobs.len());
         let mut conflicted = false;
+        let mut contested: std::collections::HashSet<&Path> = std::collections::HashSet::new();
         for job in jobs {
             if let Some(first) = claims.get(job.out_path.as_path()) {
                 if !same_file(first, &job.file) {
@@ -363,6 +366,7 @@ pub(super) fn compile_jobs(jobs: &[Job], support_root: Option<&Path>, opts: &Bui
                         first.display(),
                         job.file.display()
                     );
+                    contested.insert(&job.out_path);
                     conflicted = true;
                 }
             } else {
@@ -389,10 +393,9 @@ pub(super) fn compile_jobs(jobs: &[Job], support_root: Option<&Path>, opts: &Bui
                 }
             }
         }
-        for job in jobs
-            .iter()
-            .filter(|job| !same_file(&job.file, &job.out_path))
-        {
+        for job in jobs.iter().filter(|job| {
+            !same_file(&job.file, &job.out_path) && !contested.contains(job.out_path.as_path())
+        }) {
             if let Err(error) = check_output_owner(&job.out_path, OutputOwner::Source(&job.file)) {
                 eprintln!("{error}");
                 conflicted = true;

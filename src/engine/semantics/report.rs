@@ -221,7 +221,11 @@ pub(crate) fn report(
                     snapshot
                         .source_of(&diagnostic.file)
                         .map(str::to_owned)
-                        .or_else(|| std::fs::read_to_string(&diagnostic.file).ok())
+                        .or_else(|| {
+                            std::fs::read(&diagnostic.file)
+                                .ok()
+                                .map(crate::lines::typescript_text)
+                        })
                         .map(HandWritten::new)
                 })
                 .as_ref();

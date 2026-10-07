@@ -258,6 +258,33 @@ impl<'a> LineMap<'a> {
     }
 }
 
+/// A file's text as TypeScript reads it, measured in the same UTF-16 units:
+/// each byte that is not part of valid UTF-8 reads as one U+FFFD, the one
+/// unit tsgo's `ast.ComputePositionMap` counts for it.
+pub fn typescript_text(bytes: Vec<u8>) -> String {
+    let bytes = match String::from_utf8(bytes) {
+        Ok(text) => return text,
+        Err(error) => error.into_bytes(),
+    };
+    let mut text = String::with_capacity(bytes.len());
+    let mut rest = &bytes[..];
+    while let Some(chunk) = rest.utf8_chunks().next() {
+        text.push_str(chunk.valid());
+        rest = &rest[chunk.valid().len()..];
+        if rest.is_empty() {
+            break;
+        }
+        let width = if matches!(rest, [0xED, 0xA0..=0xBF, 0x80..=0xBF, ..]) {
+            3
+        } else {
+            1
+        };
+        text.push('\u{FFFD}');
+        rest = &rest[width..];
+    }
+    text
+}
+
 /// Byte offsets and UTF-16 code-unit offsets of one text, measured once.
 ///
 /// TypeScript addresses text in UTF-16 code units; the compiler addresses

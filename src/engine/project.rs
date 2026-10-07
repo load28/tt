@@ -263,14 +263,18 @@ impl Project {
     /// program, while the directory is not itself an input.
     ///
     /// A project without a configuration takes its program from the walk
-    /// of its root, so the directories that walk listed are dependencies
-    /// too.
+    /// of its root, so the files and directories that walk listed are
+    /// dependencies too.
     pub fn dependencies(&self) -> std::io::Result<Dependencies> {
-        let (mut files, walked) = project_tree(
-            &self.root,
-            self.out_dir.as_deref(),
-            &["tt", "ttx", "ts", "tsx", "mts", "cts", "json"],
-        )?;
+        let (mut files, walked) = if self.tsconfig.is_none() {
+            project_tree(
+                &self.root,
+                self.out_dir.as_deref(),
+                &["tt", "ttx", "ts", "tsx", "mts", "cts", "json"],
+            )?
+        } else {
+            (Vec::new(), Vec::new())
+        };
         files.extend(self.dependencies.borrow().iter().cloned());
         files.extend(self.requested.iter().cloned());
         files.extend(self.cache.keys().cloned());
@@ -280,9 +284,7 @@ impl Project {
         files.sort();
         files.dedup();
         let mut directories: Vec<_> = self.directories.borrow().iter().cloned().collect();
-        if self.tsconfig.is_none() {
-            directories.extend(walked);
-        }
+        directories.extend(walked);
         directories.sort();
         directories.dedup();
         Ok(Dependencies { files, directories })

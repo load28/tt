@@ -190,6 +190,27 @@ fn a_mixed_source_stem_collision_is_rejected_before_writing() {
 }
 
 #[test]
+fn an_in_place_build_reports_a_hand_written_twin_as_the_out_dir_build_does() {
+    let dir = tmpdir();
+    let source = dir.join("src");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(source.join("model.tt"), "export const a = 1;\n").unwrap();
+    fs::write(source.join("model.ts"), "export const a = 2;\n").unwrap();
+    let output = ttc(&[source.to_str().unwrap()]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(stderr.lines().count(), 1, "{stderr}");
+    assert!(
+        stderr.contains("model.ts: multiple inputs claim this output"),
+        "{stderr}"
+    );
+    assert_eq!(
+        fs::read_to_string(source.join("model.ts")).unwrap(),
+        "export const a = 2;\n"
+    );
+}
+
+#[test]
 fn separate_input_roots_mirror_under_the_directory_they_share() {
     let dir = tmpdir();
     let left = dir.join("left");
@@ -4107,4 +4128,58 @@ fn a_file_outside_the_program_that_cannot_be_read_does_not_stop_the_check() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert_eq!(output.status.code(), Some(2), "{stderr}");
     assert!(stderr.contains("scratch/latin1.tt"), "{stderr}");
+}
+
+#[test]
+fn a_type_error_in_a_typescript_file_that_is_not_utf8_keeps_typescripts_position() {
+    require_types_toolchain!();
+    let dir = typed_workspace();
+    fs::write(
+        dir.join("tsconfig.json"),
+        r#"{"compilerOptions":{"strict":true,"noEmit":true}}"#,
+    )
+    .unwrap();
+    fs::write(dir.join("t.tt"), "export const t = 1;\n").unwrap();
+    fs::write(
+        dir.join("a.ts"),
+        b"export const l: number = \"caf\xe9\xe9\x80\" + 1 + \"s\"; export const k: number = \"x\";\n",
+    )
+    .unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["--check-types", "."])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run ttc");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert!(stderr.contains("a.ts:1:14"), "{stderr}");
+    assert!(stderr.contains("a.ts:1:59"), "{stderr}");
+}
+
+#[test]
+fn dependencies_under_a_configuration_leave_out_files_its_program_never_reads() {
+    require_types_toolchain!();
+    let dir = typed_workspace();
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::create_dir_all(dir.join("zz")).unwrap();
+    fs::write(
+        dir.join("tsconfig.json"),
+        r#"{"compilerOptions":{"strict":true,"noEmit":true},"include":["src"]}"#,
+    )
+    .unwrap();
+    fs::write(dir.join("src/shape.tt"), "export variant Shape { A, B }\n").unwrap();
+    fs::write(dir.join("zz/bad.ts"), "export const z: number = \"s\";\n").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["--dependencies", "src/shape.tt"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run ttc");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(stdout.contains("shape.tt"), "{stdout}");
+    assert!(!stdout.contains("bad.ts"), "{stdout}");
 }

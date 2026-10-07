@@ -226,6 +226,77 @@ defects. This task fixes them in the layer that owns each one.
   only its extension (`.\shape.js`), as TypeScript's
   `rewriteRelativeImportExtensions` does.
 
+### Decision 12: A hand-written file is measured as TypeScript reads it (C4)
+
+- **Context**: A hand-written `a.ts` with bytes that are not UTF-8 got its
+  type errors from `--check-types` with no line, column, or snippet, and two
+  errors on one line merged into one. `tsc` reported `a.ts(2,14)`.
+- **Decision and rationale**: TypeScript's coordinates of a hand-written
+  file are converted against its text, and that text was read as UTF-8 or
+  not at all. tsgo keeps the bytes and counts one UTF-16 unit for each byte
+  that is not valid UTF-8 (`ast.ComputePositionMap` decodes with
+  `utf8.DecodeRuneInString`, which reads such a byte as `RuneError` of
+  width one; a WTF-8 surrogate is one unit of three bytes,
+  `stringutil.DecodeJSStringRune`). `lines::typescript_text` decodes a file
+  the same way, and both the report's conversion and the CLI's snippet use
+  it, so the positions are `tsc`'s.
+- **Not changed**: `--check` and the build still refuse such a file. A
+  passed-through file is rewritten as text and its ownership record stores
+  that text, so writing it byte for byte would need a byte-level output and
+  record path; the refusal names the file.
+
+### Decision 13: An in-place build reports a hand-written twin as `-o` does (C6)
+
+- **Context**: With `src/a.tt` beside a hand-written `src/a.ts`, `ttc -o out
+  src` reported "multiple inputs claim this output", but `ttc src` reported
+  "output is not owned by this input or has been edited".
+- **Decision and rationale**: In place, a hand-written `.ts` passes through
+  to itself, so it claims the same output `a.tt` compiles to. `build_jobs`
+  dropped every in-place pass-through that a compiled output targets, which
+  is right only for a file ttc wrote earlier; it now drops one only when an
+  ownership record names it, so a hand-written twin reaches the claim check
+  and both layouts give the same sentence. An output already reported as
+  claimed twice is not reported again by the ownership check. `--check`
+  stays silent, as TASK-770 decided: it judges no output layout.
+
+### Decision 14: The content-mapper notes say a tt error hides every file's type errors (C7)
+
+- **Context**: `docs/design/content-mapper.md` said TypeScript skips the
+  semantic check of the file with a tt diagnostic. `tsc --runExternalCode`
+  reported only the tt error while another file had a type error.
+- **Decision and rationale**: A mapper's diagnostics are syntactic, and
+  `tsc` asks for semantic diagnostics only when the program has no syntactic
+  diagnostic at all (`compiler.GetDiagnosticsOfAnyProgram` in tsgo,
+  `emitFilesAndReportErrors` in TypeScript 6). The design note and
+  `docs/ai/tt.md` now say so and point at `ttc --check-types`, which reports
+  both layers.
+
+### Decision 15: Dependencies under a configuration are what the program reads (C8)
+
+- **Context**: With `include: ["src"]`, `ttc --dependencies src/shape.tt`
+  listed `zz/bad.ts` and earlier outputs, which the check never opens.
+- **Decision and rationale**: Without a configuration the program is the
+  walk of the root, so its files and directories are dependencies. With
+  one, TypeScript decides the program; the files are those it and ttc read
+  and the directories its globs watch. The walk's files now join only in
+  the first case, as its directories already did.
+
+### Decision 16: Findings kept as they are (C5, C9, C10)
+
+- **C5** (`--check-types x.ts` is refused): TASK-770 decided that the typed
+  modes take tt sources and report a hand-written file through the project
+  they open; `tt_only_modes_name_the_file_and_the_extensions_they_accept`
+  pins it.
+- **C9** (a build writes an import of a `.tt` file that is not an input):
+  an imported `.tt` outside the inputs is a supported layout that is built
+  separately (TASK-658 rebuilds its importers in watch mode). Emitting it
+  as `tsc` would changes the output root and moves every output.
+- **C10** (`-p` points `@tt/std` at `./tt/` beside the file): `-p` prints
+  what a build of that one input writes, and the build writes `tt/` there
+  (`ttc -o out src/deep/a.tt` writes `out/tt/option.ts` and imports
+  `./tt/option.js`). The bundler adapter asks with `rewriteImports: "off"`
+  and serves `@tt/std` virtually.
+
 ## Work log
 
 - 2026-10-06: Ran the fifth audit as three read-only agents (CLI,
@@ -250,6 +321,12 @@ defects. This task fixes them in the layer that owns each one.
 - 2026-10-06: Narrowed pattern completion at empty positions, after a
   wildcard, and in an unclosed literal, and offered `val` (decision 10).
 - 2026-10-06: Read backslash specifiers as relative (decision 11).
+- 2026-10-07: Measured hand-written files as tsgo does, unified the twin
+  report, corrected the content-mapper note, and narrowed dependencies
+  under a configuration (decisions 12–15). Changed `--check-types` to
+  accept a named `.ts`, then reverted it when
+  `tt_only_modes_name_the_file_and_the_extensions_they_accept` showed the
+  TASK-770 decision (decision 16).
 
 ## Issues and resolutions
 

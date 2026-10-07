@@ -296,8 +296,11 @@ pub(super) fn typed_pass(
     let mut disk: HashMap<&Path, Option<String>> = HashMap::new();
     for diagnostic in &checked.diagnostics {
         if snapshot.source_of(&diagnostic.path).is_none() {
-            disk.entry(&diagnostic.path)
-                .or_insert_with(|| fs::read_to_string(&diagnostic.path).ok());
+            disk.entry(&diagnostic.path).or_insert_with(|| {
+                fs::read(&diagnostic.path)
+                    .ok()
+                    .map(ttc::lines::typescript_text)
+            });
         }
     }
     let mut measured: HashMap<&Path, Option<ttc::lines::LineMap<'_>>> = HashMap::new();
