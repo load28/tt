@@ -315,10 +315,18 @@ defects. This task fixes them in the layer that owns each one.
   arm's line; `tsDirectiveBeforeLoweredStatement` now writes that match on
   one line, the form in which a directive governs its declaration, and
   `docs/ai/tt.md` says so.
-- **Not changed (K2)**: in a let-else whose `else` block spans lines, the
-  bindings are declared after the block, so a binding error is reported
-  after it. Destructuring before the divergence test would read a field
-  of a value that has not been tested.
+- **K2**: in a let-else whose `else` block spans lines, the bindings are
+  declared after the block, so a binding error is reported after it. A
+  binding can only be declared where TypeScript has narrowed the value to
+  the pattern's case, which is after the divergence test and the block it
+  guards: destructuring earlier reads fields the value may not have, and a
+  `var` declared inside the narrowed branch would change the binding's
+  scope and make a `const` binding assignable. Applying directives to
+  source lines in ttc instead would make the typed check disagree with
+  `tsc` on the emitted file and with the content mapper, where TypeScript
+  applies them to the emitted lines. The constraint is a property of the
+  emitted program, so it is stated in `docs/ai/tt.md` rather than worked
+  around.
 
 ### Decision 18: Findings recorded without a change (K3, K4, K6, K7, K8)
 
