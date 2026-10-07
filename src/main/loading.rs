@@ -130,19 +130,38 @@ pub(super) fn compile_reads(file: &Path) -> Vec<PathBuf> {
 /// its read failed with.
 pub(super) struct Loaded {
     pub(super) source: String,
+    pub(super) encoding: Option<Encoding>,
     pub(super) scan: ModuleScan,
 }
 
 /// Reads and scans every job's source, in parallel.
 pub(super) fn load_jobs(jobs: &[Job], jobs_limit: Option<usize>) -> Vec<Result<Loaded, String>> {
     par_map(jobs, jobs_limit, |job| {
-        let source =
-            fs::read_to_string(&job.file).map_err(|e| format!("{}: {e}", job.file.display()))?;
+        let read = fs::read(&job.file).map_err(|e| format!("{}: {e}", job.file.display()))?;
+        let (source, encoding) = match String::from_utf8(read) {
+            Ok(source) => (source, None),
+            Err(error) if ttc::SourceKind::from_tt_path(&job.file).is_some() => {
+                return Err(format!(
+                    "{}: {}",
+                    job.file.display(),
+                    std::io::Error::new(std::io::ErrorKind::InvalidData, error.utf8_error())
+                ));
+            }
+            Err(error) => {
+                let (source, encoding) = Encoding::decode(error.into_bytes())
+                    .map_err(|reason| format!("{}: {reason}", job.file.display()))?;
+                (source, Some(encoding))
+            }
+        };
         let scan = ttc::scan_module_with_kind(
             &source,
             ttc::SourceKind::from_path(&job.file).unwrap_or_default(),
         );
-        Ok(Loaded { source, scan })
+        Ok(Loaded {
+            source,
+            encoding,
+            scan,
+        })
     })
 }
 
@@ -217,4 +236,77 @@ where
         // filled before this runs.
         .map(|r| r.expect("each index produced its own result"))
         .collect()
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Encoding {
+    Utf16Le,
+    Utf16Be,
+    Bytes,
+}
+
+const STRAY_BYTE: u32 = 0xF700;
+
+impl Encoding {
+    fn decode(bytes: Vec<u8>) -> Result<(String, Encoding), String> {
+        let utf16 = |rest: &[u8], unit: fn([u8; 2]) -> u16, encoding| {
+            if !rest.len().is_multiple_of(2) {
+                return Err("a UTF-16 file with an odd number of bytes".to_string());
+            }
+            let units: Vec<u16> = rest
+                .chunks(2)
+                .map(|pair| unit([pair[0], pair[1]]))
+                .collect();
+            String::from_utf16(&units)
+                .map(|text| (text, encoding))
+                .map_err(|_| "a UTF-16 file with an unpaired surrogate".to_string())
+        };
+        match bytes.as_slice() {
+            [0xFF, 0xFE, rest @ ..] => return utf16(rest, u16::from_le_bytes, Encoding::Utf16Le),
+            [0xFE, 0xFF, rest @ ..] => return utf16(rest, u16::from_be_bytes, Encoding::Utf16Be),
+            _ => {}
+        }
+        let mut text = String::with_capacity(bytes.len());
+        for chunk in bytes.utf8_chunks() {
+            if chunk
+                .valid()
+                .chars()
+                .any(|c| (STRAY_BYTE..STRAY_BYTE + 0x100).contains(&u32::from(c)))
+            {
+                return Err(
+                    "a file that is not UTF-8 and also holds U+F700–U+F7FF cannot be passed \
+                     through byte for byte — save it as UTF-8"
+                        .to_string(),
+                );
+            }
+            text.push_str(chunk.valid());
+            for byte in chunk.invalid() {
+                text.extend(char::from_u32(STRAY_BYTE + u32::from(*byte)));
+            }
+        }
+        Ok((text, Encoding::Bytes))
+    }
+
+    pub(super) fn encode(self, text: &str) -> Vec<u8> {
+        match self {
+            Encoding::Utf16Le => [0xFF, 0xFE]
+                .into_iter()
+                .chain(text.encode_utf16().flat_map(u16::to_le_bytes))
+                .collect(),
+            Encoding::Utf16Be => [0xFE, 0xFF]
+                .into_iter()
+                .chain(text.encode_utf16().flat_map(u16::to_be_bytes))
+                .collect(),
+            Encoding::Bytes => {
+                let mut bytes = Vec::with_capacity(text.len());
+                for c in text.chars() {
+                    match u32::from(c).checked_sub(STRAY_BYTE) {
+                        Some(byte) if byte < 0x100 => bytes.push(byte as u8),
+                        _ => bytes.extend_from_slice(c.encode_utf8(&mut [0; 4]).as_bytes()),
+                    }
+                }
+                bytes
+            }
+        }
+    }
 }

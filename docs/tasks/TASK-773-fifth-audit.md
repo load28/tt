@@ -1,5 +1,10 @@
 # TASK-773: Fix defects found by the fifth audit
 
+> TASK-780 decision C5 reverses part of this record: the command line's walk
+> of a directory input now skips a symlink whose target cannot be read, as
+> TypeScript's directory listing does; other unreadable entries are still
+> named.
+
 - **Status**: Complete
 - **Started**: 2026-10-06
 - **Completed**: 2026-10-07

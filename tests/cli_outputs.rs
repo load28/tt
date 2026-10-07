@@ -463,7 +463,7 @@ fn tt_only_modes_name_the_file_and_the_extensions_they_accept() {
     ] {
         let output = run(&root, &[mode, &["x.ts"]].concat());
         let err = String::from_utf8_lossy(&output.stderr);
-        assert!(!output.status.success(), "{mode:?}: {err}");
+        assert_eq!(output.status.code(), Some(1), "{mode:?}: {err}");
         assert_eq!(
             err.trim_end(),
             "ttc: x.ts: not a tt source (expected .tt, .ttx)",

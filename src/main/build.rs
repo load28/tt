@@ -110,6 +110,38 @@ pub(super) fn support_commonjs_dir(std_dir: &Path) -> PathBuf {
     std_dir.join(ttc::STD_PACKAGE_COMMONJS_DIR)
 }
 
+pub(super) fn support_module_dir(std_dir: &Path) -> PathBuf {
+    std_dir.join("esm")
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum SupportForm {
+    Module,
+    Commonjs,
+    ExplicitModule,
+}
+
+pub(super) fn package_is_module(dir: &Path) -> bool {
+    normalized_absolute(dir)
+        .ancestors()
+        .find_map(|ancestor| {
+            let text = fs::read_to_string(ancestor.join("package.json")).ok()?;
+            let manifest: serde_json::Value = serde_json::from_str(&text).ok()?;
+            Some(manifest["type"].as_str() == Some("module"))
+        })
+        .unwrap_or(false)
+}
+
+fn support_form(commonjs: bool, out_path: &Path, module_package: bool) -> SupportForm {
+    if commonjs {
+        SupportForm::Commonjs
+    } else if !module_package && out_path.extension().is_some_and(|ext| ext == "mts") {
+        SupportForm::ExplicitModule
+    } else {
+        SupportForm::Module
+    }
+}
+
 /// The deepest directory every input is inside, a directory input counting
 /// as itself and a file as its parent — what `-o` mirrors the inputs under.
 pub(super) fn input_root(inputs: &[String]) -> Option<PathBuf> {
@@ -332,6 +364,7 @@ pub(super) struct Outcome {
 /// One job's emitted output, not yet written.
 struct Emitted {
     code: String,
+    bytes: Option<Vec<u8>>,
     /// The `--source-map file` document that goes beside the output.
     map: Option<String>,
     /// The compiler support modules `code` imports.
@@ -423,7 +456,10 @@ pub(super) fn compile_jobs(jobs: &[Job], support_root: Option<&Path>, opts: &Bui
             }
             failed |= outcome.failed;
             if let Some(output) = outcome.output {
-                crate::out::text(&output.code);
+                match &output.bytes {
+                    Some(bytes) => crate::out::bytes(bytes),
+                    None => crate::out::text(&output.code),
+                }
             }
         }
         return failed;
@@ -483,6 +519,7 @@ fn compile_outcomes(
     let loaded = load_jobs(jobs, opts.jobs);
 
     let std_dir = std_placement(support_root);
+    let module_package = std_dir.as_deref().is_some_and(package_is_module);
 
     let cache = ExternCache::new(
         jobs.iter()
@@ -514,9 +551,19 @@ fn compile_outcomes(
                     StdModule::ALL
                         .map(|module| std_specifier(job, dir, opts.rewrite_imports, module))
                 };
-                let std_imports_owned = std_dir
-                    .as_ref()
-                    .map(|dir| (specifiers(dir), specifiers(&support_commonjs_dir(dir))));
+                let explicit_module = support_form(false, &job.out_path, module_package)
+                    == SupportForm::ExplicitModule;
+                let std_imports_owned = std_dir.as_ref().map(|dir| {
+                    let module_dir = if explicit_module {
+                        support_module_dir(dir)
+                    } else {
+                        dir.clone()
+                    };
+                    (
+                        specifiers(&module_dir),
+                        specifiers(&support_commonjs_dir(dir)),
+                    )
+                });
                 let commonjs_imports = std_imports_owned
                     .as_ref()
                     .map(|(_, commonjs)| std_imports_of(commonjs));
@@ -631,6 +678,7 @@ fn compile_outcomes(
                 }
                 if !opts.check {
                     out.output = Some(Emitted {
+                        bytes: loaded.encoding.map(|encoding| encoding.encode(&code)),
                         code,
                         map: map.and_then(|rendered| rendered.document),
                         support_imports: emit.support_imports,
@@ -660,16 +708,25 @@ fn write_outcomes(
     // source looks like: a pipeline may lower to a direct call, and a script
     // inlines its helpers. Standard-library imports materialize its three
     // public modules; the pipeline runtime is written on its own.
-    let forms: Vec<(PathBuf, bool, Vec<StdModule>)> = std_dir
+    let module_package = std_dir.as_deref().is_some_and(package_is_module);
+    let forms: Vec<(PathBuf, SupportForm, Vec<StdModule>)> = std_dir
         .iter()
-        .flat_map(|dir| [(dir.clone(), false), (support_commonjs_dir(dir), true)])
-        .map(|(dir, commonjs)| {
+        .flat_map(|dir| {
+            [
+                (dir.clone(), SupportForm::Module),
+                (support_commonjs_dir(dir), SupportForm::Commonjs),
+                (support_module_dir(dir), SupportForm::ExplicitModule),
+            ]
+        })
+        .map(|(dir, form)| {
             let imports = |module: StdModule| {
-                outcomes
-                    .iter()
-                    .filter_map(|outcome| outcome.output.as_ref())
-                    .filter(|output| output.commonjs == commonjs)
-                    .any(|output| output.support_imports.contains(&module))
+                jobs.iter()
+                    .zip(outcomes)
+                    .filter_map(|(job, outcome)| Some((job, outcome.output.as_ref()?)))
+                    .filter(|(job, output)| {
+                        support_form(output.commonjs, &job.out_path, module_package) == form
+                    })
+                    .any(|(_, output)| output.support_imports.contains(&module))
             };
             let needs_std = StdModule::STANDARD.into_iter().any(imports);
             let needs_runtime = imports(StdModule::Runtime);
@@ -680,11 +737,24 @@ fn write_outcomes(
                     _ => needs_std,
                 })
                 .collect();
-            (dir, commonjs, modules)
+            (dir, form, modules)
         })
-        .filter(|(_, _, modules): &(PathBuf, bool, Vec<StdModule>)| !modules.is_empty())
+        .filter(|(_, _, modules): &(PathBuf, SupportForm, Vec<StdModule>)| !modules.is_empty())
         .collect();
-    for (dir, _, modules) in &forms {
+    let manifest = |form: SupportForm| match form {
+        SupportForm::Module => None,
+        SupportForm::Commonjs => Some((OutputOwner::CommonjsManifest, ttc::STD_COMMONJS_MANIFEST)),
+        SupportForm::ExplicitModule => {
+            Some((OutputOwner::ModuleManifest, ttc::STD_MODULE_MANIFEST))
+        }
+    };
+    for (dir, form, modules) in &forms {
+        if let Some((owner, _)) = manifest(*form)
+            && let Err(error) = check_output_owner(&dir.join("package.json"), owner)
+        {
+            eprintln!("{error}");
+            return true;
+        }
         for module in modules {
             let support = dir.join(module.file_name());
             if let Err(error) = check_output_owner(&support, OutputOwner::Support(*module)) {
@@ -711,10 +781,10 @@ fn write_outcomes(
             }
         }
     }
-    for (dir, commonjs, modules) in &forms {
+    for (dir, form, modules) in &forms {
         let wrote = create_dir_all(dir).and_then(|()| {
             for module in modules {
-                let mut code = if *commonjs {
+                let mut code = if *form == SupportForm::Commonjs {
                     module.commonjs_source().into_owned()
                 } else {
                     module.source().to_string()
@@ -728,6 +798,10 @@ fn write_outcomes(
                     &code,
                 )
                 .map_err(std::io::Error::other)?;
+            }
+            if let Some((owner, text)) = manifest(*form) {
+                write_owned_output(&dir.join("package.json"), owner, text)
+                    .map_err(std::io::Error::other)?;
             }
             Ok(())
         });
@@ -760,8 +834,8 @@ fn write_emitted(job: &Job, output: Option<&Emitted>) -> (Vec<String>, bool) {
     let Some(output) = output.filter(|output| !output.in_place) else {
         return (Vec::new(), false);
     };
-    if let Err(e) = write_owned_output(&job.out_path, OutputOwner::Source(&job.file), &output.code)
-    {
+    let code = output.bytes.as_deref().unwrap_or(output.code.as_bytes());
+    if let Err(e) = write_owned_bytes(&job.out_path, OutputOwner::Source(&job.file), code) {
         return (vec![e], true);
     }
     if let Some(document) = &output.map

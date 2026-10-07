@@ -2218,23 +2218,37 @@ fn a_failed_write_leaves_the_previous_output_and_no_litter() {
     );
 }
 
-/// An entry the walk cannot read is named. It used to surface as
-/// "no such file or directory" against the directory the user named, which
-/// plainly does exist, leaving the actual dangling link unmentioned.
+/// A symlink whose target is gone is skipped, as `tsc`'s directory walk
+/// skips it: an editor's lock file (`.#a.tt`) or a stale link no longer stops
+/// every build of the directory that holds it.
 #[test]
-fn an_unreadable_entry_is_named_rather_than_the_directory_holding_it() {
+fn a_dangling_symlink_in_a_directory_input_is_skipped() {
     let dir = tmpdir();
     fs::create_dir_all(dir.join("src")).unwrap();
     fs::write(dir.join("src/ok.tt"), "export const a = 1;\n").unwrap();
     #[cfg(unix)]
-    std::os::unix::fs::symlink("/nonexistent/gone.tt", dir.join("src/dangling.tt")).unwrap();
+    {
+        std::os::unix::fs::symlink("/nonexistent/gone.tt", dir.join("src/dangling.tt")).unwrap();
+        std::os::unix::fs::symlink("u@h.1:1", dir.join("src/.#ok.tt")).unwrap();
+        std::os::unix::fs::symlink("nowhere", dir.join("src/README")).unwrap();
+    }
     #[cfg(not(unix))]
     return;
 
     let output = ttc(&["--check", dir.join("src").to_str().unwrap()]);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(!output.status.success());
-    assert!(stderr.contains("dangling.tt"), "{stderr}");
+    assert!(output.status.success(), "{stderr}");
+    let output = ttc(&[
+        "-o",
+        dir.join("out").to_str().unwrap(),
+        dir.join("src").to_str().unwrap(),
+    ]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(dir.join("out/ok.ts").is_file());
 }
 
 #[test]
@@ -2326,6 +2340,62 @@ fn watch_reports_input_failure_transitions_and_recovers() {
                 .unwrap()
                 .contains("no such file")
         );
+    });
+    let _ = child.kill();
+    let _ = child.wait();
+    reader.join().unwrap();
+    if let Err(error) = result {
+        std::panic::resume_unwind(error);
+    }
+}
+
+#[test]
+fn watch_started_without_sources_builds_the_first_one_written() {
+    use std::io::{BufRead, BufReader};
+    use std::process::Stdio;
+    use std::sync::mpsc;
+    use std::time::Duration;
+    let dir = tmpdir();
+    let input = dir.join("src");
+    fs::create_dir(&input).unwrap();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ttc"));
+    command
+        .current_dir(&dir)
+        .args(["--watch", "-o", "out", "src"])
+        .stderr(Stdio::piped())
+        .stdout(Stdio::null());
+    dir.isolate_unfinalized_child_profile(&mut command);
+    let mut child = command.spawn().unwrap();
+    let stderr = child.stderr.take().unwrap();
+    let (send, receive) = mpsc::channel();
+    let reader = std::thread::spawn(move || {
+        for line in BufReader::new(stderr).lines() {
+            let _ = send.send(line.unwrap());
+        }
+    });
+    let result = std::panic::catch_unwind(|| {
+        let first = receive.recv_timeout(Duration::from_secs(10)).unwrap();
+        assert!(first.contains("no sources found"), "{first}");
+        loop {
+            if receive
+                .recv_timeout(Duration::from_secs(10))
+                .unwrap()
+                .contains("Ctrl-C")
+            {
+                break;
+            }
+        }
+        fs::write(input.join("a.tt"), "export const a = 1;").unwrap();
+        loop {
+            if receive
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap()
+                .contains("file(s) ok")
+            {
+                break;
+            }
+        }
+        assert!(dir.join("out/a.ts").is_file());
     });
     let _ = child.kill();
     let _ = child.wait();
@@ -2832,21 +2902,34 @@ fn a_std_program_is_typed_without_the_package_on_disk() {
 
 #[cfg(unix)]
 #[test]
-fn contextual_input_walk_cannot_silently_stop_before_dependencies() {
+fn contextual_input_walk_reads_past_a_dangling_link() {
     if !common::toolchain() {
         return;
     }
     let dir = tmpdir();
     let file = dir.join("main.tt");
-    fs::write(&file, "declare const flag: boolean;\nexport const v = match(flag) { true => [1], false => [] };\n").unwrap();
+    fs::write(
+        &file,
+        "import { make } from \"./zzz.tt\";\ndeclare const flag: boolean;\nexport const v = match(flag) { true => make(), false => [] };\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("zzz.tt"),
+        "export const make = (): number[] => [1];\n",
+    )
+    .unwrap();
     std::os::unix::fs::symlink(dir.join("missing"), dir.join("aaa-broken")).unwrap();
     let output = ttc(&["-p", file.to_str().unwrap()]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        !output.status.success(),
-        "partial input scan was accepted: {}",
-        String::from_utf8_lossy(&output.stdout)
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
     );
-    assert!(String::from_utf8_lossy(&output.stderr).contains("aaa-broken"));
+    assert!(
+        stdout.contains("number[]"),
+        "the dependency was not read: {stdout}"
+    );
 }
 
 #[test]
@@ -4182,4 +4265,164 @@ fn dependencies_under_a_configuration_leave_out_files_its_program_never_reads() 
     );
     assert!(stdout.contains("shape.tt"), "{stdout}");
     assert!(!stdout.contains("bad.ts"), "{stdout}");
+}
+
+#[test]
+fn a_diagnostic_two_projects_reach_is_reported_once() {
+    let dir = tmpdir();
+    for project in ["a", "b"] {
+        fs::create_dir_all(dir.join(project)).unwrap();
+        fs::write(
+            dir.join(project).join("tsconfig.json"),
+            r#"{"compilerOptions": {"strict": true, "noEmit": true}}"#,
+        )
+        .unwrap();
+    }
+    fs::write(
+        dir.join("a/a.tt"),
+        "export variant V { A, B }\nexport const f = (v: V) => match (v) { A => 1 };\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("b/b.tt"),
+        "import { f } from \"../a/a.tt\";\nexport const c = f;\n",
+    )
+    .unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .current_dir(dir.path())
+        .args(["--check-types", "--tt-only", "a", "b"])
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(
+        stderr.matches("match-not-exhaustive").count(),
+        1,
+        "{stderr}"
+    );
+}
+
+#[test]
+fn a_typescript_file_that_is_not_utf8_passes_through_as_its_bytes() {
+    let dir = tmpdir();
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::write(dir.join("src/b.tt"), "export const b = 1;\n").unwrap();
+    let utf16 = |text: &str| -> Vec<u8> {
+        [0xFF, 0xFE]
+            .into_iter()
+            .chain(text.encode_utf16().flat_map(u16::to_le_bytes))
+            .collect()
+    };
+    let files: [(&str, Vec<u8>, Vec<u8>); 3] = [
+        (
+            "plain.ts",
+            utf16("export const x = 1;\n"),
+            utf16("export const x = 1;\n"),
+        ),
+        (
+            "wide.ts",
+            utf16("import \"./b.tt\";\n"),
+            utf16("import \"./b.js\";\n"),
+        ),
+        (
+            "stray.ts",
+            b"// \xff\xfe bad\nimport \"./b.tt\";\n".to_vec(),
+            b"// \xff\xfe bad\nimport \"./b.js\";\n".to_vec(),
+        ),
+    ];
+    for (name, source, _) in &files {
+        fs::write(dir.join("src").join(name), source).unwrap();
+    }
+    for round in 0..2 {
+        let output = ttc(&[
+            "-o",
+            dir.join("out").to_str().unwrap(),
+            dir.join("src").to_str().unwrap(),
+        ]);
+        assert!(
+            output.status.success(),
+            "round {round}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        for (name, _, expected) in &files {
+            assert_eq!(
+                &fs::read(dir.join("out").join(name)).unwrap(),
+                expected,
+                "{name}"
+            );
+        }
+    }
+    let check = ttc(&["--check", dir.join("src").to_str().unwrap()]);
+    assert!(
+        check.status.success(),
+        "{}",
+        String::from_utf8_lossy(&check.stderr)
+    );
+}
+
+#[test]
+fn commonjs_support_modules_carry_their_own_module_type() {
+    let dir = tmpdir();
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::write(dir.join("package.json"), r#"{"type":"module"}"#).unwrap();
+    fs::write(
+        dir.join("src/c.cts"),
+        "import O = require(\"@tt/std/option\");\nexport = O.None;\n",
+    )
+    .unwrap();
+    for round in 0..2 {
+        let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .current_dir(dir.path())
+            .args(["-o", "out", "src"])
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "round {round}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let manifest: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(dir.join("out/tt/cjs/package.json")).unwrap())
+            .unwrap();
+    assert_eq!(manifest["type"], "commonjs");
+    assert!(dir.join("out/tt/cjs/option.ts").is_file());
+}
+
+#[test]
+fn an_mts_output_in_a_commonjs_package_imports_an_es_module_copy() {
+    let dir = tmpdir();
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::write(dir.join("package.json"), "{}").unwrap();
+    let import = "import { Some } from \"@tt/std/option\";\n";
+    fs::write(
+        dir.join("src/m.mts"),
+        format!("{import}export const s = Some(1);\n"),
+    )
+    .unwrap();
+    fs::write(
+        dir.join("src/p.tt"),
+        format!("{import}export const t = Some(2);\n"),
+    )
+    .unwrap();
+    for round in 0..2 {
+        let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .current_dir(dir.path())
+            .args(["-o", "out", "src"])
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "round {round}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let mts = fs::read_to_string(dir.join("out/m.mts")).unwrap();
+    assert!(mts.contains("\"./tt/esm/option.js\""), "{mts}");
+    let ts = fs::read_to_string(dir.join("out/p.ts")).unwrap();
+    assert!(ts.contains("\"./tt/option.js\""), "{ts}");
+    let manifest: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(dir.join("out/tt/esm/package.json")).unwrap())
+            .unwrap();
+    assert_eq!(manifest["type"], "module");
+    assert!(dir.join("out/tt/option.ts").is_file());
 }

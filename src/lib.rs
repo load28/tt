@@ -113,8 +113,9 @@ pub use probe::{
 };
 pub use sidecar::{Sidecar, build_sidecar, source_specifiers};
 pub use stdlib::{
-    GENERATED_BANNER, RUNTIME_SOURCE, STD_OPTION_SOURCE, STD_PACKAGE_COMMONJS_DIR,
-    STD_RESULT_SOURCE, STD_SPECIFIER, STD_TYPES_SOURCE, StdImports, StdModule, StdPackage,
+    GENERATED_BANNER, RUNTIME_SOURCE, STD_COMMONJS_MANIFEST, STD_MODULE_MANIFEST,
+    STD_OPTION_SOURCE, STD_PACKAGE_COMMONJS_DIR, STD_RESULT_SOURCE, STD_SPECIFIER,
+    STD_TYPES_SOURCE, StdImports, StdModule, StdPackage,
 };
 pub use val::{Mutation, ValBinding, ValFn, ValParam, ValPass, ValProbes, is_builtin_mutator_name};
 

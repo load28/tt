@@ -341,8 +341,8 @@ pub(crate) struct Resolution {
 /// One emitted declaration file, in memory.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Declaration {
-    /// The path the compiler would have written it to.
-    pub path: PathBuf,
+    /// The lowered module it declares.
+    pub module: PathBuf,
     pub text: String,
 }
 

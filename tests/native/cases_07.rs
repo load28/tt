@@ -111,8 +111,8 @@ fn types_that_cannot_check_exits_2_and_leaves_earlier_output() {
     require_tsgo!();
     let dir = project(&[
         ("src/a.tt", "export const a: number = 1;\n"),
-        ("src/notes.js", "export const notes = 1;\n"),
     ]);
+    fs::write(dir.join("src/b.tt"), b"export const b = \"\xff\";\n").unwrap();
     let out_dir = dir.join("out");
     fs::create_dir_all(&out_dir).unwrap();
     fs::write(out_dir.join("a.tt.d.ts"), "export {};\n").unwrap();
@@ -121,7 +121,7 @@ fn types_that_cannot_check_exits_2_and_leaves_earlier_output() {
         &[
             "--types",
             "--json-report",
-            "src/notes.js",
+            "src",
             "-o",
             out_dir.to_str().unwrap(),
         ],

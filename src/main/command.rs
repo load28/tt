@@ -612,6 +612,13 @@ pub(super) fn run() -> ExitCode {
             eprintln!("ttc: no such file or directory: {missing}");
             return ExitCode::FAILURE;
         }
+        if let Some(named) = inputs.iter().find(|input| {
+            let path = Path::new(input.as_str());
+            path.is_file() && ttc::SourceKind::from_tt_path(path).is_none()
+        }) {
+            eprintln!("ttc: {named}: not a tt source (expected .tt, .ttx)");
+            return ExitCode::FAILURE;
+        }
         return typed_check_mode(
             &inputs,
             &TypedCheckOptions {
@@ -638,7 +645,9 @@ pub(super) fn run() -> ExitCode {
 
     if jobs.is_empty() {
         eprintln!("ttc: no sources found");
-        return ExitCode::FAILURE;
+        if !watch || print || symbols || emit_map || sidecar_dir.is_some() {
+            return ExitCode::FAILURE;
+        }
     }
     if print && jobs.len() != 1 {
         eprintln!("ttc: --print requires exactly one source file");

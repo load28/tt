@@ -12,6 +12,8 @@ use ttc::ownership::{owned_output, record, record_path};
 pub(super) enum OutputOwner<'a> {
     Source(&'a Path),
     Support(StdModule),
+    CommonjsManifest,
+    ModuleManifest,
 }
 
 fn source_identity(path: &Path) -> PathBuf {
@@ -34,6 +36,9 @@ fn support_identity(module: StdModule) -> String {
     format!("@tt/std/{}", module.file_name())
 }
 
+const COMMONJS_MANIFEST_IDENTITY: &str = "@tt/std/cjs/package.json";
+const MODULE_MANIFEST_IDENTITY: &str = "@tt/std/esm/package.json";
+
 fn owns(record: &serde_json::Value, owner: OutputOwner) -> bool {
     match owner {
         OutputOwner::Source(source) => record["source"].as_str().is_some_and(|recorded| {
@@ -44,6 +49,10 @@ fn owns(record: &serde_json::Value, owner: OutputOwner) -> bool {
             record["support"].as_str() == Some(identity.as_str())
                 || record["source"].as_str() == normalized_absolute(Path::new(&identity)).to_str()
         }
+        OutputOwner::CommonjsManifest => {
+            record["support"].as_str() == Some(COMMONJS_MANIFEST_IDENTITY)
+        }
+        OutputOwner::ModuleManifest => record["support"].as_str() == Some(MODULE_MANIFEST_IDENTITY),
     }
 }
 
@@ -100,29 +109,44 @@ pub(super) fn write_owned_output(
     owner: OutputOwner,
     code: &str,
 ) -> Result<(), String> {
+    write_owned_bytes(output, owner, code.as_bytes())
+}
+
+pub(super) fn write_owned_bytes(
+    output: &Path,
+    owner: OutputOwner,
+    code: &[u8],
+) -> Result<(), String> {
     check_output_owner(output, owner)?;
     if let Some(parent) = output.parent() {
         super::output::create_dir_all(parent)
             .map_err(|e| format!("ttc: {}: {e}", output.display()))?;
     }
+    let content = ttc::ownership::recordable(code);
     let record = match owner {
         OutputOwner::Source(source) => {
-            serde_json::json!({ "version": 1, "source": recorded_source(source)?, "content": code })
+            serde_json::json!({ "version": 1, "source": recorded_source(source)?, "content": content })
         }
         OutputOwner::Support(module) => {
-            serde_json::json!({ "version": 1, "support": support_identity(module), "content": code })
+            serde_json::json!({ "version": 1, "support": support_identity(module), "content": content })
+        }
+        OutputOwner::CommonjsManifest => {
+            serde_json::json!({ "version": 1, "support": COMMONJS_MANIFEST_IDENTITY, "content": content })
+        }
+        OutputOwner::ModuleManifest => {
+            serde_json::json!({ "version": 1, "support": MODULE_MANIFEST_IDENTITY, "content": content })
         }
     };
     let replaced = owned_output(output)
-        .then(|| fs::read_to_string(output).ok())
+        .then(|| fs::read(output).ok())
         .flatten()
         .filter(|replaced| replaced != code);
     let mut publishing = record.clone();
     if let Some(replaced) = &replaced {
-        publishing["replaced"] = serde_json::Value::from(replaced.as_str());
+        publishing["replaced"] = ttc::ownership::recordable(replaced);
     }
     write_output(&record_path(output), &publishing.to_string())?;
-    write_output(output, code)?;
+    super::output::write_output_bytes(output, code)?;
     if replaced.is_some() {
         write_output(&record_path(output), &record.to_string())?;
     }

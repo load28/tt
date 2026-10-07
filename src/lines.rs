@@ -259,9 +259,22 @@ impl<'a> LineMap<'a> {
 }
 
 /// A file's text as TypeScript reads it, measured in the same UTF-16 units:
-/// each byte that is not part of valid UTF-8 reads as one U+FFFD, the one
-/// unit tsgo's `ast.ComputePositionMap` counts for it.
+/// a UTF-16 file (one that starts with its byte order mark) is decoded
+/// without the mark, and each byte that is not part of valid UTF-8 reads as
+/// one U+FFFD, the one unit tsgo's `ast.ComputePositionMap` counts for it.
 pub fn typescript_text(bytes: Vec<u8>) -> String {
+    let utf16 = |rest: &[u8], unit: fn([u8; 2]) -> u16| {
+        let units: Vec<u16> = rest
+            .chunks(2)
+            .map(|pair| unit([pair[0], pair.get(1).copied().unwrap_or(0)]))
+            .collect();
+        String::from_utf16_lossy(&units)
+    };
+    match bytes.as_slice() {
+        [0xFF, 0xFE, rest @ ..] => return utf16(rest, u16::from_le_bytes),
+        [0xFE, 0xFF, rest @ ..] => return utf16(rest, u16::from_be_bytes),
+        _ => {}
+    }
     let bytes = match String::from_utf8(bytes) {
         Ok(text) => return text,
         Err(error) => error.into_bytes(),

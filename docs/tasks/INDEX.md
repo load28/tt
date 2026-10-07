@@ -820,7 +820,8 @@
 | TASK-777 | Give a value in a nested concise arrow body its layout scope | Complete | 2026-10-07 | 2026-10-07 | [TASK-777](./TASK-777-nested-concise-arrow-layout-scope.md) |
 | TASK-778 | Pin the TypeScript-twin parity of an `@tt/std` case as a clean checkout answers it | Complete | 2026-10-07 | 2026-10-07 | [TASK-778](./TASK-778-twin-parity-without-stray-std.md) |
 | TASK-779 | Share the pattern analysis' declaration entries across the scopes it narrows | Complete | 2026-10-07 | 2026-10-07 | [TASK-779](./TASK-779-shared-pattern-table-entries.md) |
+| TASK-780 | Fix the sixth audit's command-line findings | Complete | 2026-10-07 | 2026-10-07 | [TASK-780](./TASK-780-sixth-audit-cli.md) |
 
 ## Next task number
 
-**TASK-780**
+**TASK-781**

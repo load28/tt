@@ -798,3 +798,102 @@ fn a_typed_session_releases_the_snapshots_of_earlier_edits() {
         grown / 1024
     );
 }
+
+#[test]
+fn a_circular_configuration_is_reported_rather_than_waited_on() {
+    require_tsgo!();
+    for (config, base) in [
+        (r#"{"extends": "./tsconfig.json"}"#, None),
+        (r#"{"extends": "./base.json"}"#, Some(r#"{"extends": "./tsconfig.json"}"#)),
+    ] {
+        let dir = tmpdir();
+        write(&dir, "tsconfig.json", config);
+        if let Some(base) = base {
+            write(&dir, "base.json", base);
+        }
+        write(&dir, "src/a.tt", "export const a = 1;\n");
+        let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .args(["--check-types", "src"])
+            .current_dir(&dir)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("ttc runs");
+        let started = std::time::Instant::now();
+        while child.try_wait().unwrap().is_none() {
+            if started.elapsed() > std::time::Duration::from_secs(60) {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("the check never finished for {config}");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        let output = child.wait_with_output().unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(1), "{stderr}");
+        assert!(stderr.contains("ts18000"), "{stderr}");
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn output_a_preload_or_a_node_shim_writes_does_not_break_the_check() {
+    require_tsgo!();
+    let dir = project(&[("src/a.tt", "export const a: number = \"x\";\n")]);
+    write(
+        &dir,
+        "preload.js",
+        "console.log(\"preloaded\");\nprocess.stdout.write(\"partial\");\n",
+    );
+    write(&dir, "shim", "#!/bin/sh\necho \"using node\"\nexec node \"$@\"\n");
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(dir.join("shim"), fs::Permissions::from_mode(0o755)).unwrap();
+    let preload = format!("--require {}", dir.join("preload.js").display());
+    let shim = dir.join("shim");
+    let runs = [
+        Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .args(["--check-types", "src"])
+            .env("NODE_OPTIONS", &preload)
+            .current_dir(&dir)
+            .output()
+            .unwrap(),
+        Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .arg("--node")
+            .arg(&shim)
+            .args(["--check-types", "src"])
+            .current_dir(&dir)
+            .output()
+            .unwrap(),
+    ];
+    for output in runs {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(1), "{stderr}");
+        assert!(stderr.contains("ts2322"), "{stderr}");
+    }
+}
+
+#[test]
+fn types_writes_sidecars_under_an_out_dir_or_a_declaration_dir() {
+    require_emit!();
+    for options in [
+        r#""outDir": "dist", "rootDir": "src""#,
+        r#""declaration": true, "declarationDir": "dd", "rootDir": "src""#,
+    ] {
+        let dir = tmpdir();
+        write(
+            &dir,
+            "tsconfig.json",
+            &format!(r#"{{"compilerOptions": {{{options}}}, "include": ["src"]}}"#),
+        );
+        write(&dir, "src/a.tt", "export const a = 1;\n");
+        let output = run(&dir, &["--types", "src"]);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let sidecar = fs::read_to_string(dir.join(".tt-types/a.tt.d.ts"))
+            .unwrap_or_else(|_| panic!("no sidecar under {options}"));
+        assert!(sidecar.contains("export declare const a = 1;"), "{sidecar}");
+    }
+}

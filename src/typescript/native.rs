@@ -128,6 +128,7 @@ impl NativeBackend {
 
         let mut child = Command::new(&self.node)
             .arg(&script)
+            .env_remove("NODE_OPTIONS")
             .current_dir(root)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -321,6 +322,8 @@ fn exchange(session: &mut Session, request: &str) -> std::io::Result<String> {
     read_answer(&mut session.stdin, &mut session.stdout)
 }
 
+const RECORD: char = '\u{1e}';
+
 /// The host's answer to the request in flight, after answering the
 /// questions it asks ttc on the way (see `host.mjs`).
 fn read_answer(
@@ -332,6 +335,14 @@ fn read_answer(
         if stdout.read_line(&mut line)? == 0 {
             return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof));
         }
+        let Some(at) = line.find(RECORD) else {
+            eprint!("{line}");
+            continue;
+        };
+        if at > 0 {
+            eprintln!("{}", &line[..at]);
+        }
+        let line = line[at + RECORD.len_utf8()..].to_string();
         if !line.starts_with(r#"{"ownedOutputs":"#) {
             return Ok(line);
         }
@@ -598,7 +609,7 @@ fn parse_answers(stdout: &str, project: &Path) -> Result<Answers, Failure> {
     }
     for d in array(&value, "declarations") {
         answers.declarations.push(Declaration {
-            path: PathBuf::from(d["path"].as_str().unwrap_or_default()),
+            module: PathBuf::from(d["module"].as_str().unwrap_or_default()),
             text: d["text"].as_str().unwrap_or_default().to_string(),
         });
     }

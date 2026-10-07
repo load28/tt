@@ -166,7 +166,11 @@ pub enum StdPackage {
 /// The subdirectory holding the CommonJS copy of a [`StdPackage`].
 pub const STD_PACKAGE_COMMONJS_DIR: &str = "cjs";
 
-const COMMONJS_MANIFEST: &str = "{\n  \"type\": \"commonjs\"\n}\n";
+/// The `package.json` beside the CommonJS support modules.
+pub const STD_COMMONJS_MANIFEST: &str = "{\n  \"type\": \"commonjs\"\n}\n";
+
+/// The `package.json` beside the ES-module support modules.
+pub const STD_MODULE_MANIFEST: &str = "{\n  \"type\": \"module\"\n}\n";
 
 impl StdPackage {
     /// Every package, in deterministic materialization order.
@@ -261,7 +265,7 @@ impl StdPackage {
             .chain([
                 (
                     format!("{STD_PACKAGE_COMMONJS_DIR}/package.json"),
-                    COMMONJS_MANIFEST.to_string(),
+                    STD_COMMONJS_MANIFEST.to_string(),
                 ),
                 (
                     "package.json".to_string(),
@@ -292,7 +296,7 @@ impl StdPackage {
             })
             .chain(std::iter::once((
                 format!("{STD_PACKAGE_COMMONJS_DIR}/package.json"),
-                COMMONJS_MANIFEST.to_string(),
+                STD_COMMONJS_MANIFEST.to_string(),
             )))
             .collect()
     }

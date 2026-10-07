@@ -195,10 +195,11 @@ function originalSpan(spans, start, end) {
 }
 
 const CANNOT_READ_FILE = 5083;
+const RECORD = "\u001e";
+const CIRCULAR_CONFIGURATION = 18000;
 const CANNOT_FIND_MODULE = 2307;
 const LOWERED = /\.(?:tt\.ts|ttx\.tsx)$/;
 const TT_SOURCE = /\.ttx?$/;
-const MAPPED_DECLARATION = /\.d\.(ttx?)\.ts$/;
 const IDENTITY_MAPPER = `
 let pending = Buffer.alloc(0);
 process.stdin.on("data", (chunk) => {
@@ -240,7 +241,7 @@ process.stdin.on("data", (chunk) => {
  * retried until every byte is out.
  */
 function writeLine(text) {
-  const buffer = Buffer.from(text + "\n", "utf8");
+  const buffer = Buffer.from(RECORD + text + "\n", "utf8");
   let pos = 0;
   while (pos < buffer.length) {
     try {
@@ -575,9 +576,6 @@ async function main() {
       }
     }
     out.projectModules = out.projectModules.map(moduleName);
-    for (const declaration of out.declarations) {
-      if (mapped) declaration.path = declaration.path.replace(MAPPED_DECLARATION, ".$1.d.ts");
-    }
     return out;
   }
 
@@ -654,7 +652,18 @@ async function main() {
         out.directories = [...listings.keys()];
         return engineAnswer(out);
       }
-      const wanted = !foreignMappers(api.parseConfigFile(open.tsconfig));
+      const parsed = api.parseConfigFile(open.tsconfig);
+      const circular = (parsed?.errors ?? []).filter((d) => d.code === CIRCULAR_CONFIGURATION);
+      if (circular.length > 0) {
+        if (opened) reconnect();
+        for (const d of circular) {
+          out.projectDiagnostics.push({ file: open.tsconfig, code: d.code, message: messageText(d) });
+        }
+        out.dependencies = [...dependencies.keys()];
+        out.directories = [...listings.keys()];
+        return engineAnswer(out);
+      }
+      const wanted = !foreignMappers(parsed);
       if (wanted !== mapped) {
         mapped = wanted;
         reconnect();
@@ -1352,9 +1361,12 @@ async function main() {
           .map((path) => (group.members.has(path) ? path : served(path)))
           .filter((module) => group.members.has(module));
         if (modules.length === 0) continue;
-        const emitted = group.project.program.getDeclarationEmit(modules);
-        for (const [path, file] of emitted.outputFiles) {
-          out.declarations.push({ path, text: file.text });
+        for (const module of modules) {
+          const emitted = group.project.program.getDeclarationEmit([module]);
+          for (const [path, file] of emitted.outputFiles) {
+            if (path.endsWith(".map")) continue;
+            out.declarations.push({ module: moduleName(module), text: file.text });
+          }
         }
       }
     }

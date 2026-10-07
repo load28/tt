@@ -30,7 +30,7 @@ fn source_walk_skips_excluded_names_before_following_links() {
 
     let mut collected = Vec::new();
     ttc::engine::collect_sources(&dir, false, &mut collected).unwrap();
-    assert_eq!(collected, vec![hidden_source.clone(), source.clone()]);
+    assert_eq!(collected, vec![source.clone()]);
 
     let engine = Engine::new(None);
     let project = engine
@@ -39,12 +39,13 @@ fn source_walk_skips_excluded_names_before_following_links() {
             &ProjectOptions::default(),
         )
         .unwrap();
-    let mut expected = vec![
-        hidden_source.canonicalize().unwrap(),
-        source.canonicalize().unwrap(),
-    ];
-    expected.sort();
-    assert_eq!(project.scan().unwrap(), expected);
+    assert_eq!(
+        project.scan().unwrap(),
+        vec![source.canonicalize().unwrap()]
+    );
+    let mut named = Vec::new();
+    ttc::engine::collect_sources(&hidden_source, false, &mut named).unwrap();
+    assert_eq!(named, vec![hidden_source.clone()]);
 }
 
 #[test]

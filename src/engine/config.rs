@@ -40,8 +40,12 @@ fn jsx_option(config: &Path, reading: &mut Vec<PathBuf>) -> Result<Option<String
     }
     let text = std::fs::read_to_string(config)
         .map_err(|error| format!("{}: {error}", config.display()))?;
-    let value: serde_json::Value = serde_json::from_str(&json_text(&text))
-        .map_err(|error| format!("{}: {error}", config.display()))?;
+    let text = json_text(text.strip_prefix('\u{feff}').unwrap_or(&text));
+    let value: serde_json::Value = if text.trim().is_empty() {
+        serde_json::json!({})
+    } else {
+        serde_json::from_str(&text).map_err(|error| format!("{}: {error}", config.display()))?
+    };
     if let Some(jsx) = value["compilerOptions"]["jsx"].as_str() {
         return Ok(Some(jsx.to_string()));
     }
@@ -167,5 +171,28 @@ mod tests {
             "{\n  // a comment\n  \"a\": [1, 2,],\n  /* \"b\": 1, */ \"c\": \"x // y, }\",\n}\n";
         let value: serde_json::Value = serde_json::from_str(&json_text(text)).unwrap();
         assert_eq!(value, serde_json::json!({ "a": [1, 2], "c": "x // y, }" }));
+    }
+
+    #[test]
+    fn an_empty_comment_only_or_bom_prefixed_configuration_is_read() {
+        let dir = crate::test_workspace::Workspace::new("config-text");
+        let config = dir.join("tsconfig.json");
+        for (text, jsx) in [
+            ("", None),
+            ("// only a comment\n", None),
+            (
+                "\u{feff}{\"compilerOptions\":{\"jsx\":\"preserve\"}}",
+                Some("preserve"),
+            ),
+        ] {
+            std::fs::write(&config, text).unwrap();
+            assert_eq!(
+                super::jsx_option(&config, &mut Vec::new())
+                    .unwrap()
+                    .as_deref(),
+                jsx,
+                "{text:?}"
+            );
+        }
     }
 }

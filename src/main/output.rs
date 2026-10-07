@@ -128,12 +128,16 @@ pub(super) fn normalized_absolute(path: &Path) -> PathBuf {
 /// sibling temporary first and the rename replaces the target in one step,
 /// so a reader sees the previous file or the new one, never a prefix.
 pub(super) fn write_output(out_path: &Path, code: &str) -> Result<(), String> {
+    write_output_bytes(out_path, code.as_bytes())
+}
+
+pub(super) fn write_output_bytes(out_path: &Path, code: &[u8]) -> Result<(), String> {
     if let Some(parent) = out_path.parent()
         && let Err(e) = create_dir_all(parent)
     {
         return Err(format!("ttc: {}: {e}", out_path.display()));
     }
-    replace_file(out_path, code.as_bytes()).map_err(|e| format!("ttc: {}: {e}", out_path.display()))
+    replace_file(out_path, code).map_err(|e| format!("ttc: {}: {e}", out_path.display()))
 }
 
 pub(super) fn create_dir_all(dir: &Path) -> std::io::Result<()> {

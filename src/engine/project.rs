@@ -1490,18 +1490,29 @@ fn collect_sources_in(
         children.sort();
         for child in children {
             // Exclusion is a property of the entry name, even when its
-            // target is missing or unreadable. Inspect only admitted entries.
-            if excluded_source_entry(&child) && !is_source(&child, include_ts) {
+            // target is missing or unreadable: a dot-file or dot-directory and
+            // `node_modules` are left out, as TypeScript's include patterns
+            // leave them out. Only a file named on the command line is read
+            // whatever its name.
+            if excluded_source_entry(&child) {
                 continue;
             }
-            // A directory holds entries the walk cannot read — a dangling
-            // symlink, a loop, a permission. Naming the one that failed is
-            // the difference between a fixable report and "the directory
-            // you named does not exist", which is what the bare error said
-            // about a directory that plainly does.
-            let meta = std::fs::metadata(&child).map_err(|e| named(&child, e))?;
+            // A symlink whose target cannot be read is skipped, as
+            // TypeScript's directory listing skips it. Any other entry the
+            // walk cannot read is named, rather than reported as "the
+            // directory you named does not exist".
+            let meta = match std::fs::metadata(&child) {
+                Ok(meta) => meta,
+                Err(_)
+                    if std::fs::symlink_metadata(&child)
+                        .is_ok_and(|link| link.file_type().is_symlink()) =>
+                {
+                    continue;
+                }
+                Err(error) => return Err(named(&child, error)),
+            };
             if meta.is_dir() {
-                if !excluded_source_entry(&child) && !alias_of_walked_directory(root, &child)? {
+                if !alias_of_walked_directory(root, &child)? {
                     collect_sources_in(root, &child, include_ts, out, directories)?;
                 }
             } else if meta.is_file() && is_source(&child, include_ts) {

@@ -24,19 +24,40 @@ pub(super) fn typed_check_mode(inputs: &[String], options: &TypedCheckOptions<'_
             return ExitCode::FAILURE;
         }
         let mut report = TypedReport::checked();
+        let mut printed = HashSet::new();
         for group in &groups {
-            report.absorb(typed_check_group(&engine, group, &project_options, options));
+            report.absorb(typed_check_group(
+                &engine,
+                group,
+                &project_options,
+                options,
+                &mut printed,
+            ));
         }
         if options.json_report {
             crate::out::line(&report.to_json());
         }
         return report.exit_code();
     }
+    if options.watch {
+        let mut reported = None;
+        loop {
+            match open_typed_project(&engine, inputs, &project_options, options) {
+                Ok(project) => {
+                    return typed_watch(&engine, project, inputs, &project_options, options);
+                }
+                Err(e) => {
+                    if reported.as_ref() != Some(&e) {
+                        eprintln!("ttc: {e}");
+                        reported = Some(e);
+                    }
+                    thread::sleep(WATCH_INTERVAL);
+                }
+            }
+        }
+    }
     let report = match open_typed_project(&engine, inputs, &project_options, options) {
         Ok(mut project) => {
-            if options.watch {
-                return typed_watch(&engine, project, inputs, &project_options, options);
-            }
             let mut files = project.initial_files();
             files.extend(
                 options
@@ -47,7 +68,7 @@ pub(super) fn typed_check_mode(inputs: &[String], options: &TypedCheckOptions<'_
             );
             files.sort();
             files.dedup();
-            typed_pass(&mut project, &files, options).unwrap_or_else(|e| {
+            typed_pass(&mut project, &files, options, &mut HashSet::new()).unwrap_or_else(|e| {
                 eprintln!("ttc: {e}");
                 TypedReport::unchecked(0)
             })
@@ -95,13 +116,14 @@ fn typed_check_group(
     inputs: &[String],
     project_options: &ttc::engine::ProjectOptions,
     options: &TypedCheckOptions<'_>,
+    printed: &mut HashSet<String>,
 ) -> TypedReport {
     match open_typed_project(engine, inputs, project_options, options) {
         Ok(mut project) => {
             let mut files = project.initial_files();
             files.sort();
             files.dedup();
-            typed_pass(&mut project, &files, options).unwrap_or_else(|e| {
+            typed_pass(&mut project, &files, options, printed).unwrap_or_else(|e| {
                 eprintln!("ttc: {e}");
                 TypedReport::unchecked(0)
             })
@@ -253,6 +275,7 @@ pub(super) fn typed_pass(
     project: &mut ttc::engine::Project,
     files: &[PathBuf],
     options: &TypedCheckOptions<'_>,
+    printed: &mut HashSet<String>,
 ) -> Result<TypedReport, String> {
     let snapshot = match project.update(files) {
         Ok(snapshot) => snapshot,
@@ -304,6 +327,7 @@ pub(super) fn typed_pass(
         }
     }
     let mut measured: HashMap<&Path, Option<ttc::lines::LineMap<'_>>> = HashMap::new();
+    let mut reported = 0;
     for diagnostic in &checked.diagnostics {
         let lines = measured.entry(&diagnostic.path).or_insert_with(|| {
             snapshot
@@ -311,15 +335,16 @@ pub(super) fn typed_pass(
                 .or_else(|| disk.get(diagnostic.path.as_path())?.as_deref())
                 .map(ttc::lines::LineMap::ecma)
         });
-        eprintln!(
-            "{}",
-            ttc::render::engine_diagnostic_measured(
-                diagnostic,
-                lines.as_ref(),
-                &shown(&diagnostic.path),
-                styles(),
-            )
+        let rendered = ttc::render::engine_diagnostic_measured(
+            diagnostic,
+            lines.as_ref(),
+            &shown(&diagnostic.path),
+            styles(),
         );
+        if printed.insert(rendered.clone()) {
+            eprintln!("{rendered}");
+            reported += 1;
+        }
     }
 
     // A backend that could not run is the pass failing to *run*, not the
@@ -332,14 +357,14 @@ pub(super) fn typed_pass(
         eprintln!("ttc: {error}");
         eprintln!("ttc: the TypeScript layer did not run — only tt-level diagnostics are shown");
         return Ok(TypedReport {
-            reported: checked.diagnostics.len(),
+            reported,
             blocked: true,
             writes,
         });
     }
 
     Ok(TypedReport {
-        reported: checked.diagnostics.len(),
+        reported,
         blocked: false,
         writes,
     })
@@ -406,7 +431,7 @@ pub(super) fn typed_watch(
 
         if first || current != stamps {
             let started = std::time::Instant::now();
-            match typed_pass(project, &files, options) {
+            match typed_pass(project, &files, options, &mut HashSet::new()) {
                 Ok(report) if report.writes.failed.is_empty() => eprintln!(
                     "ttc: {} file(s), {} reported in {} ms — watching",
                     files.len(),

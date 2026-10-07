@@ -273,13 +273,6 @@ pub(crate) fn std_package_modules(
         })
 }
 
-/// The path the compiler emits a lowered module's declarations to:
-/// `src/token.tt.ts` → `src/token.tt.d.ts`, which is the sidecar name a
-/// specifier written `"./token.tt"` resolves to.
-pub(crate) fn declaration_path_of(file: &ProjectedDocument) -> PathBuf {
-    file.module_path.with_extension("d.ts")
-}
-
 /// Builds the batch of questions the whole snapshot asks in one round trip.
 ///
 /// Every question is anchored at a byte the compiler can see: a probe whose
