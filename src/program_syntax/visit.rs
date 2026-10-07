@@ -230,16 +230,6 @@ impl ParentCollector {
         let mut owners: Vec<HostOwnerSyntax> = Vec::new();
         let mut globals = HashMap::new();
         let mut overlay: Vec<OverlayEntry> = Vec::with_capacity(pending.len());
-        // The position of the latest tt value listed under each frame of
-        // each owner ([`evaluation_protocol`]'s `earlier`).
-        let mut listed_values: HashMap<
-            (
-                HostOwnerId,
-                ProjectedSpan,
-                std::mem::Discriminant<ProjectedProtocolFrame>,
-            ),
-            (usize, ProjectedByte),
-        > = HashMap::new();
         let overlay_spans: Vec<_> = pending
             .iter()
             .map(|entry| (entry.id, entry.projected))
@@ -399,38 +389,11 @@ impl ParentCollector {
                         })
                         .cloned()
                         .collect();
-                    let positions: Vec<Option<usize>> = frames
-                        .iter()
-                        .map(|frame| listed_position(frame, entry.projected))
-                        .collect();
-                    let earlier: Vec<Option<usize>> = frames
-                        .iter()
-                        .zip(&positions)
-                        .map(|(frame, position)| {
-                            let position = (*position)?;
-                            listed_values
-                                .get(&(owner_id, frame.parent(), std::mem::discriminant(&**frame)))
-                                .copied()
-                                .filter(|&(earlier, start)| {
-                                    earlier <= position && start < entry.projected.start
-                                })
-                                .map(|(earlier, _)| earlier)
-                        })
-                        .collect();
-                    for (frame, position) in frames.iter().zip(&positions) {
-                        if let Some(position) = *position {
-                            listed_values.insert(
-                                (owner_id, frame.parent(), std::mem::discriminant(&**frame)),
-                                (position, entry.projected.start),
-                            );
-                        }
-                    }
                     evaluation_protocol(
                         &self.source_segments,
                         entry.projected,
                         entry.source,
                         &frames,
-                        &earlier,
                     )?
                 },
                 core_root: entry.core_root,

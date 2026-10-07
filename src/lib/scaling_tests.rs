@@ -619,48 +619,6 @@ fn a_check_measures_each_file_once_however_many_diagnostics_it_reports() {
     }
 }
 
-fn sibling_matches(count: usize, open: &str, close: &str) -> String {
-    format!(
-        "export variant V {{ A, B }}\ndeclare const v: V;\ndeclare function f(...values: number[]): number;\nexport const x = {open}{}{close};\n",
-        vec!["match (v) { A => 1, B => 2 }"; count].join(", "),
-    )
-}
-
-fn template_matches(count: usize) -> String {
-    format!(
-        "export variant V {{ A, B }}\ndeclare const v: V;\nexport const x = `{}`;\n",
-        "${match (v) { A => 1, B => 2 }}".repeat(count),
-    )
-}
-
-fn property_matches(count: usize) -> String {
-    format!(
-        "export variant V {{ A, B }}\ndeclare const v: V;\nexport const x = {{ {} }};\n",
-        (0..count)
-            .map(|i| format!("k{i}: match (v) {{ A => 1, B => 2 }}"))
-            .collect::<Vec<_>>()
-            .join(", "),
-    )
-}
-
-#[test]
-fn compiling_does_linear_work_in_the_tt_values_one_expression_lists() {
-    let shapes: [&dyn Fn(usize) -> String; 6] = [
-        &|n| sibling_matches(n, "[", "]"),
-        &|n| sibling_matches(n, "f(", ")"),
-        &|n| sibling_matches(n, "new Array(", ")"),
-        &|n| sibling_matches(n, "{ k: [", "] }"),
-        &template_matches,
-        &property_matches,
-    ];
-    for shape in shapes {
-        let small = measure(|| every_request(&shape(100)));
-        let large = measure(|| every_request(&shape(200)));
-        assert_linear(&small, &large);
-        assert!(large["evaluation protocol inputs"] > 0);
-    }
-}
-
 #[test]
 fn compiling_maps_each_projected_span_once_for_nested_tt_values() {
     let chain = |count| {

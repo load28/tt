@@ -1,0 +1,85 @@
+=== aConditionalBeforeALaterArgumentIsLoweredWhole.tt ===
+const calls: string[] = [];
+>calls : const calls: string[]
+variant V { A, B }
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+function f(...xs: number[]): number { calls.push("f"); return xs.reduce((a, b) => a + b, 0); }
+>f : function f(...xs: number[]): number
+>xs : (parameter) xs: number[]
+>calls : const calls: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>xs : (parameter) xs: number[]
+>reduce : (method) Array<number>.reduce(callbackfn: (previousValue: number, currentValue: number, currentIndex: number, array: number[]) => number, initialValue: number): number
+>a : (parameter) a: number
+>b : (parameter) b: number
+>a : (parameter) a: number
+>b : (parameter) b: number
+function a(): number { calls.push("a"); return 1; }
+>a : function a(): number
+>calls : const calls: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+function b(): number { calls.push("b"); return 10; }
+>b : function b(): number
+>calls : const calls: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+export function g(c: boolean, v: V) {
+>g : function g(c: boolean, v: V): number
+>c : (parameter) c: boolean
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+  return f(a(), c ? match (v) { A => { calls.push("A"); return 100; }, B => 200 } : match (v) { A => { calls.push("A2"); return 300; }, B => 400 }, b());
+>f : function f(...xs: number[]): number
+>a : function a(): number
+>c : (parameter) c: boolean
+>v : (parameter) v: V
+>calls : const calls: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>v : (parameter) v: V
+>calls : const calls: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>b : function b(): number
+console.log(g(true, V.A), g(false, V.B), JSON.stringify(calls));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>g : function g(c: boolean, v: V): number
+>V : const V: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>g : function g(c: boolean, v: V): number
+>V : const V: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>calls : const calls: string[]
+

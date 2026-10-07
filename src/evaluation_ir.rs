@@ -135,9 +135,7 @@ pub(crate) struct LoweringPlan {
     owners: Vec<HostRewrite>,
     for_initializer_propagations: Vec<ForInitializerPropagation>,
     slot_names: Vec<String>,
-    /// The owner group and source span each source capture's slot holds.
     captures: HashMap<ValueSlotId, (usize, SourceSpan)>,
-    /// The slot of each source span captured in an owner group.
     captured_slots: HashMap<(usize, SourceSpan), ValueSlotId>,
     value_slots: HashMap<ExprId, ValueSlotId>,
     piped_slots: HashMap<ExprId, Vec<ValueSlotId>>,
@@ -526,10 +524,6 @@ struct PlannedSourceSlot {
 }
 
 impl LoweringPlan {
-    /// Whether `earlier`, a source materialized before the capture written
-    /// to `target`, is substituted into that capture: an earlier capture of
-    /// the same owner group lying inside it, so emission reads its slot, not
-    /// its source.
     pub(crate) fn capture_depends_on(&self, target: ValueSlotId, earlier: SourceSpan) -> bool {
         let Some(&(group, source)) = self.captures.get(&target) else {
             return false;

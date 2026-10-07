@@ -79,9 +79,6 @@ impl ProjectionSegments {
         }
     }
 
-    /// The source span `projected` maps to, worked out once per span: every
-    /// tt value nested in an expression maps the spans of the frames it
-    /// shares with its siblings and ancestors.
     pub(in super::super) fn mapped(
         &self,
         projected: ProjectedSpan,

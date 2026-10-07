@@ -22,8 +22,8 @@ removes that growth from the structure that causes it.
 
 ## Decisions
 
-1. **Each tt value of a frame lists only the inputs after the previous
-   value's position.** An array, call, `new`, template, tagged template or
+1. **Reversed later in this task (Issue 1): each tt value of a frame lists
+   only the inputs after the previous value's position.** An array, call, `new`, template, tagged template or
    JSX frame that holds many tt values gave each value a step listing every
    position before it, so the schedules of `n` values held `n²/2` inputs,
    and every later stage (schedule resolution, the order validation)
@@ -38,7 +38,9 @@ removes that growth from the structure that causes it.
    whose call the dispatch may complete keeps the full list, because the
    completion re-reads the whole argument list from its step; and the
    callee or tag is listed only by the first value, which is where it
-   evaluates.
+   evaluates. This decision is reversed: values that share a conditional
+   operation must carry the same steps above it, and trimming broke that
+   (Issue 1). The flat-breadth cost moves to TASK-777.
 2. **Frames are shared, and positions are found by binary search.** The
    collector cloned every enclosing frame (with its position lists) into
    each value's path; frames are now `Rc`-shared. Positions in a frame are
@@ -62,7 +64,8 @@ removes that growth from the structure that causes it.
    The plan now keeps each capture's owner group and span and each group's
    span-to-slot map, and `LoweringPlan::capture_depends_on` answers the
    same membership question in constant time.
-5. **A value's steps stay one per enclosing operation.** A schedule lists
+5. **Superseded by TASK-777: a value's steps stay one per enclosing
+   operation.** A schedule lists
    each operation between the value and its owner, and the planner and
    emitter index, slice, and compare those lists (`steps()[..index]`,
    suffix equality for shared conditionals, `steps().is_empty()`), so a
@@ -73,7 +76,18 @@ removes that growth from the structure that causes it.
    per-value path in the collector for the same reason. With decisions 3
    and 4, 1,600 matches in one `+` chain compile in 1.5 s (from 2.9 s) and
    800 in 0.47 s (from 0.63 s); the remaining time is copying the step
-   lists.
+   lists. The user chose to restructure lowering as TypeScript does
+   (TASK-777): one top-down pass per owner over the subtrees that contain
+   tt values, as `transformers/generators.ts` spills operands before a
+   `yield` using `TransformFlags.ContainsYield`.
+6. **Decision 1 is reverted; decisions 2 to 4 stay.** Restoring every
+   value's full input lists restores the contract that values grouped into
+   one conditional operation carry equal steps outside it. Sharing frames
+   (decision 2), the span memo (decision 3), and the capture relation
+   (decision 4) do not change any step, so they stay. The flat-breadth
+   cost is quadratic again until TASK-777 replaces the per-value schedules,
+   and `compiling_does_linear_work_in_the_tt_values_one_expression_lists`
+   is removed with decision 1.
 
 ## Work log
 
@@ -104,17 +118,35 @@ removes that growth from the structure that causes it.
   `compiling_maps_each_projected_span_once_for_nested_tt_values`, which
   fails without the memo (`projection span lookups: 5651 units for n
   matches but 21301 for 2n`).
+- 2026-10-07: While designing TASK-777, found that decision 1 rejects
+  valid code (Issue 1). Confirmed with a release build of 2074893c, which
+  compiles the program, against the current branch, which reports
+  `match-placement`. Reverted decision 1 (decision 6) and added
+  `aConditionalBeforeALaterArgumentIsLoweredWhole`.
 
 ## Issues and resolutions
 
-None.
+### Issue 1: A conditional operation under a call followed by another argument was rejected
+
+- **Symptom**: `f(a(), c ? match ... : match ..., b())` reported
+  `match-placement` ("cannot be lowered from this conditional expression
+  position without evaluating a skipped branch"), where the previous build
+  compiled it.
+- **Cause**: decision 1 gave the second match an empty step at the call
+  (the first match had already listed `f` and `a()`).
+  `plan_one_operation` groups the two matches into one conditional
+  operation only when their steps above the conditional are equal, so the
+  group was refused. With `b()` absent the call is completable and both
+  values kept their full lists, which is why no existing case failed.
+- **Resolution**: decision 1 is reverted (decision 6). The case
+  `tests/cases/compiler/aConditionalBeforeALaterArgumentIsLoweredWhole.tt`
+  runs the program and pins the order `a`, the arm, `b`, `f`.
 
 ## Regression test (fails before the fix)
 
-- **Path**: `src/lib/scaling_tests.rs`
-  (`compiling_does_linear_work_in_the_tt_values_one_expression_lists`)
-- **Observed failure**: without decision 1 the test fails on
-  `projection span lookups: 5252 → 20502` (200 values against 100).
+- **Path**: `tests/cases/compiler/aConditionalBeforeALaterArgumentIsLoweredWhole.tt`
+- **Observed failure**: with decision 1 in place, `ttc` reports
+  `error[match-placement]` at both matches and writes no output.
 - **Path**: `src/lib/scaling_tests.rs`
   (`compiling_maps_each_projected_span_once_for_nested_tt_values`)
 - **Observed failure**: without decision 3 the test fails on

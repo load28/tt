@@ -1,0 +1,19 @@
+//// [aConditionalBeforeALaterArgumentIsLoweredWhole.tt] 17 mapping(s)
+1:1 -> 19:1 len 28  "const calls: string[] = [];\n"
+2:19 -> 26:3 len 241  "\nfunction f(...xs: number[]): number { calls.pus"...
+7:3 -> 68:3 len 7  "return "
+7:10 -> 32:29 len 1  "f"
+7:11 -> 68:16 len 1  "("
+7:12 -> 33:19 len 3  "a()"
+7:15 -> 68:23 len 2  ", "
+7:17 -> 34:7 len 1  "c"
+7:28 -> 36:21 len 1  "v"
+7:40 -> 39:11 len 17  "calls.push(\"A\"); "
+7:64 -> 39:37 len 3  "100"
+7:77 -> 42:20 len 3  "200"
+7:92 -> 52:21 len 1  "v"
+7:104 -> 55:11 len 18  "calls.push(\"A2\"); "
+7:129 -> 55:38 len 3  "300"
+7:142 -> 58:20 len 3  "400"
+7:147 -> 68:31 len 75  ", b());\n}\nconsole.log(g(true, V.A), g(false, V.B"...
+
