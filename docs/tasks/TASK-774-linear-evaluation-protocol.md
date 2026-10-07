@@ -1,8 +1,8 @@
 # TASK-774: Make the evaluation protocol linear in the tt values of an expression
 
-- **Status**: In progress
+- **Status**: Complete
 - **Started**: 2026-10-07
-- **Completed**: —
+- **Completed**: 2026-10-07
 - **Commit**: —
 
 ## Purpose
@@ -154,11 +154,19 @@ removes that growth from the structure that causes it.
 
 ## Verification
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] Every case baseline unchanged
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test` (exit 0 after the revert, with the new case)
+- [x] Every case baseline unchanged; one new case and its baselines
 
 ## Result
 
-In progress.
+Complete. Decisions 2 to 4 stay: frames are shared and searched by binary
+search (`src/program_syntax/collector.rs`, `visit.rs`, `protocol.rs`),
+projected spans are mapped once (`src/program_syntax/projection/segments.rs`),
+and capture dependencies are a relation (`src/evaluation_ir.rs`,
+`evaluation.rs`, `validation.rs`), pinned by
+`compiling_maps_each_projected_span_once_for_nested_tt_values`. Decision 1
+is reverted after Issue 1, pinned by
+`aConditionalBeforeALaterArgumentIsLoweredWhole`. The remaining
+quadratic cost of many tt values in one expression moves to TASK-777.
