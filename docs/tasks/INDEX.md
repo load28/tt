@@ -819,7 +819,8 @@
 | TASK-776 | Lower an expression's tt values over one shared evaluation tree | Complete | 2026-10-07 | 2026-10-07 | [TASK-776](./TASK-776-shared-evaluation-tree.md) |
 | TASK-777 | Give a value in a nested concise arrow body its layout scope | Complete | 2026-10-07 | 2026-10-07 | [TASK-777](./TASK-777-nested-concise-arrow-layout-scope.md) |
 | TASK-778 | Pin the TypeScript-twin parity of an `@tt/std` case as a clean checkout answers it | Complete | 2026-10-07 | 2026-10-07 | [TASK-778](./TASK-778-twin-parity-without-stray-std.md) |
+| TASK-779 | Share the pattern analysis' declaration entries across the scopes it narrows | Complete | 2026-10-07 | 2026-10-07 | [TASK-779](./TASK-779-shared-pattern-table-entries.md) |
 
 ## Next task number
 
-**TASK-779**
+**TASK-780**

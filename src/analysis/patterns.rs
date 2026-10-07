@@ -45,7 +45,7 @@ pub(super) struct Entry {
 pub(super) struct Table {
     /// Local declarations first (in source order), then imported ones, then
     /// the built-ins; each name appears once, so the nearer origin wins.
-    entries: Vec<Entry>,
+    entries: Vec<std::sync::Arc<Entry>>,
 }
 
 impl Table {
@@ -56,7 +56,7 @@ impl Table {
     /// and constructors with declared field text.
     pub(super) fn from_resolution(resolution: &crate::resolve::Resolution) -> Table {
         use crate::resolve::{DeclOrigin, DefKind};
-        let entries = resolution
+        let entries: Vec<Entry> = resolution
             .defs
             .iter()
             .filter_map(|(id, def)| {
@@ -111,7 +111,9 @@ impl Table {
                 })
             })
             .collect();
-        Table { entries }
+        Table {
+            entries: entries.into_iter().map(std::sync::Arc::new).collect(),
+        }
     }
 
     pub(super) fn visible_at(&self, at: usize) -> Table {
@@ -148,6 +150,7 @@ impl Table {
                 tags.iter()
                     .all(|tag| entry.constructors.iter().any(|c| c.tag == *tag))
             })
+            .map(|entry| &**entry)
             .collect()
     }
 
@@ -211,6 +214,7 @@ impl Table {
         self.entries
             .iter()
             .find(|e| e.name == base || e.type_names.iter().any(|name| name == base))
+            .map(|entry| &**entry)
     }
 }
 
