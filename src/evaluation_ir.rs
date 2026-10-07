@@ -260,14 +260,14 @@ pub(crate) struct PlannedConditionalOperation {
     pub(crate) active: Vec<PlannedActiveBranch>,
     /// The evaluation steps outside this operation (its own host context),
     /// shared by every consumed value.
-    pub(crate) outer: Vec<PlannedEvaluationStep>,
+    pub(crate) outer: crate::chain::ChainSlice<PlannedEvaluationStep>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PlannedActiveBranch {
     pub(crate) value: ExprId,
     pub(crate) branch: SourceSpan,
-    pub(crate) steps: Vec<PlannedEvaluationStep>,
+    pub(crate) steps: crate::chain::ChainSlice<PlannedEvaluationStep>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -415,7 +415,7 @@ pub(crate) enum ExpressionBoundaryReason {
 pub(crate) struct EvaluationSchedule {
     /// Optional host-call completion carried from the syntax proof.
     pub(crate) call_completion: Option<PlannedCallCompletion>,
-    steps: Vec<PlannedEvaluationStep>,
+    steps: crate::chain::ChainSlice<PlannedEvaluationStep>,
 }
 
 /// A syntax-proven completable call with its generated-name reservations
@@ -431,8 +431,15 @@ pub(crate) struct PlannedCallCompletion {
 }
 
 impl EvaluationSchedule {
-    pub(crate) fn steps(&self) -> &[PlannedEvaluationStep] {
+    pub(crate) fn steps(&self) -> &crate::chain::ChainSlice<PlannedEvaluationStep> {
         &self.steps
+    }
+
+    #[cfg(test)]
+    pub(crate) fn edit_steps(&mut self, edit: impl FnOnce(&mut Vec<PlannedEvaluationStep>)) {
+        let mut steps = self.steps.to_vec();
+        edit(&mut steps);
+        self.steps = crate::chain::ChainSlice::whole(crate::chain::Chain::from_vec(steps));
     }
 }
 
@@ -440,7 +447,7 @@ impl EvaluationSchedule {
 pub(crate) struct PlannedEvaluationStep {
     pub(crate) parent: SourceSpan,
     pub(crate) operation: HostEvaluationOperation,
-    pub(crate) inputs: Vec<PlannedEvaluationInput>,
+    pub(crate) inputs: crate::chain::Segments<PlannedEvaluationInput>,
     /// The whole-operation structure, carried from the protocol when the
     /// step is conditional ([`crate::program_syntax::ConditionalFacts`]).
     pub(crate) conditional: Option<ConditionalFacts>,

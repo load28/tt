@@ -156,7 +156,7 @@ pub(crate) struct HostEvaluationProtocol {
     /// value. Target planning must still tie these facts to the value's
     /// innermost evaluation step before consuming the call.
     pub(crate) call_completion: Option<CallCompletionFacts>,
-    steps: Vec<HostEvaluationStep>,
+    steps: crate::chain::Chain<HostEvaluationStep>,
 }
 
 /// The syntactic facts of one completable call: a non-optional call
@@ -188,7 +188,7 @@ pub(crate) struct CallCompletionFacts {
 }
 
 impl HostEvaluationProtocol {
-    pub(crate) fn steps(&self) -> &[HostEvaluationStep] {
+    pub(crate) fn steps(&self) -> &crate::chain::Chain<HostEvaluationStep> {
         &self.steps
     }
 }
@@ -197,7 +197,7 @@ impl HostEvaluationProtocol {
 pub(crate) struct HostEvaluationStep {
     pub(crate) parent: SourceSpan,
     pub(crate) operation: HostEvaluationOperation,
-    pub(crate) inputs: Vec<HostEvaluationInput>,
+    pub(crate) inputs: crate::chain::Segments<HostEvaluationInput>,
     /// The structure of the conditional operation this step belongs to,
     /// when [`HostEvaluationStep::operation`] is a
     /// [`HostEvaluationOperation::Conditional`] — everything lowering needs

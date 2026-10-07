@@ -512,8 +512,10 @@ pub(super) fn completable_decision_arms(core: &CoreFile, expr: ExprId, exits: &[
 /// the whole question — the rest of the frame is keys and punctuation. An
 /// earlier position that is *not* inert would move from before the
 /// scrutinee to after it, which the arms cannot undo.
-fn framed_positions_are_inert(steps: &[PlannedEvaluationStep]) -> bool {
-    steps.iter().all(|step| {
+fn framed_positions_are_inert<'s>(
+    mut steps: impl Iterator<Item = &'s PlannedEvaluationStep>,
+) -> bool {
+    steps.all(|step| {
         matches!(
             step.operation,
             HostEvaluationOperation::Eager(
@@ -585,7 +587,7 @@ fn scoped_call_completion(
     } else {
         if !completion.facts.literal_positions
             || call_step == 0
-            || !framed_positions_are_inert(&schedule.steps()[..call_step])
+            || !framed_positions_are_inert(schedule.steps().iter().take(call_step))
             || !all_arms_are_expressions(core, expr)
         {
             return None;
@@ -601,7 +603,7 @@ fn scoped_call_completion(
             },
         ))
     };
-    let step = &schedule.steps()[call_step];
+    let step = schedule.steps().get(call_step)?;
     let HostEvaluationOperation::Eager(crate::program_syntax::EagerPosition::CallArgument(index)) =
         step.operation
     else {
@@ -647,7 +649,7 @@ fn scoped_call_completion(
     };
     invoke.push('(');
     let mut captures = Vec::new();
-    for input in &step.inputs[1..] {
+    for input in step.inputs.iter().skip(1) {
         match input {
             PlannedEvaluationInput::Source { target, .. } => {
                 invoke.push_str(lowering.slot_name(*target));
@@ -925,11 +927,13 @@ impl TargetRewritePlan {
                         .filter_map(|value| match operation_of.get(&value.expr) {
                             Some(index) => emitted_operations.insert(*index).then(|| {
                                 let mut operation = rewrite.operations[*index].clone();
-                                let loop_step = operation.outer.pop().unwrap_or_else(|| {
-                                    crate::ice::bug!(
-                                        "loop conditional operation lost its loop step"
-                                    )
-                                });
+                                let loop_step =
+                                    operation.outer.last().cloned().unwrap_or_else(|| {
+                                        crate::ice::bug!(
+                                            "loop conditional operation lost its loop step"
+                                        )
+                                    });
+                                operation.outer = operation.outer.take(operation.outer.len() - 1);
                                 if loop_step.operation != HostEvaluationOperation::LoopTest {
                                     crate::ice::bug!(
                                         "loop conditional operation has a non-loop outer step"
@@ -939,10 +943,14 @@ impl TargetRewritePlan {
                             }),
                             None => {
                                 let ValueTarget::Slot(slot) = value.target;
-                                let mut steps = value.schedule.steps().to_vec();
-                                let loop_step = steps.pop().unwrap_or_else(|| {
-                                    crate::ice::bug!("loop value lost its loop step")
-                                });
+                                let loop_step =
+                                    value.schedule.steps().last().cloned().unwrap_or_else(|| {
+                                        crate::ice::bug!("loop value lost its loop step")
+                                    });
+                                let steps = value
+                                    .schedule
+                                    .steps()
+                                    .take(value.schedule.steps().len() - 1);
                                 if loop_step.operation != HostEvaluationOperation::LoopTest {
                                     crate::ice::bug!("loop value has a non-loop outer step")
                                 }
@@ -1043,9 +1051,9 @@ impl TargetRewritePlan {
                                     source: value.source,
                                     slot: slot_name,
                                     steps: if inline {
-                                        Vec::new()
+                                        crate::chain::ChainSlice::new()
                                     } else {
-                                        value.schedule.steps().to_vec()
+                                        value.schedule.steps().clone()
                                     },
                                     defer_arm_values: rewrite.values.len() == 1
                                         && can_defer_arm_values(

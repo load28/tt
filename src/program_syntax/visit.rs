@@ -230,6 +230,7 @@ impl ParentCollector {
         let mut owners: Vec<HostOwnerSyntax> = Vec::new();
         let mut globals = HashMap::new();
         let mut overlay: Vec<OverlayEntry> = Vec::with_capacity(pending.len());
+        let mut step_links = StepLinks::default();
         let overlay_spans: Vec<_> = pending
             .iter()
             .map(|entry| (entry.id, entry.projected))
@@ -394,6 +395,7 @@ impl ParentCollector {
                         entry.projected,
                         entry.source,
                         &frames,
+                        &mut step_links,
                     )?
                 },
                 core_root: entry.core_root,

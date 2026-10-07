@@ -2,11 +2,13 @@
 
 use super::*;
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn resolve_schedule(
     protocol: HostEvaluationProtocol,
     tt_spans: &[SourceSpan],
     slots: &HashMap<SourceSpan, ValueSlotId>,
     source_slots: &mut HashMap<SourceSpan, PlannedSourceSlot>,
+    links: &mut PlannedLinks,
     next_slot: &mut u32,
     slot_names: &mut Vec<String>,
     occupied_names: &mut HashSet<String>,
@@ -18,12 +20,14 @@ pub(super) fn resolve_schedule(
     // other lowering.
     let mut schedule = resolve_schedule_steps(
         protocol.steps(),
+        protocol.steps().len(),
         Elision {
             tt_spans,
             reserve_names: protocol.call_completion.is_some(),
         },
         slots,
         source_slots,
+        links,
         next_slot,
         slot_names,
         occupied_names,
@@ -49,126 +53,249 @@ pub(super) struct Elision<'a> {
     pub(super) reserve_names: bool,
 }
 
+#[derive(Default)]
+pub(super) struct PlannedLinks {
+    steps: HashMap<
+        usize,
+        (
+            crate::chain::Chain<crate::program_syntax::HostEvaluationStep>,
+            crate::chain::Chain<PlannedEvaluationStep>,
+        ),
+    >,
+    inputs: InputLinks,
+}
+
+type InputLinks = HashMap<
+    usize,
+    (
+        crate::chain::Segments<crate::program_syntax::HostEvaluationInput>,
+        crate::chain::Segments<PlannedEvaluationInput>,
+    ),
+>;
+
+#[allow(clippy::too_many_arguments)]
 pub(super) fn resolve_schedule_steps(
-    protocol_steps: &[crate::program_syntax::HostEvaluationStep],
+    protocol_steps: &crate::chain::Chain<crate::program_syntax::HostEvaluationStep>,
+    count: usize,
+    elision: Elision<'_>,
+    slots: &HashMap<SourceSpan, ValueSlotId>,
+    source_slots: &mut HashMap<SourceSpan, PlannedSourceSlot>,
+    links: &mut PlannedLinks,
+    next_slot: &mut u32,
+    slot_names: &mut Vec<String>,
+    occupied_names: &mut HashSet<String>,
+) -> Result<EvaluationSchedule, EvaluationError> {
+    let shared = count == protocol_steps.len() && !elision.reserve_names;
+    let mut resolved = Vec::new();
+    let mut rest = protocol_steps;
+    let mut tail = crate::chain::Chain::new();
+    for _ in 0..count {
+        if shared && let Some((_, planned)) = links.steps.get(&rest.identity()) {
+            tail = planned.clone();
+            break;
+        }
+        let (Some(step), Some(next)) = (rest.first(), rest.rest()) else {
+            break;
+        };
+        resolved.push((
+            rest.clone(),
+            resolve_step(
+                step,
+                elision,
+                slots,
+                source_slots,
+                (!elision.reserve_names).then_some(&mut links.inputs),
+                next_slot,
+                slot_names,
+                occupied_names,
+            )?,
+        ));
+        rest = next;
+    }
+    for (host, step) in resolved.into_iter().rev() {
+        tail = crate::chain::Chain::cons(step, tail);
+        if shared {
+            links.steps.insert(host.identity(), (host, tail.clone()));
+        }
+    }
+    Ok(EvaluationSchedule {
+        steps: crate::chain::ChainSlice::whole(tail),
+        call_completion: None,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn resolve_step(
+    step: &crate::program_syntax::HostEvaluationStep,
+    elision: Elision<'_>,
+    slots: &HashMap<SourceSpan, ValueSlotId>,
+    source_slots: &mut HashMap<SourceSpan, PlannedSourceSlot>,
+    inputs_links: Option<&mut InputLinks>,
+    next_slot: &mut u32,
+    slot_names: &mut Vec<String>,
+    occupied_names: &mut HashSet<String>,
+) -> Result<PlannedEvaluationStep, EvaluationError> {
+    Ok(PlannedEvaluationStep {
+        parent: step.parent,
+        operation: step.operation,
+        conditional: step.conditional.clone(),
+        loop_test: step.loop_test,
+        inputs: resolve_inputs(
+            &step.inputs,
+            elision,
+            slots,
+            source_slots,
+            inputs_links,
+            next_slot,
+            slot_names,
+            occupied_names,
+        )?,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn resolve_inputs(
+    inputs: &crate::chain::Segments<crate::program_syntax::HostEvaluationInput>,
+    elision: Elision<'_>,
+    slots: &HashMap<SourceSpan, ValueSlotId>,
+    source_slots: &mut HashMap<SourceSpan, PlannedSourceSlot>,
+    links: Option<&mut InputLinks>,
+    next_slot: &mut u32,
+    slot_names: &mut Vec<String>,
+    occupied_names: &mut HashSet<String>,
+) -> Result<crate::chain::Segments<PlannedEvaluationInput>, EvaluationError> {
+    let mut resolve = |input: &crate::program_syntax::HostEvaluationInput| {
+        resolve_input(
+            input,
+            elision,
+            slots,
+            source_slots,
+            next_slot,
+            slot_names,
+            occupied_names,
+        )
+    };
+    let Some(links) = links else {
+        return Ok(crate::chain::Segments::from_vec(
+            inputs
+                .iter()
+                .map(&mut resolve)
+                .collect::<Result<Vec<_>, _>>()?,
+        ));
+    };
+    let mut pending = Vec::new();
+    let mut at = inputs;
+    let mut base = crate::chain::Segments::new();
+    while !at.is_empty() {
+        if let Some((_, planned)) = links.get(&at.identity()) {
+            base = planned.clone();
+            break;
+        }
+        pending.push(at.clone());
+        let Some(earlier) = at.earlier() else {
+            break;
+        };
+        at = earlier;
+    }
+    for host in pending.into_iter().rev() {
+        let own = host
+            .own()
+            .iter()
+            .map(&mut resolve)
+            .collect::<Result<Vec<_>, _>>()?;
+        base = crate::chain::Segments::extend(base, own);
+        links.insert(host.identity(), (host, base.clone()));
+    }
+    Ok(base)
+}
+
+fn resolve_input(
+    input: &crate::program_syntax::HostEvaluationInput,
     elision: Elision<'_>,
     slots: &HashMap<SourceSpan, ValueSlotId>,
     source_slots: &mut HashMap<SourceSpan, PlannedSourceSlot>,
     next_slot: &mut u32,
     slot_names: &mut Vec<String>,
     occupied_names: &mut HashSet<String>,
-) -> Result<EvaluationSchedule, EvaluationError> {
-    let steps = protocol_steps
-        .iter()
-        .map(|step| {
-            Ok(PlannedEvaluationStep {
-                parent: step.parent,
-                operation: step.operation,
-                conditional: step.conditional.clone(),
-                loop_test: step.loop_test,
-                inputs: step
-                    .inputs
+) -> Result<PlannedEvaluationInput, EvaluationError> {
+    slots.get(&input.source).map_or_else(
+        || {
+            // §9 capture elision: an inert value input
+            // is left in place — its only role here was
+            // order preservation, and evaluating it is
+            // unobservable.
+            if matches!(
+                input.mode,
+                EvaluationInputMode::Value
+                    | EvaluationInputMode::JsxChildValue
+                    | EvaluationInputMode::Discarded
+                    | EvaluationInputMode::SpreadElement
+                    | EvaluationInputMode::ObjectSpread
+                    | EvaluationInputMode::TemplateSubstitution
+            ) && input.effects.is_inert()
+                && !elision
+                    .tt_spans
                     .iter()
-                    .map(|input| {
-                        slots.get(&input.source).map_or_else(
-                            || {
-                                // §9 capture elision: an inert value input
-                                // is left in place — its only role here was
-                                // order preservation, and evaluating it is
-                                // unobservable.
-                                if matches!(
-                                    input.mode,
-                                    EvaluationInputMode::Value
-                                        | EvaluationInputMode::JsxChildValue
-                                        | EvaluationInputMode::Discarded
-                                        | EvaluationInputMode::SpreadElement
-                                        | EvaluationInputMode::ObjectSpread
-                                        | EvaluationInputMode::TemplateSubstitution
-                                ) && input.effects.is_inert()
-                                    && !elision.tt_spans.iter().any(|span| {
-                                        input.source.start <= span.start
-                                            && span.end <= input.source.end
-                                    })
-                                {
-                                    return Ok(PlannedEvaluationInput::Stable {
-                                        source: input.source,
-                                        reserved: elision
-                                            .reserve_names
-                                            .then(|| {
-                                                allocate_value_slot(
-                                                    next_slot,
-                                                    slot_names,
-                                                    occupied_names,
-                                                )
-                                            })
-                                            .transpose()?,
-                                    });
-                                }
-                                if let Some(slot) = source_slots.get(&input.source) {
-                                    return Ok(PlannedEvaluationInput::Source {
-                                        source: input.source,
-                                        mode: input.mode,
-                                        target: slot.target,
-                                        receiver: slot.receiver,
-                                        key: slot.key,
-                                    });
-                                }
-                                let target =
-                                    allocate_value_slot(next_slot, slot_names, occupied_names)?;
-                                let mut part =
-                                    |part: Option<crate::program_syntax::HostReferencePart>| {
-                                        part.map(|part| {
-                                            if part.read_at_call || part.effects.is_inert() {
-                                                Ok(PlannedReceiver::Stable {
-                                                    source: part.source,
-                                                })
-                                            } else {
-                                                Ok(PlannedReceiver::Captured {
-                                                    source: part.source,
-                                                    slot: allocate_value_slot(
-                                                        next_slot,
-                                                        slot_names,
-                                                        occupied_names,
-                                                    )?,
-                                                })
-                                            }
-                                        })
-                                        .transpose()
-                                    };
-                                let receiver = part(input.receiver)?;
-                                let key = part(input.key)?;
-                                source_slots.insert(
-                                    input.source,
-                                    PlannedSourceSlot {
-                                        target,
-                                        receiver,
-                                        key,
-                                    },
-                                );
-                                Ok(PlannedEvaluationInput::Source {
-                                    source: input.source,
-                                    mode: input.mode,
-                                    target,
-                                    receiver,
-                                    key,
-                                })
-                            },
-                            |slot| {
-                                Ok(PlannedEvaluationInput::Slot {
-                                    slot: *slot,
-                                    mode: input.mode,
-                                })
-                            },
-                        )
-                    })
-                    .collect::<Result<Vec<_>, EvaluationError>>()?,
+                    .any(|span| input.source.start <= span.start && span.end <= input.source.end)
+            {
+                return Ok(PlannedEvaluationInput::Stable {
+                    source: input.source,
+                    reserved: elision
+                        .reserve_names
+                        .then(|| allocate_value_slot(next_slot, slot_names, occupied_names))
+                        .transpose()?,
+                });
+            }
+            if let Some(slot) = source_slots.get(&input.source) {
+                return Ok(PlannedEvaluationInput::Source {
+                    source: input.source,
+                    mode: input.mode,
+                    target: slot.target,
+                    receiver: slot.receiver,
+                    key: slot.key,
+                });
+            }
+            let target = allocate_value_slot(next_slot, slot_names, occupied_names)?;
+            let mut part = |part: Option<crate::program_syntax::HostReferencePart>| {
+                part.map(|part| {
+                    if part.read_at_call || part.effects.is_inert() {
+                        Ok(PlannedReceiver::Stable {
+                            source: part.source,
+                        })
+                    } else {
+                        Ok(PlannedReceiver::Captured {
+                            source: part.source,
+                            slot: allocate_value_slot(next_slot, slot_names, occupied_names)?,
+                        })
+                    }
+                })
+                .transpose()
+            };
+            let receiver = part(input.receiver)?;
+            let key = part(input.key)?;
+            source_slots.insert(
+                input.source,
+                PlannedSourceSlot {
+                    target,
+                    receiver,
+                    key,
+                },
+            );
+            Ok(PlannedEvaluationInput::Source {
+                source: input.source,
+                mode: input.mode,
+                target,
+                receiver,
+                key,
             })
-        })
-        .collect::<Result<Vec<_>, EvaluationError>>()?;
-    Ok(EvaluationSchedule {
-        steps,
-        call_completion: None,
-    })
+        },
+        |slot| {
+            Ok(PlannedEvaluationInput::Slot {
+                slot: *slot,
+                mode: input.mode,
+            })
+        },
+    )
 }
 
 pub(super) fn overlaps(left: SourceSpan, right: SourceSpan) -> bool {
@@ -260,7 +387,8 @@ pub(super) fn plan_one_operation(
         let Some((member_index, _)) = whole_operation_step(&values[*member].schedule) else {
             return true;
         };
-        values[*member].schedule.steps()[member_index + 1..] != first_steps[conditional_index + 1..]
+        values[*member].schedule.steps().skip(member_index + 1)
+            != first_steps.skip(conditional_index + 1)
     }) {
         return Ok(None);
     }
@@ -309,7 +437,7 @@ pub(super) fn plan_one_operation(
                 active.push(PlannedActiveBranch {
                     value: value.expr,
                     branch: member_facts.branch,
-                    steps: value.schedule.steps()[..member_index].to_vec(),
+                    steps: value.schedule.steps().take(member_index),
                 });
                 let side = match member_step.operation {
                     HostEvaluationOperation::Conditional(ConditionalBranch::Consequent) => {
@@ -417,7 +545,10 @@ pub(super) fn plan_one_operation(
             let capture_of = |span: SourceSpan| {
                 members.iter().find_map(|member| {
                     let (member_index, _) = whole_operation_step(&values[*member].schedule)?;
-                    values[*member].schedule.steps()[member_index]
+                    values[*member]
+                        .schedule
+                        .steps()
+                        .get(member_index)?
                         .inputs
                         .iter()
                         .find_map(|input| match input {
@@ -450,7 +581,7 @@ pub(super) fn plan_one_operation(
                             active.push(PlannedActiveBranch {
                                 value: expr,
                                 branch: operand.span,
-                                steps: value.schedule.steps()[..member_index].to_vec(),
+                                steps: value.schedule.steps().take(member_index),
                             });
                         }
                         arguments.push(PlannedOperand::Composed {
@@ -519,7 +650,7 @@ pub(super) fn plan_one_operation(
             active.push(PlannedActiveBranch {
                 value: value.expr,
                 branch: facts.branch,
-                steps: value.schedule.steps()[..member_index].to_vec(),
+                steps: value.schedule.steps().take(member_index),
             });
         }
     }
@@ -530,7 +661,7 @@ pub(super) fn plan_one_operation(
         condition,
         values: members.iter().map(|member| values[*member].expr).collect(),
         active,
-        outer: first_steps[conditional_index + 1..].to_vec(),
+        outer: first_steps.skip(conditional_index + 1),
     }))
 }
 

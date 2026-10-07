@@ -118,7 +118,7 @@ pub(in super::super) struct ComposeValue {
     pub(in super::super) expr: ExprId,
     pub(in super::super) source: SourceSpan,
     pub(in super::super) slot: String,
-    pub(in super::super) steps: Vec<PlannedEvaluationStep>,
+    pub(in super::super) steps: crate::chain::ChainSlice<PlannedEvaluationStep>,
     /// Select an expression arm in the prelude, but evaluate its value in
     /// the authored host so TypeScript can apply contextual typing.
     pub(in super::super) defer_arm_values: bool,

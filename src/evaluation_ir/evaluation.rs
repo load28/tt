@@ -265,6 +265,7 @@ impl EvaluationFile {
                 })
                 .collect();
             let mut source_slots = HashMap::new();
+            let mut planned_links = PlannedLinks::default();
             let values = assigned
                 .into_iter()
                 .map(|(value, target)| {
@@ -273,6 +274,7 @@ impl EvaluationFile {
                         &self.tt_spans,
                         &slots,
                         &mut source_slots,
+                        &mut planned_links,
                         &mut next_slot,
                         &mut slot_names,
                         &mut occupied_names,
@@ -357,7 +359,7 @@ impl EvaluationFile {
                 else {
                     continue;
                 };
-                let steps: Vec<_> = child
+                let count = child
                     .schedule
                     .steps()
                     .iter()
@@ -366,10 +368,9 @@ impl EvaluationFile {
                             && step.parent.end <= outer.end
                             && step.parent != outer
                     })
-                    .cloned()
-                    .collect();
+                    .count();
                 let schedule = EvaluationSchedule {
-                    steps,
+                    steps: child.schedule.steps().take(count),
                     call_completion: None,
                 };
                 let capability = target_capability(
@@ -432,10 +433,13 @@ impl EvaluationFile {
                 .iter()
                 .map(|operation| (operation.parent, operation.result))
                 .collect();
-            for value in &mut values {
+            for value in values.iter_mut().filter(|_| !operation_slots.is_empty()) {
                 let mut changed = false;
-                for step in &mut value.schedule.steps {
-                    for input in &mut step.inputs {
+                let mut steps = value.schedule.steps.to_vec();
+                for step in &mut steps {
+                    let mut inputs = step.inputs.to_vec();
+                    let mut substituted = false;
+                    for input in &mut inputs {
                         let PlannedEvaluationInput::Source { source, mode, .. } = *input else {
                             continue;
                         };
@@ -443,10 +447,16 @@ impl EvaluationFile {
                             continue;
                         };
                         *input = PlannedEvaluationInput::Slot { slot, mode };
+                        substituted = true;
+                    }
+                    if substituted {
+                        step.inputs = crate::chain::Segments::from_vec(inputs);
                         changed = true;
                     }
                 }
                 if changed {
+                    value.schedule.steps =
+                        crate::chain::ChainSlice::whole(crate::chain::Chain::from_vec(steps));
                     value.capability = target_capability(
                         core,
                         &self.tt_spans,
@@ -511,6 +521,7 @@ impl EvaluationFile {
             })
             .collect();
         let mut nested_source_slots = HashMap::new();
+        let mut nested_links = PlannedLinks::default();
         let mut nested_schedules: HashMap<_, _> = owned_child_schedules.into_iter().collect();
         let mut nested_groups: Vec<(SourceSpan, Option<SourceSpan>, Vec<PlannedValue>)> =
             Vec::new();
@@ -574,13 +585,15 @@ impl EvaluationFile {
                 continue;
             }
             let schedule = resolve_schedule_steps(
-                &protocol.steps()[..step_count],
+                protocol.steps(),
+                step_count,
                 Elision {
                     tt_spans: &self.tt_spans,
                     reserve_names: false,
                 },
                 &nested_sources,
                 &mut nested_source_slots,
+                &mut nested_links,
                 &mut next_slot,
                 &mut slot_names,
                 &mut occupied_names,

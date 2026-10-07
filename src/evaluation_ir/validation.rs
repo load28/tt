@@ -226,7 +226,8 @@ impl EvaluationFile {
                     }
                 }
                 let mut conditional_after = false;
-                for step in steps.iter().rev() {
+                let ordered: Vec<_> = steps.iter().collect();
+                for step in ordered.into_iter().rev() {
                     let conditional =
                         matches!(step.operation, HostEvaluationOperation::Conditional(_));
                     for input in &step.inputs {
