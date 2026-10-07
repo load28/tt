@@ -1,8 +1,8 @@
 # TASK-773: Fix defects found by the fifth audit
 
-- **Status**: In progress
+- **Status**: Complete
 - **Started**: 2026-10-06
-- **Completed**: —
+- **Completed**: 2026-10-07
 - **Commit**: —
 
 ## Purpose
@@ -15,7 +15,9 @@ defects. This task fixes them in the layer that owns each one.
 - Included: the CLI findings C1–C10, the editor findings E1–E7 and the
   smaller completion gaps, and the compiler findings of the same round.
 - Excluded: tsgo's own defects (the content-mapper diagnostic cost, a
-  signature-help timeout that a plain `.ts` file shows too).
+  signature-help timeout that a plain `.ts` file shows too), and the
+  quadratic cost of a deep expression (K8), which TASK-774 takes
+  (decision 18).
 
 ## Decisions
 
@@ -328,14 +330,22 @@ defects. This task fixes them in the layer that owns each one.
   emitted program, so it is stated in `docs/ai/tt.md` rather than worked
   around.
 
-### Decision 18: Findings recorded without a change (K3, K4, K6, K7, K8)
+### Decision 18: The cost of a deep expression moves to TASK-774 (K8)
 
-- **K8** (time for many matches in one expression): measured on a debug
-  build at 200, 400, and 800 matches in one expression, 0.24 s, 0.75 s,
-  and 3.2 s; let-else statements in one body are linear (0.04 s at 100,
-  0.10 s at 400). Samples put the expression cost in the evaluation-order
-  validation, which compares each captured span with every earlier one.
-  Not changed in this task.
+- **Context**: Decision 18 first listed K3, K4, K6, and K7 here as well;
+  decisions 19–22 replace those entries. For K8, a release build takes
+  0.18 s, 0.70 s, and 2.9 s for 400, 800, and 1,600 matches joined by `+`
+  in one expression: quadratic in the expression's depth. let-else
+  statements in one body are linear.
+- **Decision and rationale**: A callgrind profile at 800 puts the cost in
+  three places that all hold one value's full ancestor path. The collector
+  clones the path for every tt value (`FoundOverlay`), the evaluation
+  protocol makes a step for every ancestor, and the order validation
+  compares each capture with every earlier one. A cheaper validation alone
+  would leave the first two quadratic. The structural fix is to share one
+  path between the values under it, which changes the evaluation IR's
+  representation and every consumer of its schedules. That is its own
+  task, TASK-774, rather than a step of this one.
 
 ### Decision 19: Plain `ttc` judges the declaration a callee resolves to (K7)
 
@@ -535,11 +545,41 @@ Each test below was run against the code before this task (the parent of
 
 ## Verification
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] Baseline changes reviewed and committed with the change
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings` (no output)
+- [x] `TTC_REQUIRE_TSGO=1 cargo test --no-fail-fast`: 1,381 tests passed in
+  31 test binaries, none failed, none ignored, on the head of this task
+- [x] `npm test` in `editors/vscode`: 243 passed after the outline
+  expectation fix (decision 10's commit)
+- [x] Baseline changes reviewed and committed with the change that caused
+  them (decisions 5, 11, 17, 20, 21)
+- [x] `scripts/check-task-index`
 
 ## Result
 
-In progress.
+Complete. The CLI findings C1–C4, C6–C8, the editor findings E1–E7, the
+completion gaps, and the compiler findings K1, K4, K6, and K7 are fixed;
+C5, C9, and C10 are kept with their reasons (decision 16); K2 and K3 are
+properties of the emitted program, stated in `docs/ai/tt.md` (decisions 17
+and 22); K8 moves to TASK-774 (decision 18).
+
+Changed: `docs/ai/tt.md`, `docs/design/content-mapper.md`,
+`editors/vscode/server/src/{server.ts,test/server.test.ts}`,
+`src/analysis/{coverage,mod}.rs`, `src/codegen/contextual.rs`,
+`src/codegen/core/{mod,planning}.rs`,
+`src/codegen/core/emitter/{mod,pattern,result,source}.rs`,
+`src/codegen/rope.rs`, `src/codegen/rope/builder.rs`,
+`src/content_mapper.rs`, `src/engine/completions.rs`,
+`src/engine/language.rs`, `src/engine/language/{project,service,tests}.rs`,
+`src/engine/language/project/completion.rs`,
+`src/engine/{project,projection}.rs`,
+`src/engine/semantics/{declarations,report,translate}.rs`,
+`src/evaluation_ir.rs`, `src/evaluation_ir/evaluation.rs`,
+`src/lib/{api,compile,recovery}.rs`, `src/lines.rs`,
+`src/main/{build,loading,modes,output,tests,typed}.rs`,
+`src/parser/{imports,mod,parse,partial}.rs`,
+`src/program_syntax/projection.rs`, `src/scanner.rs`,
+`src/sema/checker.rs`, `src/typescript/{contextual,mapper}.rs`,
+`src/val.rs`, `src/val/checker.rs`, `tests/cli.rs`,
+`tests/native/{cases_06,editor_service}.rs`, nine compiler cases and four
+editor cases with their baselines, the API baseline, and one emit fixture.
