@@ -140,14 +140,117 @@ pub(crate) fn report(
         }
     }
 
-    let mut declared_holes: HashSet<(PathBuf, usize)> = HashSet::new();
+    // Tag exhaustiveness. The checker names the constituents the
+    // scrutinee's type still has — narrowing included — and tt runs its
+    // own algorithm over that alphabet, which is what sees a hole *inside*
+    // a payload as well as a missing case (TASK-108). Those constituents
+    // are the cases a match must cover on this path (TASK-775).
+    //
+    // A witness tt is not certain of is dropped when only the checker's
+    // payload alphabets show the hole: the default path reports those
+    // because it has nothing better, but on this path the honest answer for
+    // an unidentifiable column is to ask the checker, and that question is
+    // not asked yet.
+    // Per file, per match: the alphabet of each scrutinee position, in
+    // position order (a single match has one).
+    let mut by_file: HashMap<PathBuf, Vec<MatchAlphabets>> = HashMap::new();
+    // The payload answers ride in the same list, after the match ones —
+    // they name the alphabet of a `(constructor, field)` column, which is
+    // the one thing tt cannot work out from declarations alone.
+    let mut payloads: HashMap<PathBuf, Vec<PayloadAlphabet>> = HashMap::new();
+    // `(file, match keyword) -> end of `match (scrutinee)``.
+    let mut match_ends: HashMap<(PathBuf, usize), usize> = HashMap::new();
+    // The same key -> where the match's body braces are, so a coverage
+    // hole's fix can be written as an edit on this path too.
+    let mut sites: HashMap<(PathBuf, usize), crate::diagnostics::MatchSite> = HashMap::new();
+    for members in &answers.tag_members {
+        if let Some(anchor) = probes.tags.get(members.index) {
+            let per_match = by_file
+                .entry(anchor.anchor.source_path.clone())
+                .or_default();
+            match per_match
+                .iter_mut()
+                .find(|(at, _)| *at == anchor.anchor.offset)
+            {
+                Some((_, positions)) => positions.push(members.tags.clone()),
+                None => per_match.push((anchor.anchor.offset, vec![members.tags.clone()])),
+            }
+            // The keyword offset keys the alphabets; the range it opens is
+            // what the diagnostic underlines, and the braces are where its
+            // fix is written.
+            sites.insert(
+                (anchor.anchor.source_path.clone(), anchor.anchor.offset),
+                site_of(anchor),
+            );
+            match_ends.insert(
+                (anchor.anchor.source_path.clone(), anchor.anchor.offset),
+                anchor.anchor.end,
+            );
+            continue;
+        }
+        let Some(anchor) = probes
+            .payloads
+            .get(members.index.wrapping_sub(probes.tags.len()))
+        else {
+            continue;
+        };
+        payloads
+            .entry(anchor.source_path.clone())
+            .or_default()
+            .push((
+                (anchor.tag.clone(), anchor.field.clone()),
+                anchor.offset,
+                members.tags.clone(),
+            ));
+    }
+    let mut narrowed: HashMap<PathBuf, HashMap<usize, crate::analysis::Coverage>> = HashMap::new();
+    let mut checked: HashMap<PathBuf, HashMap<usize, crate::analysis::Coverage>> = HashMap::new();
+    for file in files {
+        let Some(asked) = by_file.get(&file.source_path) else {
+            continue;
+        };
+        // The nested columns are resolved from declarations, so the
+        // imported ones have to be collected — otherwise a payload whose
+        // type is an imported variant reads as an unknown alphabet and its
+        // holes go unreported. The cached semantics carry them.
+        let externs: Vec<crate::resolve::ExternDecl> = semantics
+            .get(&file.source_path)
+            .map(|s| s.externs.iter().map(Into::into).collect())
+            .unwrap_or_default();
+        let asked_payloads = payloads
+            .get(&file.source_path)
+            .map_or(&[][..], Vec::as_slice);
+        let source_kind = crate::SourceKind::from_path(&file.source_path).unwrap_or_default();
+        narrowed.insert(
+            file.source_path.clone(),
+            crate::analysis::checked_coverage(&file.source, source_kind, &externs, asked, &[])
+                .into_iter()
+                .collect(),
+        );
+        checked.insert(
+            file.source_path.clone(),
+            crate::analysis::checked_coverage(
+                &file.source,
+                source_kind,
+                &externs,
+                asked,
+                asked_payloads,
+            )
+            .into_iter()
+            .collect(),
+        );
+    }
+
     for file in files {
         let Some(semantics) = semantics.get(&file.source_path) else {
             continue;
         };
+        let answered = narrowed.get(&file.source_path);
         for error in crate::sema::coverage_errors(&file.source, &semantics.analyses) {
-            if let Some(offset) = error.offset {
-                declared_holes.insert((file.source_path.clone(), offset));
+            if error.offset.is_some_and(|offset| {
+                answered.is_some_and(|answered| answered.contains_key(&offset))
+            }) {
+                continue;
             }
             let diagnostic = Diagnostic {
                 path: file.source_path.clone(),
@@ -419,9 +522,9 @@ pub(crate) fn report(
                 && let Some(said) =
                     translate(anchor.kind, diagnostic.code, &diagnostic.message, declared)
             {
-                // tt requires every declared case, which a value narrowed
-                // before the match does not have: `_` covers the rest
-                // without writing a case the checker rejects.
+                // A build requires every declared case, which a value
+                // narrowed before the match does not have: `_` covers the
+                // rest without writing a case the checker rejects.
                 let (tag_start, tag_end) = anchor.display();
                 let narrowed_case = anchor.kind == AnchorKind::Match
                     && translation_class(anchor.kind, diagnostic.code) == Some("impossible-case")
@@ -555,98 +658,32 @@ pub(crate) fn report(
         });
     }
 
-    // Tag exhaustiveness. The checker names the constituents the
-    // scrutinee's type still has — narrowing included — and tt runs its
-    // own algorithm over that alphabet, which is what sees a hole *inside*
-    // a payload as well as a missing case (TASK-108).
-    //
-    // A witness tt is not certain of is dropped here: the default path
-    // reports those because it has nothing better, but on this path the
-    // honest answer for an unidentifiable column is to ask the checker,
-    // and that question is not asked yet.
-    // Per file, per match: the alphabet of each scrutinee position, in
-    // position order (a single match has one).
-    let mut by_file: HashMap<PathBuf, Vec<MatchAlphabets>> = HashMap::new();
-    // The payload answers ride in the same list, after the match ones —
-    // they name the alphabet of a `(constructor, field)` column, which is
-    // the one thing tt cannot work out from declarations alone.
-    let mut payloads: HashMap<PathBuf, Vec<PayloadAlphabet>> = HashMap::new();
-    // `(file, match keyword) -> end of `match (scrutinee)``.
-    let mut match_ends: HashMap<(PathBuf, usize), usize> = HashMap::new();
-    // The same key -> where the match's body braces are, so a coverage
-    // hole's fix can be written as an edit on this path too.
-    let mut sites: HashMap<(PathBuf, usize), crate::diagnostics::MatchSite> = HashMap::new();
-    for members in &answers.tag_members {
-        if let Some(anchor) = probes.tags.get(members.index) {
-            let per_match = by_file
-                .entry(anchor.anchor.source_path.clone())
-                .or_default();
-            match per_match
-                .iter_mut()
-                .find(|(at, _)| *at == anchor.anchor.offset)
-            {
-                Some((_, positions)) => positions.push(members.tags.clone()),
-                None => per_match.push((anchor.anchor.offset, vec![members.tags.clone()])),
-            }
-            // The keyword offset keys the alphabets; the range it opens is
-            // what the diagnostic underlines, and the braces are where its
-            // fix is written.
-            sites.insert(
-                (anchor.anchor.source_path.clone(), anchor.anchor.offset),
-                site_of(anchor),
-            );
-            match_ends.insert(
-                (anchor.anchor.source_path.clone(), anchor.anchor.offset),
-                anchor.anchor.end,
-            );
-            continue;
-        }
-        let Some(anchor) = probes
-            .payloads
-            .get(members.index.wrapping_sub(probes.tags.len()))
-        else {
-            continue;
-        };
-        payloads
-            .entry(anchor.source_path.clone())
-            .or_default()
-            .push((
-                (anchor.tag.clone(), anchor.field.clone()),
-                anchor.offset,
-                members.tags.clone(),
-            ));
-    }
     for file in files {
-        let Some(asked) = by_file.get(&file.source_path) else {
+        let Some(answered) = narrowed.get(&file.source_path) else {
             continue;
         };
-        // The nested columns are resolved from declarations, so the
-        // imported ones have to be collected — otherwise a payload whose
-        // type is an imported variant reads as an unknown alphabet and its
-        // holes go unreported. The cached semantics carry them.
-        let externs: Vec<crate::resolve::ExternDecl> = semantics
-            .get(&file.source_path)
-            .map(|s| s.externs.iter().map(Into::into).collect())
-            .unwrap_or_default();
-        let asked_payloads = payloads
-            .get(&file.source_path)
-            .map_or(&[][..], Vec::as_slice);
-        for (offset, coverage) in crate::analysis::checked_coverage(
-            &file.source,
-            crate::SourceKind::from_path(&file.source_path).unwrap_or_default(),
-            &externs,
-            asked,
-            asked_payloads,
-        ) {
+        let mut offsets: Vec<usize> = answered.keys().copied().collect();
+        offsets.sort_unstable();
+        for offset in offsets {
             if semantics
                 .get(&file.source_path)
                 .is_some_and(|semantics| semantics.analyses.match_has_resolution_error(offset))
-                || declared_holes.contains(&(file.source_path.clone(), offset))
             {
                 continue;
             }
             let Some(hole) =
-                crate::sema::non_exhaustive(&coverage, crate::sema::Witnesses::Certain)
+                crate::sema::non_exhaustive(&answered[&offset], crate::sema::Witnesses::All)
+                    .or_else(|| {
+                        checked
+                            .get(&file.source_path)
+                            .and_then(|checked| checked.get(&offset))
+                            .and_then(|coverage| {
+                                crate::sema::non_exhaustive(
+                                    coverage,
+                                    crate::sema::Witnesses::Certain,
+                                )
+                            })
+                    })
             else {
                 continue;
             };
