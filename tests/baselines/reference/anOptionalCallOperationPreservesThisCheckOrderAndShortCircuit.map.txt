@@ -1,7 +1,9 @@
-//// [anOptionalCallOperationPreservesThisCheckOrderAndShortCircuit.tt] 15 mapping(s)
+//// [anOptionalCallOperationPreservesThisCheckOrderAndShortCircuit.tt] 19 mapping(s)
 1:1 -> 1:1 len 260  "\nconst trace: string[] = [];\nconst live = {\n  ba"...
 9:1 -> 29:1 len 12  "const hit = "
 9:13 -> 10:17 len 6  "live.m"
+9:13 -> 16:30 len 4  "live"
+9:13 -> 20:30 len 4  "live"
 9:29 -> 13:19 len 11  "arg(\"live\")"
 9:44 -> 15:12 len 1  "1"
 9:49 -> 16:36 len 1  "1"
@@ -9,6 +11,8 @@
 9:61 -> 29:19 len 2  ";\n"
 10:1 -> 50:1 len 13  "const miss = "
 10:14 -> 31:17 len 6  "dead.m"
+10:14 -> 37:30 len 4  "dead"
+10:14 -> 41:30 len 4  "dead"
 10:30 -> 34:19 len 11  "arg(\"dead\")"
 10:45 -> 36:12 len 1  "1"
 10:50 -> 37:36 len 1  "1"

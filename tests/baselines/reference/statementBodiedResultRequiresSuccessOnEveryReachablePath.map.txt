@@ -2,7 +2,7 @@
 1:1 -> 10:1 len 14  "const value = "
 1:30 -> 8:9 len 4  "item"
 1:41 -> 3:18 len 6  "read()"
-1:48 -> 8:29 len 11  " if (item) "
+1:47 -> 8:28 len 12  "; if (item) "
 1:66 -> 8:87 len 4  "item"
 1:71 -> 8:116 len 11  " log(item);"
 1:84 -> 10:27 len 2  ";\n"

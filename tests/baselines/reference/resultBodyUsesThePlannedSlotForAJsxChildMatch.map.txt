@@ -5,7 +5,7 @@
 7:3 -> 80:3 len 14  "const value = "
 8:11 -> 44:11 len 5  "first"
 8:23 -> 39:20 len 11  "fallible(n)"
-8:35 -> 44:32 len 5  "\n    "
+8:34 -> 44:31 len 6  ";\n    "
 9:5 -> 62:5 len 15  "const chosen = "
 9:27 -> 47:21 len 1  "e"
 9:37 -> 50:20 len 1  "1"

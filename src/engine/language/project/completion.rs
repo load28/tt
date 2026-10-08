@@ -53,7 +53,8 @@ impl Project {
         let recovered = doc
             .recovered
             .iter()
-            .any(|&(start, end)| start <= source_at && source_at < end);
+            .any(|&(start, end)| start <= source_at && source_at < end)
+            || in_arrowless_arm(&doc.source, source_at, kind);
         let plain = match to_service_typed(&doc, position).filter(|_| !recovered) {
             Some(at) => {
                 let mut plain = ts_completions(
@@ -559,4 +560,17 @@ impl Project {
             ..detail
         }))
     }
+}
+
+/// Whether the cursor at `at` is in the pattern of a match arm that has no
+/// `=>` yet, read with a name typed there: the text around it is that arm,
+/// not the TypeScript it would read as unfinished.
+fn in_arrowless_arm(source: &str, at: usize, kind: crate::SourceKind) -> bool {
+    if !source.is_char_boundary(at) {
+        return false;
+    }
+    let spliced = format!("{}{PROBE_NAME}{}", &source[..at], &source[at..]);
+    let tokens = crate::lexer::lex_with_kind(&spliced, 0, spliced.len(), kind);
+    let index = tokens.partition_point(|token| token.span.start < at);
+    crate::parser::arrowless_arm_end(&spliced, &tokens, index).is_some()
 }

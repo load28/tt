@@ -268,6 +268,35 @@ export function area(s: Shape): number {\n\
 }
 
 #[test]
+fn a_declaration_initialized_by_try_spans_its_initializer_in_the_outline() {
+    require_tsgo!();
+    let source = "import type { TResult } from \"@tt/std\";\n\
+declare function rr(n: number): TResult<number, string>;\n\
+export function f(): TResult<number, string> {\n\
+\x20 const s = try rr(1);\n\
+\x20 const n = s + 1;\n\
+\x20 return { kind: \"Ok\", value: n };\n\
+}\n";
+    let dir = project(&[("src/main.tt", source)]);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut project = ttc::engine::Engine::new(None)
+        .open_project(
+            &[file.to_string_lossy().into_owned()],
+            &ttc::engine::ProjectOptions::default(),
+        )
+        .unwrap();
+    let symbols = project.document_symbols(&file).unwrap();
+    let function = symbols.iter().find(|symbol| symbol.name == "f").expect("f");
+    let ranges: Vec<&str> = function
+        .children
+        .iter()
+        .filter(|symbol| symbol.name == "s" || symbol.name == "n")
+        .map(|symbol| utf16_slice(source, symbol.range))
+        .collect();
+    assert_eq!(ranges, vec!["s = try rr(1)", "n = s + 1"], "{symbols:?}");
+}
+
+#[test]
 fn an_operand_hoisted_ahead_of_a_later_match_still_answers_at_its_end() {
     require_tsgo!();
     let source = "variant Shape { Circle(radius: number), Point }\n\

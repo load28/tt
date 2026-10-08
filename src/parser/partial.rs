@@ -80,6 +80,25 @@ pub(crate) fn pattern_site_at(src: &str, tokens: &[Token], before: usize) -> Opt
     single_pattern_site(src, tokens, head_end, parens > 0)
 }
 
+/// The byte offset where the `=>` of the match arm whose pattern holds the
+/// token at `index` would be written, when that arm has none yet: the end
+/// of the arm's last token. `None` when the token is not in an arm's
+/// pattern or the arm already has its `=>`.
+pub(crate) fn arrowless_arm_end(src: &str, tokens: &[Token], index: usize) -> Option<usize> {
+    let PatternSite::Arm { open, .. } = pattern_site_at(src, tokens, index)? else {
+        return None;
+    };
+    let body = &tokens[open + 1..body_close(tokens, open)];
+    let at = index.checked_sub(open + 1)?;
+    let arm = matches::outline_arms(src, body)
+        .into_iter()
+        .find(|arm| at <= arm.end)?;
+    if arm.arrow.is_some() {
+        return None;
+    }
+    body[..arm.end].last().map(|token| token.span.end)
+}
+
 /// The finished arms of the match body whose `{` is the token at `open`, in
 /// source order.
 pub(crate) fn arm_headers(src: &str, tokens: &[Token], open: usize) -> Vec<ArmHeader> {

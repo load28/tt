@@ -1,0 +1,8 @@
+=== diagnostics diagnosticOnACapturedJsxTag.ttx ===
+diagnostics: 1 diagnostic(s)
+  4:46-4:51 "Badge" error TS2741: Property 'label' is missing in type '{ n: number; }' but required in type '{ label: string; n?: number | undefined; children?: any; }'.
+    related 2:25-2:30 "label": 'label' is declared here.
+published: 1 diagnostic(s)
+  4:46-4:51 "Badge" error ts2741 (ttc): Property 'label' is missing in type '{ n: number; }' but required in type '{ label: string; n?: number | undefined; children?: any; }'.
+    related diagnosticOnACapturedJsxTag.ttx 2:25-2:30 "label": 'label' is declared here.
+

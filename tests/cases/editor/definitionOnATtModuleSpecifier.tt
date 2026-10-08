@@ -1,0 +1,13 @@
+// @definition: named, dynamic, typeQuery, reexport, fromTs
+// @filename: shape.tt
+export variant Shape { Circle(radius: number), Point }
+export const k = 1;
+// @filename: use.tt
+import { Shape } from "./sh/*named*/ape.tt";
+export const q = import("./sh/*dynamic*/ape.tt");
+export type T = typeof import("./sh/*typeQuery*/ape.tt");
+export { k } from "./sh/*reexport*/ape.tt";
+export const s: Shape = Shape.Point;
+// @filename: use.ts
+import { Shape } from "./sh/*fromTs*/ape.tt";
+export const t: Shape = Shape.Point;

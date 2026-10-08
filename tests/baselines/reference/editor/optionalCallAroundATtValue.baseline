@@ -1,0 +1,98 @@
+=== hover /*o*/ optionalCallAroundATtValue.tt:6:13 ===
+  |   const r = o?.m(try rr(1));
+  |             ^ /*o*/
+hover: 6:13-6:14 "o"
+    (parameter) o: {
+        m(n: number, k?: number): number;
+    } | undefined
+ttSymbol: null
+
+=== hover /*m*/ optionalCallAroundATtValue.tt:6:16 ===
+  |   const r = o?.m(try rr(1));
+  |                ^ /*m*/
+hover: 6:16-6:17 "m"
+    (method) m(n: number, k?: number): number
+ttSymbol: null
+
+=== hover /*p*/ optionalCallAroundATtValue.tt:13:13 ===
+  |   const r = p.n?.(try rr(1));
+  |             ^ /*p*/
+hover: 13:13-13:14 "p"
+    (parameter) p: {
+        n?(k: number): number;
+    }
+ttSymbol: null
+
+=== definition /*o*/ optionalCallAroundATtValue.tt:6:13 ===
+  |   const r = o?.m(try rr(1));
+  |             ^ /*o*/
+definition: 1 location(s)
+  optionalCallAroundATtValue.tt 5:19-5:20 "o"
+
+=== definition /*m*/ optionalCallAroundATtValue.tt:6:16 ===
+  |   const r = o?.m(try rr(1));
+  |                ^ /*m*/
+definition: 1 location(s)
+  optionalCallAroundATtValue.tt 5:25-5:26 "m"
+
+=== references /*oDecl*/ optionalCallAroundATtValue.tt:5:19 ===
+  | export function f(o?: { m(n: number, k?: number): number }): TResult<unknown, string> {
+  |                   ^ /*oDecl*/
+references: 5 location(s)
+  optionalCallAroundATtValue.tt 5:19-5:20 "o" (definition)
+  optionalCallAroundATtValue.tt 6:13-6:14 "o"
+  optionalCallAroundATtValue.tt 7:13-7:14 "o"
+  optionalCallAroundATtValue.tt 8:13-8:14 "o"
+  optionalCallAroundATtValue.tt 9:13-9:14 "o"
+
+=== references /*mDecl*/ optionalCallAroundATtValue.tt:5:25 ===
+  | export function f(o?: { m(n: number, k?: number): number }): TResult<unknown, string> {
+  |                         ^ /*mDecl*/
+references: 4 location(s)
+  optionalCallAroundATtValue.tt 5:25-5:26 "m" (definition)
+  optionalCallAroundATtValue.tt 6:16-6:17 "m"
+  optionalCallAroundATtValue.tt 7:16-7:17 "m"
+  optionalCallAroundATtValue.tt 9:16-9:17 "m"
+
+=== rename /*o*/ optionalCallAroundATtValue.tt:6:13 ===
+  |   const r = o?.m(try rr(1));
+  |             ^ /*o*/
+prepareRename: 6:13-6:14 "o"
+rename: 5 edit(s)
+  optionalCallAroundATtValue.tt 5:19-5:20 "o" -> "ttRenamePlaceholder"
+  optionalCallAroundATtValue.tt 6:13-6:14 "o" -> "ttRenamePlaceholder"
+  optionalCallAroundATtValue.tt 7:13-7:14 "o" -> "ttRenamePlaceholder"
+  optionalCallAroundATtValue.tt 8:13-8:14 "o" -> "ttRenamePlaceholder"
+  optionalCallAroundATtValue.tt 9:13-9:14 "o" -> "ttRenamePlaceholder"
+
+=== rename /*m*/ optionalCallAroundATtValue.tt:6:16 ===
+  |   const r = o?.m(try rr(1));
+  |                ^ /*m*/
+prepareRename: 6:16-6:17 "m"
+rename: 4 edit(s)
+  optionalCallAroundATtValue.tt 5:25-5:26 "m" -> "ttRenamePlaceholder"
+  optionalCallAroundATtValue.tt 6:16-6:17 "m" -> "ttRenamePlaceholder"
+  optionalCallAroundATtValue.tt 7:16-7:17 "m" -> "ttRenamePlaceholder"
+  optionalCallAroundATtValue.tt 9:16-9:17 "m" -> "ttRenamePlaceholder"
+
+=== rename /*p*/ optionalCallAroundATtValue.tt:13:13 ===
+  |   const r = p.n?.(try rr(1));
+  |             ^ /*p*/
+prepareRename: 13:13-13:14 "p"
+rename: 2 edit(s)
+  optionalCallAroundATtValue.tt 12:19-12:20 "p" -> "ttRenamePlaceholder"
+  optionalCallAroundATtValue.tt 13:13-13:14 "p" -> "ttRenamePlaceholder"
+
+=== signatureHelp /*sig*/ optionalCallAroundATtValue.tt:9:29 ===
+  |   const q = o?.m(try rr(1), 2);
+  |                             ^ /*sig*/
+signatureHelp: active signature 0, active parameter 1
+  m(n: number, k?: number): number
+    parameters: n: number | k?: number
+
+=== diagnostics optionalCallAroundATtValue.tt ===
+diagnostics: 1 diagnostic(s)
+  8:16-8:18 "zz" error TS2339: Property 'zz' does not exist on type '{ m(n: number, k?: number | undefined): number; }'.
+published: 1 diagnostic(s)
+  8:16-8:18 "zz" error ts2339 (ttc): Property 'zz' does not exist on type '{ m(n: number, k?: number | undefined): number; }'.
+

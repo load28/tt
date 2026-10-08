@@ -1,0 +1,5 @@
+// @completions: first, second
+class Alpha {} class Beta { b = 1 }
+declare const ab: Alpha | Beta;
+const a = match (ab) { is /*first*/ };
+const b = match (ab) { is Alpha => 1, is /*second*/ };

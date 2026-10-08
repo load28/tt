@@ -738,12 +738,15 @@ pub(super) fn build_probe(path: &Path, source: &str, at: usize, version: u64) ->
     let probe_end = at + PROBE_NAME.len();
     let report = crate::compile_projection_report(&spliced, &options);
     let mut closers = Vec::new();
-    let report = match report
+    let mended = report
         .recovered
         .iter()
         .find(|&&(start, end)| start <= at && probe_end <= end)
-        .and_then(|&(start, _)| closed_at(&spliced, start, probe_end, options.source_kind))
-    {
+        .and_then(|&(start, _)| {
+            closed_at(&spliced, start, probe_end, options.source_kind)
+                .or_else(|| arm_closed(&spliced, at, options.source_kind))
+        });
+    let report = match mended {
         Some((closed, inserted)) => {
             let mended = crate::compile_projection_report(&closed, &options);
             if mended
@@ -776,6 +779,25 @@ pub(super) fn build_probe(path: &Path, source: &str, at: usize, version: u64) ->
         generated_names: emit.generated_names,
         inserted: emit.inserted,
     })
+}
+
+/// `text` with an arm that the probe at `at` is written in, and that has no
+/// `=>` yet, given one and a body, as the parser needs every arm to have.
+/// `None` when the probe is not in such an arm.
+fn arm_closed(
+    text: &str,
+    at: usize,
+    source_kind: crate::SourceKind,
+) -> Option<(String, Vec<(usize, usize)>)> {
+    const ARM_TAIL: &str = " => 0";
+    let tokens = crate::lexer::lex_with_kind(text, 0, text.len(), source_kind);
+    let index = tokens.partition_point(|token| token.span.start < at);
+    let end = crate::parser::arrowless_arm_end(text, &tokens, index)?;
+    let mut closed = String::with_capacity(text.len() + ARM_TAIL.len());
+    closed.push_str(&text[..end]);
+    closed.push_str(ARM_TAIL);
+    closed.push_str(&text[end..]);
+    Some((closed, vec![(end, ARM_TAIL.len())]))
 }
 
 /// `text` with the brackets its construct starting at `start` leaves open
@@ -1633,7 +1655,9 @@ pub(super) fn diagnostic_source_span(
             start: list.src,
             end: list.src_end,
         },
-        None => match mapper::shared_binding_origin(&doc.shared_bindings, sb, eb) {
+        None => match mapper::shared_binding_origin(&doc.shared_bindings, sb, eb)
+            .or_else(|| mapper::relocated_origin(&doc.mappings, &doc.relocated_operands, sb, eb))
+        {
             Some(origin) => origin,
             None => mapper::diagnostic_origin(
                 &doc.mappings,

@@ -1,4 +1,4 @@
-//// [aSkippedBranchOrLaterArgumentMayHoldAnInlinePipeline.tt] 76 mapping(s)
+//// [aSkippedBranchOrLaterArgumentMayHoldAnInlinePipeline.tt] 80 mapping(s)
 1:19 -> 25:3 len 282  "\nconst s: S = S.A as S;\nfunction p(): S { return"...
 9:3 -> 55:3 len 10  "const a = "
 9:13 -> 34:7 len 1  "c"
@@ -30,6 +30,8 @@
 11:61 -> 110:20 len 55  ";\n  return [a, b, d];\n}\nfunction conditionalTest"...
 15:3 -> 162:3 len 7  "return "
 15:10 -> 116:20 len 4  "g.mm"
+15:10 -> 122:34 len 1  "g"
+15:10 -> 126:34 len 1  "g"
 15:24 -> 119:21 len 3  "p()"
 15:36 -> 122:37 len 1  "1"
 15:44 -> 126:37 len 1  "2"
@@ -49,6 +51,7 @@
 19:35 -> 180:21 len 1  "2"
 19:38 -> 270:12 len 6  ",\n    "
 20:5 -> 194:20 len 4  "g.mm"
+20:5 -> 213:28 len 1  "g"
 20:19 -> 198:21 len 1  "s"
 20:29 -> 201:21 len 1  "1"
 20:37 -> 205:21 len 1  "2"
@@ -58,6 +61,7 @@
 20:58 -> 213:53 len 1  ")"
 20:61 -> 271:12 len 6  ",\n    "
 21:5 -> 219:30 len 1  "h"
+21:8 -> 238:22 len 1  "("
 21:16 -> 223:21 len 1  "s"
 21:26 -> 226:21 len 1  "1"
 21:34 -> 230:21 len 1  "2"

@@ -5,7 +5,7 @@
 2:1 -> 25:1 len 14  "const value = "
 2:30 -> 15:9 len 4  "item"
 2:41 -> 10:18 len 6  "read()"
-2:48 -> 15:29 len 1  " "
+2:47 -> 15:28 len 2  "; "
 2:61 -> 18:15 len 5  "found"
 2:70 -> 16:20 len 4  "item"
 2:84 -> 19:54 len 5  "found"

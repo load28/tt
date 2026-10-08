@@ -922,10 +922,7 @@ impl<'a> Emitter<'a> {
         let temp = self.temp_name(propagate.temporary);
         let mut out = self.emit_propagate_input(propagate, &temp);
         out.push_break(0);
-        out.push_lit(format!(
-            "if ({}) {{",
-            result_failure_test(&temp, propagate.layout)
-        ));
+        self.push_failure_test(propagate, &temp, &mut out);
         out.push_break(1);
         out.append(self.emit_failure_exit(propagate, &temp));
         out.push_break(0);

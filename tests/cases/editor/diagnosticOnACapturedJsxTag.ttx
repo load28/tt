@@ -1,0 +1,5 @@
+// @diagnostics: *
+declare global { namespace JSX { interface IntrinsicElements { div: { id?: string; children?: any } } type Element = { el: true } } }
+function Badge(props: { label: string; n?: number; children?: any }) { return <div>{props.label}</div>; }
+export variant Load { Busy, Done(text: string) }
+export const view = (l: Load, k: number) => <Badge n={k}>{match (l) { Busy => 1, Done(text) => text }}</Badge>;

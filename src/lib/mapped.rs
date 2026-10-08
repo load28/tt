@@ -124,6 +124,10 @@ pub enum AnchorKind {
     Match,
     /// A `try` statement's test, early return and binding.
     Try,
+    /// A `try`'s test of whether its operand failed.
+    TryTest,
+    /// A `try`'s early exit with the failed `Result`.
+    TryExit,
     /// A let-else statement's test and destructuring.
     LetElse,
     /// An `if let` statement's test and destructuring.

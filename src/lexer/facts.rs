@@ -61,6 +61,7 @@ impl TokenFacts {
     const CLASS_BODY: u32 = 1 << 14;
     const STATIC_BLOCK: u32 = 1 << 15;
     const SETTER_BODY: u32 = 1 << 16;
+    const UNTERMINATED_BEFORE: u32 = 1 << 17;
 
     /// A line terminator (ECMA-262 §12.3: LF, CR, U+2028, U+2029), possibly
     /// inside a comment, separates this token from the previous one.
@@ -85,6 +86,13 @@ impl TokenFacts {
     /// This token begins a statement.
     pub(crate) fn statement_start(self) -> bool {
         self.0 & Self::STATEMENT_START != 0
+    }
+
+    /// The statement before this token ended with no `;`, line terminator
+    /// or `}` between them, so no automatic semicolon is inserted
+    /// (§12.10.1) and the token cannot begin a statement there.
+    pub(crate) fn unterminated_before(self) -> bool {
+        self.0 & Self::UNTERMINATED_BEFORE != 0
     }
 
     /// This identifier is a statement label, where it is declared or where
@@ -206,6 +214,7 @@ impl std::fmt::Debug for TokenFacts {
             (Self::CLASS_BODY, "class-body"),
             (Self::STATIC_BLOCK, "static-block"),
             (Self::SETTER_BODY, "setter"),
+            (Self::UNTERMINATED_BEFORE, "unterminated-before"),
         ];
         let set: Vec<&str> = names
             .iter()

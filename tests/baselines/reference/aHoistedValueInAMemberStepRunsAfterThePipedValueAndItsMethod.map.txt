@@ -1,4 +1,4 @@
-//// [aHoistedValueInAMemberStepRunsAfterThePipedValueAndItsMethod.tt] 88 mapping(s)
+//// [aHoistedValueInAMemberStepRunsAfterThePipedValueAndItsMethod.tt] 92 mapping(s)
 1:1 -> 19:1 len 1  "\n"
 2:22 -> 21:25 len 6  "number"
 2:22 -> 24:14 len 6  "number"
@@ -56,6 +56,8 @@
 23:1 -> 174:33 len 6  "report"
 23:7 -> 204:8 len 1  "("
 23:8 -> 176:19 len 43  "mark(\"head\", new Box(1) as Box | undefined)"
+23:55 -> 185:28 len 5  "?.add"
+23:55 -> 189:28 len 5  "?.add"
 23:68 -> 181:21 len 14  "subject(\"arg\")"
 23:88 -> 184:19 len 5  "value"
 23:98 -> 185:34 len 5  "value"
@@ -65,6 +67,8 @@
 24:1 -> 206:33 len 6  "report"
 24:7 -> 236:8 len 1  "("
 24:8 -> 208:19 len 42  "mark(\"head\", undefined as Box | undefined)"
+24:54 -> 217:28 len 5  "?.add"
+24:54 -> 221:28 len 5  "?.add"
 24:67 -> 213:21 len 18  "subject(\"skipped\")"
 24:91 -> 216:19 len 5  "value"
 24:101 -> 217:34 len 5  "value"

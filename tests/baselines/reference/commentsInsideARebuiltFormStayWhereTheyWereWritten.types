@@ -34,6 +34,10 @@ export function f(o: O, c: boolean) {
 >c : (parameter) c: boolean
   const a = obj?.m(/*C1*/ 1, match (o) { A(n) => n, B => 0 });
 >a : const a: number | undefined
+>obj : const obj: {
+>       m(a: number, b: number): number;
+>   } | undefined
+>m : (method) m(a: number, b: number): number
 >o : (parameter) o: O
 >n : const n: number
 >n : const n: number

@@ -1,8 +1,10 @@
-//// [aCalleeCaptureInsideALogicalOperandReadsTheCallee.tt] 11 mapping(s)
+//// [aCalleeCaptureInsideALogicalOperandReadsTheCallee.tt] 13 mapping(s)
 1:1 -> 1:1 len 313  "import * as Result from \"@tt/std/result\";\nimport"...
 8:3 -> 37:3 len 10  "const r = "
 8:13 -> 10:31 len 3  "obj"
 8:16 -> 24:22 len 1  "("
+8:17 -> 11:7 len 1  "n"
+8:17 -> 18:14 len 5  "n?.m("
 8:26 -> 13:20 len 4  "R(1)"
 8:31 -> 24:29 len 1  ")"
 8:36 -> 28:31 len 1  "g"

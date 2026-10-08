@@ -1,4 +1,4 @@
-//// [shortCircuitTtOperands.tt] 70 mapping(s)
+//// [shortCircuitTtOperands.tt] 76 mapping(s)
 1:1 -> 19:1 len 242  "// A tt value on the right of `&&`, `||`, `??`, "...
 5:25 -> 29:3 len 457  "\nfunction flag(on: boolean): Flag {\n  return on "...
 23:3 -> 48:33 len 5  "flush"
@@ -41,6 +41,8 @@
 44:1 -> 174:32 len 5  "flush"
 44:6 -> 197:8 len 15  "(\"absent?.()\", "
 44:21 -> 175:18 len 10  "absent.run"
+44:21 -> 181:32 len 6  "absent"
+44:21 -> 185:32 len 6  "absent"
 44:41 -> 178:19 len 38  "note(\"argument scrutinee\", flag(true))"
 44:89 -> 181:40 len 1  "1"
 44:99 -> 185:40 len 1  "2"
@@ -48,6 +50,8 @@
 45:1 -> 199:32 len 5  "flush"
 45:6 -> 222:8 len 16  "(\"present?.()\", "
 45:22 -> 200:18 len 11  "present.run"
+45:22 -> 206:32 len 7  "present"
+45:22 -> 210:32 len 7  "present"
 45:43 -> 203:19 len 38  "note(\"argument scrutinee\", flag(true))"
 45:91 -> 206:41 len 1  "1"
 45:101 -> 210:41 len 1  "2"
@@ -55,6 +59,8 @@
 47:1 -> 225:32 len 5  "flush"
 47:6 -> 248:8 len 26  "(\"missing receiver?.m()\", "
 47:32 -> 226:40 len 13  "holder.runner"
+47:45 -> 232:26 len 5  "?.run"
+47:45 -> 236:26 len 5  "?.run"
 47:58 -> 229:19 len 39  "note(\"argument scrutinee\", flag(false))"
 47:107 -> 232:32 len 1  "1"
 47:117 -> 236:32 len 1  "2"

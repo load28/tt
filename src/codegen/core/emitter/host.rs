@@ -173,10 +173,7 @@ impl<'a> Emitter<'a> {
         let temp = self.temp_name(propagate.temporary);
         let mut out = self.emit_propagate_input(propagate, &temp);
         out.push_break(0);
-        out.push_lit(format!(
-            "if ({}) {{",
-            result_failure_test(&temp, propagate.layout)
-        ));
+        self.push_failure_test(propagate, &temp, &mut out);
         out.push_break(1);
         out.append(self.emit_failure_exit(propagate, &temp));
         out.push_break(0);
@@ -191,7 +188,7 @@ impl<'a> Emitter<'a> {
         if let Some(binding) = propagate.binding {
             out.push_lit(format!("{} ", binding_keyword(binding.mode)));
             self.push_propagate_binding(binding.node, &mut out);
-            out.push_lit(format!("{temp}.{};", propagate.layout.payload_field));
+            self.push_propagate_payload(propagate, temp.as_str(), &mut out);
         }
         Rope::scoped(out)
     }
@@ -776,6 +773,7 @@ impl<'a> Emitter<'a> {
                 // A call skipped at its callee's member link reads the callee only
                 // past the receiver's test, as the chain does.
                 let mut guarded_callee = Rope::new();
+                let mut callee_text = None;
                 let condition = match (&operation.kind, &operation.condition) {
                     (
                         PlannedConditionalKind::OptionalCall {
@@ -799,12 +797,16 @@ impl<'a> Emitter<'a> {
                                 self.capture_planned_receiver(key, captured, &mut guarded_callee);
                             }
                         }
+                        callee_text =
+                            Some(self.member_callee_text(*source, [Some(*receiver), *key]));
                         member_callee(self.source, *source, [Some(*receiver), *key], |slot| {
                             self.value_slot_name(slot)
                         })
                     }
                     _ => self.emit_condition_capture(&operation.condition, captured, &mut out),
                 };
+                let callee_text =
+                    callee_text.unwrap_or_else(|| AuthoredText::generated(condition.clone()));
                 let receiver = match &operation.condition {
                     PlannedEvaluationInput::Source {
                         mode: EvaluationInputMode::MemberReference,
@@ -821,8 +823,8 @@ impl<'a> Emitter<'a> {
                 // member call itself.
                 let through = receiver.filter(|_| *test == OptionalCallTest::Callee);
                 let tested = match test {
-                    OptionalCallTest::Callee => condition.clone(),
-                    OptionalCallTest::Receiver => self.planned_receiver_text(
+                    OptionalCallTest::Callee => AuthoredText::generated(condition.clone()),
+                    OptionalCallTest::Receiver => self.planned_receiver_authored(
                         &receiver
                             .unwrap_or_else(|| crate::ice::bug!("receiver test has no receiver")),
                     ),
@@ -830,7 +832,9 @@ impl<'a> Emitter<'a> {
                         crate::ice::bug!("an optional call skipped inside its callee was planned")
                     }
                 };
-                out.push_lit(format!("if ({tested} != null) {{"));
+                out.push_lit("if (");
+                tested.push_to(self.source, &mut out);
+                out.push_lit(" != null) {");
                 out.push_break(1);
                 // A single whole-value argument with completable arms calls
                 // the captured callee from each dispatch arm, keeping the
@@ -840,12 +844,14 @@ impl<'a> Emitter<'a> {
                     && type_args.is_none()
                     && completable_decision_arms(self.core, *expr, &self.exits_for_expr(*expr))
                 {
-                    let mut prefix = AuthoredText::generated(match through {
+                    let mut prefix = match through {
                         Some(receiver) => {
-                            format!("{condition}.call({}", self.planned_receiver_text(&receiver))
+                            let mut prefix = AuthoredText::generated(format!("{condition}.call("));
+                            prefix.append(self.planned_receiver_authored(&receiver));
+                            prefix
                         }
-                        None => condition.clone(),
-                    });
+                        None => callee_text.clone(),
+                    };
                     prefix.push_gap(
                         self.source,
                         if through.is_some() { ", " } else { "(" },
@@ -956,27 +962,51 @@ impl<'a> Emitter<'a> {
                         PlannedOperand::Source { capture: None, .. } => {}
                     }
                 }
-                body.push_lit(format!("{result} = {condition}"));
+                body.push_lit(format!("{result} = "));
+                callee_text.push_to(self.source, &mut body);
                 if let Some(span) = type_args {
                     body.push_src(&self.source[span.start..span.end], span.start);
                 }
                 if let Some(receiver) = through {
                     body.push_lit(".call(");
-                    self.push_planned_receiver(&receiver, false, &mut body);
+                    self.push_planned_receiver(&receiver, true, &mut body);
                 }
                 for (index, argument) in arguments.iter().enumerate() {
-                    let separator = if index > 0 || through.is_some() {
-                        ", "
-                    } else {
-                        "("
-                    };
-                    push_gap(
-                        self.source,
-                        &mut body,
-                        separator,
-                        operation.gaps.get(index).copied(),
-                        "",
-                    );
+                    let gap = operation.gaps.get(index).copied();
+                    match gap.and_then(|gap| self.call_opener(gap)) {
+                        Some(open) if index == 0 && through.is_none() => {
+                            let gap = gap.unwrap_or_else(|| crate::ice::bug!("opener without gap"));
+                            push_gap(
+                                self.source,
+                                &mut body,
+                                "",
+                                Some(SourceSpan {
+                                    start: gap.start,
+                                    end: open,
+                                }),
+                                "",
+                            );
+                            body.push_src(&self.source[open..open + 1], open);
+                            push_gap(
+                                self.source,
+                                &mut body,
+                                "",
+                                Some(SourceSpan {
+                                    start: open + 1,
+                                    end: gap.end,
+                                }),
+                                "",
+                            );
+                        }
+                        _ => {
+                            let separator = if index > 0 || through.is_some() {
+                                ", "
+                            } else {
+                                "("
+                            };
+                            push_gap(self.source, &mut body, separator, gap, "");
+                        }
+                    }
                     self.push_operand(operation, argument, &mut body);
                 }
                 if arguments.is_empty() && through.is_none() {
@@ -1011,6 +1041,54 @@ impl<'a> Emitter<'a> {
 
     /// The receiver a member callee is called through, as the expression
     /// that reads it.
+    /// A member callee as written, its captured parts read from their
+    /// slots and the rest copied from the source.
+    fn member_callee_text(
+        &self,
+        callee: SourceSpan,
+        parts: [Option<PlannedReceiver>; 2],
+    ) -> AuthoredText {
+        let mut text = AuthoredText::default();
+        let mut cursor = callee.start;
+        for part in parts.into_iter().flatten() {
+            let PlannedReceiver::Captured { source: at, slot } = part else {
+                continue;
+            };
+            text.push_source(SourceSpan {
+                start: cursor,
+                end: at.start,
+            });
+            text.push_generated(self.value_slot_name(slot));
+            cursor = at.end;
+        }
+        text.push_source(SourceSpan {
+            start: cursor,
+            end: callee.end,
+        });
+        text
+    }
+
+    /// The `(` that opens a call's arguments: the last token of the
+    /// authored text between the callee and the first argument.
+    fn call_opener(&self, gap: SourceSpan) -> Option<usize> {
+        crate::lexer::lex_with_kind(self.source, gap.start, gap.end, self.source_kind)
+            .last()
+            .filter(|token| matches!(token.kind, crate::lexer::TokenKind::Punct(b'(')))
+            .map(|token| token.span.start)
+    }
+
+    /// A receiver read again: its slot, or its source text as written.
+    fn planned_receiver_authored(&self, receiver: &PlannedReceiver) -> AuthoredText {
+        match *receiver {
+            PlannedReceiver::Stable { source } => {
+                let mut text = AuthoredText::default();
+                text.push_source(source);
+                text
+            }
+            _ => AuthoredText::generated(self.planned_receiver_text(receiver)),
+        }
+    }
+
     fn planned_receiver_text(&self, receiver: &PlannedReceiver) -> String {
         match receiver {
             PlannedReceiver::Captured { slot, .. } => self.value_slot_name(*slot).to_owned(),
@@ -1627,6 +1705,13 @@ impl<'a> Emitter<'a> {
                 if cursor < source.end {
                     out.push_src(&self.source[cursor..source.end], cursor);
                 }
+            }
+            PlannedEvaluationInput::Source { source, .. } => {
+                out.push_relocated_operand(
+                    self.captured_reading(step, input),
+                    source.start,
+                    source.end,
+                );
             }
             _ => out.push_lit(self.captured_reading(step, input)),
         }

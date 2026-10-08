@@ -3,16 +3,11 @@ ttc: std → $DIR/out/tt
 ttc: ./resultBodyUsesThePlannedSlotForAJsxChildMatch.ttx → $DIR/out/resultBodyUsesThePlannedSlotForAJsxChildMatch.tsx
 
 ==== ttc --check-types (exit 1) ====
-error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists. (in code ttc generated for this construct)
-  --> resultBodyUsesThePlannedSlotForAJsxChildMatch.ttx:7:17
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+  --> resultBodyUsesThePlannedSlotForAJsxChildMatch.ttx:10:18
    |
- 7 |     const value = result {
-   |  _________________^
- 8 | |     const first = try fallible(n);
- 9 | |     const chosen = match (e) { A => 1, B => 2 };
-... | |
-16 | |   };
-   | |___^
+10 |     const view = <section data-value={chosen}>{match (f) {
+   |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
   --> resultBodyUsesThePlannedSlotForAJsxChildMatch.ttx:11:14
    |

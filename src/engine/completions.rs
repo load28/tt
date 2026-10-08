@@ -408,6 +408,9 @@ impl TtKeyword {
     /// statement where a statement begins, an expression where a statement
     /// or an operand begins.
     fn fits(self, facts: crate::lexer::TokenFacts) -> bool {
+        if facts.unterminated_before() {
+            return false;
+        }
         match self {
             TtKeyword::Variant => facts.statement_start() || facts.modified(),
             TtKeyword::Try | TtKeyword::LetElse | TtKeyword::Val => facts.statement_start(),
@@ -1359,6 +1362,9 @@ const c = match (d) { is Error => 1, \"x\" => 2, ‸ };\n";
             ("/p/a.tt", "const n = user.‸\n", &[][..]),
             ("/p/a.tt", "// ‸\n", &[][..]),
             ("/p/a.tt", "const s = \"‸\";\n", &[][..]),
+            ("/p/a.tt", "function f() {\n  val ‸\n}\n", &[][..]),
+            ("/p/a.tt", "function f() {\n  val m‸\n}\n", &[][..]),
+            ("/p/a.tt", "function f() {\n  foo ‸\n}\n", &[][..]),
             (
                 "/p/a.tt",
                 "variant V { A, B }\nconst v = match (x) { A => 1, ‸ };\n",

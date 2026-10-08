@@ -6,7 +6,7 @@
 1:52 -> 7:3 len 46  "\ndeclare const g: () => R;\nconst f = (): R => "
 4:7 -> 17:11 len 1  "n"
 4:15 -> 12:20 len 3  "g()"
-4:19 -> 17:28 len 1  "\n"
+4:18 -> 17:27 len 2  ";\n"
 5:1 -> 32:1 len 16  "const doubled = "
 5:24 -> 20:17 len 1  "n"
 5:29 -> 22:10 len 1  "0"

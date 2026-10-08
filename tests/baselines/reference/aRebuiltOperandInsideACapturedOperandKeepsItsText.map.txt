@@ -1,9 +1,10 @@
-//// [aRebuiltOperandInsideACapturedOperandKeepsItsText.tt] 25 mapping(s)
+//// [aRebuiltOperandInsideACapturedOperandKeepsItsText.tt] 26 mapping(s)
 1:1 -> 19:1 len 82  "import * as Result from \"@tt/std/result\";\nimport"...
 3:19 -> 27:3 len 242  "\nfunction R<T>(x: T): TResult<T, string> { retur"...
 10:3 -> 67:3 len 13  "const call = "
 10:16 -> 61:19 len 7  "typeof "
 10:23 -> 36:19 len 4  "g.mm"
+10:23 -> 56:26 len 1  "g"
 10:30 -> 39:31 len 1  "f"
 10:31 -> 56:35 len 1  "("
 10:39 -> 41:21 len 3  "p()"

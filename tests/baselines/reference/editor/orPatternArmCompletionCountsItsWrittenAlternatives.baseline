@@ -1,8 +1,7 @@
 === completions /*alternative*/ orPatternArmCompletionCountsItsWrittenAlternatives.tt:3:39 ===
   | export const a = match (s) { Circle |  };
   |                                       ^ /*alternative*/
-completion: 1062 item(s), member false, probe no
-  Circle (Variable, 11)
+completion: 1061 item(s), member false, probe yes
   Shape (Variable, 11)
   a (Variable, 11)
   s (Variable, 11)

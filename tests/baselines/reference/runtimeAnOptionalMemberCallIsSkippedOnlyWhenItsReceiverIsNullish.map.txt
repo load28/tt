@@ -1,20 +1,29 @@
-//// [runtimeAnOptionalMemberCallIsSkippedOnlyWhenItsReceiverIsNullish.tt] 21 mapping(s)
+//// [runtimeAnOptionalMemberCallIsSkippedOnlyWhenItsReceiverIsNullish.tt] 30 mapping(s)
 1:1 -> 1:1 len 627  "\ntype M = { base?: number; m(v: number): number "...
 13:3 -> 26:3 len 15  "const called = "
+13:18 -> 14:7 len 1  "o"
+13:18 -> 21:14 len 5  "o?.m("
 13:27 -> 16:20 len 9  "read(tag)"
 13:37 -> 26:24 len 131  ";\n  return { kind: \"Ok\", value: called ?? -1 };\n"...
+18:19 -> 33:11 len 1  "o"
+18:19 -> 38:24 len 4  "o?.m"
+18:19 -> 42:24 len 4  "o?.m"
 18:31 -> 35:25 len 18  "arg(tag + \":call\")"
 18:53 -> 37:18 len 1  "1"
 18:58 -> 38:29 len 1  "1"
 18:66 -> 42:29 len 1  "0"
 18:70 -> 52:6 len 21  "),\n    attempt(() => "
 19:19 -> 55:23 len 4  "o?.m"
+19:19 -> 61:36 len 1  "o"
+19:19 -> 65:36 len 1  "o"
 19:33 -> 58:25 len 18  "arg(tag + \":both\")"
 19:55 -> 60:18 len 1  "1"
 19:60 -> 61:39 len 1  "1"
 19:68 -> 65:39 len 1  "0"
 19:72 -> 75:6 len 81  "),\n    attempt(() => JSON.stringify(viaTry(o, ta"...
 21:19 -> 80:25 len 1  "o"
+21:24 -> 88:34 len 3  "?.m"
+21:24 -> 92:34 len 3  "?.m"
 21:35 -> 85:27 len 18  "arg(tag + \":pipe\")"
 21:57 -> 87:20 len 1  "1"
 21:62 -> 88:38 len 1  "1"

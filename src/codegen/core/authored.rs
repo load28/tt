@@ -18,6 +18,21 @@ impl AuthoredText {
         authored
     }
 
+    pub(super) fn append(&mut self, other: AuthoredText) {
+        for part in other.0 {
+            match part {
+                AuthoredPart::Generated(text) => self.push_generated(&text),
+                AuthoredPart::Source(span) => self.0.push(AuthoredPart::Source(span)),
+            }
+        }
+    }
+
+    pub(super) fn push_source(&mut self, span: SourceSpan) {
+        if span.start < span.end {
+            self.0.push(AuthoredPart::Source(span));
+        }
+    }
+
     pub(super) fn push_generated(&mut self, text: &str) {
         if text.is_empty() {
             return;

@@ -1,4 +1,4 @@
-//// [tryInConditionalOperand.tt] 66 mapping(s)
+//// [tryInConditionalOperand.tt] 68 mapping(s)
 1:1 -> 1:1 len 1017  "// A `try` nested in an operand of a conditional"...
 22:3 -> 43:3 len 12  "const and = "
 22:15 -> 24:16 len 4  "flag"
@@ -49,6 +49,7 @@
 29:89 -> 135:22 len 123  ";\n  return { kind: \"Ok\", value: [both, one] };\n}"...
 33:3 -> 154:3 len 15  "const scaled = "
 33:18 -> 140:20 len 11  "sink(label)"
+33:31 -> 149:22 len 1  "("
 33:32 -> 142:22 len 16  "note(\"first\", 1)"
 33:54 -> 144:21 len 7  "read(n)"
 33:61 -> 149:39 len 4  " * 2"
@@ -56,6 +57,7 @@
 33:83 -> 154:25 len 4  ";\n  "
 34:3 -> 182:3 len 15  "const member = "
 34:18 -> 156:20 len 11  "sink(label)"
+34:31 -> 177:22 len 1  "("
 34:32 -> 164:22 len 1  "("
 34:37 -> 159:21 len 7  "read(n)"
 34:44 -> 164:30 len 12  ").toFixed(1)"

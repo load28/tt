@@ -85,6 +85,10 @@ function main() {
 >s : const s: S
   const j = g?.mm(match (s) { A => 0, B => 1 } ? "then" : "else");
 >j : const j: unknown[] | undefined
+>g : const g: {
+>       mm: (...a: unknown[]) => unknown[];
+>   }
+>mm : (property) mm: (...a: unknown[]) => unknown[]
 >s : const s: S
   return JSON.stringify({ b, c, d, e, h, i, j });
 >JSON : var JSON: JSON

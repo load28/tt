@@ -136,6 +136,8 @@ pub(in super::super) fn map_target(
             let end = byte_at(&code_lines, lsp_range.end);
             let (s, e) = match mapper::to_source_span(&doc.mappings, start, end) {
                 Some(span) => span,
+                None if start == 0 && end == 0 => (0, 0),
+                None if start == 0 && end == doc.code.len() => (0, doc.source.len()),
                 None if purpose == TargetUse::Navigation => declared_name_span(&doc, start, end)?,
                 None => return None,
             };

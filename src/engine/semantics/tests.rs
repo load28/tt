@@ -14,7 +14,7 @@ fn a_case_is_named_and_a_full_union_is_its_variant() {
              variant ParseError { NotANumber(text: string) }\n",
     );
     let said = translate(
-        AnchorKind::Try,
+        AnchorKind::TryExit,
         2322,
         "Type 'Err<{ kind: \"OutOfRange\"; value: number; }>' is not assignable to type \
              'Result<string, { kind: \"NotANumber\"; text: string; }>'.",
@@ -115,9 +115,14 @@ fn translation_classes_group_incidental_ts_codes_by_tt_meaning() {
     assert_eq!(translation_class(AnchorKind::Try, 2339), Some("not-result"));
     assert_eq!(translation_class(AnchorKind::Try, 2571), Some("not-result"));
     assert_eq!(
-        translation_class(AnchorKind::Try, 2322),
+        translation_class(AnchorKind::TryExit, 2322),
         Some("try-error-type")
     );
+    assert_eq!(
+        translation_class(AnchorKind::TryTest, 2322),
+        Some("not-result")
+    );
+    assert_eq!(translation_class(AnchorKind::Try, 2322), None);
     assert_eq!(translation_class(AnchorKind::Pipe, 2339), None);
     assert_eq!(
         translation_class(AnchorKind::Pipe, 2345),

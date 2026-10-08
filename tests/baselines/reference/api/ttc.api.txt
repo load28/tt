@@ -1412,6 +1412,8 @@ pub type ProjectIdentity = (Option<PathBuf>, PathBuf);
 pub enum AnchorKind {
     Match,
     Try,
+    TryTest,
+    TryExit,
     LetElse,
     IfLet,
     Result,

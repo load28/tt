@@ -1,4 +1,4 @@
-//// [aSpreadArgumentBesideATtValueReadsItsElementsFirst.tt] 49 mapping(s)
+//// [aSpreadArgumentBesideATtValueReadsItsElementsFirst.tt] 50 mapping(s)
 1:19 -> 31:3 len 354  "\nconst arr: number[] = [1, 2];\nfunction get(): V"...
 9:1 -> 51:3 len 12  "console.log("
 9:13 -> 41:29 len 1  "f"
@@ -22,6 +22,7 @@
 10:75 -> 66:2 len 1  "\n"
 11:1 -> 94:3 len 12  "console.log("
 11:13 -> 69:19 len 3  "o.m"
+11:13 -> 89:27 len 1  "o"
 11:22 -> 71:33 len 3  "arr"
 11:34 -> 74:21 len 5  "get()"
 11:48 -> 77:20 len 1  "1"

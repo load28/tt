@@ -373,6 +373,8 @@ impl Machine<'_> {
         }
         if tok.line_break && !tok.is(b'}') {
             self.mark(TokenFacts::ASI_BEFORE);
+        } else if !tok.line_break && !tok.is(b'}') {
+            self.mark(TokenFacts::UNTERMINATED_BEFORE);
         }
         self.record(start, self.last_end);
         Out::Retry

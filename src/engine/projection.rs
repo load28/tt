@@ -784,6 +784,14 @@ pub(crate) fn diagnostic_origin(
     if let Some(origin) = mapper::shared_binding_origin(&file.emit.shared_bindings, start, end) {
         return Some(origin);
     }
+    if let Some(origin) = mapper::relocated_origin(
+        &file.emit.mappings,
+        &file.emit.relocated_operands,
+        start,
+        end,
+    ) {
+        return Some(origin);
+    }
     mapper::diagnostic_origin(
         &file.emit.mappings,
         &file.emit.anchors,

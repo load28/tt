@@ -51,6 +51,7 @@ const miss = absent |> ?.method(match (subject()) { A(value) => value, B => 0 })
 >absent : const absent: {
 >       method(value: number): number;
 >   } | undefined
+>method : (method) method(value: number): number
 >subject : const subject: () => E
 >value : const value: number
 >value : const value: number
@@ -59,6 +60,7 @@ const hit = live |> ?.method(match (subject()) { A(value) => value, B => 0 });
 >live : const live: {
 >       method(value: number): number;
 >   }
+>method : (method) method(value: number): number
 >subject : const subject: () => E
 >value : const value: number
 >value : const value: number

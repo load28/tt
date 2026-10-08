@@ -1,6 +1,7 @@
-//// [anOptionalCallArgumentRunsWholeBeforeALaterValue.tt] 69 mapping(s)
+//// [anOptionalCallArgumentRunsWholeBeforeALaterValue.tt] 70 mapping(s)
 1:19 -> 25:3 len 327  "\nconst log: string[] = [];\nfunction o(t: string)"...
 9:3 -> 34:19 len 4  "g.mm"
+9:3 -> 77:26 len 1  "g"
 9:10 -> 37:31 len 1  "f"
 9:11 -> 59:27 len 1  "("
 9:19 -> 41:23 len 6  "o(\"1\")"

@@ -1,9 +1,10 @@
-//// [commentsInsideARebuiltFormStayWhereTheyWereWritten.tt] 57 mapping(s)
+//// [commentsInsideARebuiltFormStayWhereTheyWereWritten.tt] 58 mapping(s)
 1:18 -> 21:21 len 6  "number"
 1:18 -> 24:10 len 6  "number"
 1:30 -> 26:3 len 159  "\ndeclare const obj: { m(a: number, b: number): n"...
 5:3 -> 55:3 len 10  "const a = "
-5:20 -> 50:21 len 8  "/*C1*/ 1"
+5:13 -> 31:7 len 3  "obj"
+5:13 -> 50:14 len 15  "obj?.m(/*C1*/ 1"
 5:37 -> 34:21 len 1  "o"
 5:44 -> 37:19 len 1  "n"
 5:50 -> 38:20 len 1  "n"

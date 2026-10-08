@@ -2,13 +2,13 @@
 1:1 -> 2:1 len 138  "import type { TResult } from \"@tt/std\";\ndeclare "...
 4:30 -> 10:11 len 1  "z"
 4:38 -> 6:20 len 9  "await g()"
-4:48 -> 10:28 len 1  " "
+4:47 -> 10:27 len 2  "; "
 4:56 -> 10:68 len 1  "z"
 4:60 -> 11:8 len 52  " } = p;\n  return a;\n}\nexport function H(p: any) "...
 8:3 -> 24:3 len 10  "const q = "
 8:28 -> 22:11 len 1  "z"
 8:36 -> 17:20 len 9  "await g()"
-8:46 -> 22:28 len 1  " "
+8:45 -> 22:27 len 2  "; "
 8:54 -> 22:70 len 1  "z"
 8:58 -> 24:19 len 16  ";\n  return q;\n}\n"
 

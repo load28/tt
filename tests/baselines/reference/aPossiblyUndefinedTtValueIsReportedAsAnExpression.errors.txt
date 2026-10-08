@@ -2,11 +2,11 @@
 ttc: ./aPossiblyUndefinedTtValueIsReportedAsAnExpression.tt → $DIR/out/aPossiblyUndefinedTtValueIsReportedAsAnExpression.ts
 
 ==== ttc --check-types (exit 1) ====
-error[ts2532]: Object is possibly 'undefined'. (in code ttc generated for this construct)
+error[ts2532]: Object is possibly 'undefined'.
  --> aPossiblyUndefinedTtValueIsReportedAsAnExpression.tt:3:17
   |
 3 |   return "n" in match (v) { A => v, B => {} };
-  |                 ^^^^^^^^^
+  |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 ==== tsc on the emitted TypeScript (exit 2) ====
 aPossiblyUndefinedTtValueIsReportedAsAnExpression.ts(45,17): error TS18048: '$tt_v0' is possibly 'undefined'.

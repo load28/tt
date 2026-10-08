@@ -16,7 +16,8 @@ pub(crate) fn translate(
     translation_class(kind, code)?;
     let said = match (kind, code) {
         // `.kind` / `.value` reached for on something that is not a Result.
-        (AnchorKind::Try, 2339 | 2551 | 2571) => {
+        (AnchorKind::Try, 2339 | 2551 | 2571)
+        | (AnchorKind::TryTest, 2322 | 2339 | 2360 | 2361 | 2551 | 2571) => {
             "`try` needs a `Result` — this expression is not one".to_string()
         }
         (AnchorKind::Result, 2339 | 2551 | 2571) => {
@@ -24,7 +25,7 @@ pub(crate) fn translate(
                 .to_string()
         }
         // The propagated `Err` reaching a return type that cannot hold it.
-        (AnchorKind::Try, 2322 | 2345) => "the `Err` this `try` propagates does not fit the \
+        (AnchorKind::TryExit, 2322 | 2345) => "the `Err` this `try` propagates does not fit the \
              enclosing function's return type — tt has no automatic conversion, so widen the \
              return type or convert the error"
             .to_string(),
@@ -88,8 +89,9 @@ pub(crate) fn unnamed_generated_operand(
 /// the class identifies the single tt-level explanation they share.
 pub(crate) fn translation_class(kind: AnchorKind, code: u32) -> Option<&'static str> {
     match (kind, code) {
-        (AnchorKind::Try | AnchorKind::Result, 2339 | 2551 | 2571) => Some("not-result"),
-        (AnchorKind::Try, 2322 | 2345) => Some("try-error-type"),
+        (AnchorKind::Try | AnchorKind::Result, 2339 | 2551 | 2571)
+        | (AnchorKind::TryTest, 2322 | 2339 | 2360 | 2361 | 2551 | 2571) => Some("not-result"),
+        (AnchorKind::TryExit, 2322 | 2345) => Some("try-error-type"),
         (AnchorKind::LetElse | AnchorKind::IfLet | AnchorKind::Match, 2339 | 2571) => {
             Some("missing-discriminant")
         }

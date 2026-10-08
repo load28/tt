@@ -26,6 +26,11 @@ impl<'a> Emitter<'a> {
     }
 
     pub(super) fn emit_failure_exit(&self, propagate: &Propagate, temp: &str) -> Rope<'a> {
+        let exit = self.emit_failure_exit_text(propagate, temp);
+        self.anchored_failure_exit(propagate, exit)
+    }
+
+    fn emit_failure_exit_text(&self, propagate: &Propagate, temp: &str) -> Rope<'a> {
         let mut out = Rope::new();
         match propagate.exit {
             ExitTarget::EnclosingFunction => out.push_lit(format!("return {temp};")),
@@ -49,10 +54,7 @@ impl<'a> Emitter<'a> {
         let temp = self.temp_name(propagate.temporary);
         let mut out = self.emit_propagate_input(propagate, &temp);
         out.push_break(0);
-        out.push_lit(format!(
-            "if ({}) {{",
-            result_failure_test(&temp, propagate.layout)
-        ));
+        self.push_failure_test(propagate, &temp, &mut out);
         out.push_break(1);
         out.append(self.emit_failure_exit(propagate, &temp));
         out.push_break(0);
@@ -66,9 +68,27 @@ impl<'a> Emitter<'a> {
             }
             out.push_lit(format!("{} ", binding_keyword(binding.mode)));
             self.push_propagate_binding(binding.node, &mut out);
-            out.push_lit(format!("{temp}.{};", propagate.layout.payload_field));
+            self.push_propagate_payload(propagate, temp.as_str(), &mut out);
         }
         Rope::scoped(out)
+    }
+
+    /// The success payload a propagation's binding reads, and the
+    /// statement's own `;` when its source ends with one.
+    pub(super) fn push_propagate_payload(
+        &self,
+        propagate: &Propagate,
+        temp: &str,
+        out: &mut Rope<'a>,
+    ) {
+        out.push_lit(format!("{temp}.{}", propagate.layout.payload_field));
+        let owner = self.span(propagate.owner);
+        match owner.end.checked_sub(1) {
+            Some(semi) if self.source.as_bytes().get(semi) == Some(&b';') => {
+                out.push_src(&self.source[semi..owner.end], semi);
+            }
+            _ => out.push_lit(";"),
+        }
     }
 
     /// A propagation's binding as written, with what the source has between
@@ -715,16 +735,16 @@ impl<'a> Emitter<'a> {
         let temp = self.temp_name(propagate.temporary);
         let mut out = self.emit_propagate_input(propagate, &temp);
         out.push_break(0);
-        out.push_lit(format!(
-            "if ({}) {{",
-            result_failure_test(&temp, propagate.layout)
-        ));
+        self.push_failure_test(propagate, &temp, &mut out);
         out.push_break(1);
         let mut value = Rope::new();
         value.push_lit(temp.clone());
         out.append(Rope::indented(
             1,
-            self.emit_value_delivery_with_exit(value, None, continuation, exit_label, Some(0)),
+            self.anchored_failure_exit(
+                propagate,
+                self.emit_value_delivery_with_exit(value, None, continuation, exit_label, Some(0)),
+            ),
         ));
         out.push_break(0);
         out.push_lit("}");
@@ -737,7 +757,7 @@ impl<'a> Emitter<'a> {
             }
             out.push_lit(format!("{} ", binding_keyword(binding.mode)));
             self.push_propagate_binding(binding.node, &mut out);
-            out.push_lit(format!("{temp}.{};", propagate.layout.payload_field));
+            self.push_propagate_payload(propagate, temp.as_str(), &mut out);
         }
         Rope::scoped(out)
     }

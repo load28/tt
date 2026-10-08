@@ -26,6 +26,10 @@ function t(): TResult<unknown, string> {
   const r = obj(n?.m(try R(1))) || g(try R(2));
 >r : const r: unknown
 >obj : function obj(x: unknown): unknown
+>n : const n: {
+>       m: (x: number) => number;
+>   }
+>m : (property) m: (x: number) => number
 >R : function R(x: number): TResult<number, string>
 >g : function g(x: unknown): unknown
 >R : function R(x: number): TResult<number, string>

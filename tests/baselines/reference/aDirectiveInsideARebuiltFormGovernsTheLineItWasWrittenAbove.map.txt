@@ -1,4 +1,4 @@
-//// [aDirectiveInsideARebuiltFormGovernsTheLineItWasWrittenAbove.tt] 65 mapping(s)
+//// [aDirectiveInsideARebuiltFormGovernsTheLineItWasWrittenAbove.tt] 66 mapping(s)
 1:18 -> 20:21 len 6  "number"
 1:18 -> 23:10 len 6  "number"
 1:30 -> 25:3 len 327  "\ndeclare function g(a: number, b: number): numbe"...
@@ -13,7 +13,8 @@
 12:33 -> 49:13 len 1  "0"
 13:4 -> 57:22 len 4  ";\n  "
 14:3 -> 85:3 len 17  "const optional = "
-14:27 -> 78:21 len 43  "\n    // @ts-expect-error\n    \"not a number\""
+14:20 -> 59:7 len 3  "obj"
+14:20 -> 78:14 len 50  "obj?.m(\n    // @ts-expect-error\n    \"not a numbe"...
 17:12 -> 62:21 len 1  "o"
 17:19 -> 65:19 len 1  "n"
 17:25 -> 66:20 len 1  "n"

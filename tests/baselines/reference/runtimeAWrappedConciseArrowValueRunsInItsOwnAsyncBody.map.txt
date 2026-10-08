@@ -31,7 +31,7 @@
 8:55 -> 112:2 len 33  ";\nconst r = async (n: number) => "
 9:47 -> 121:11 len 1  "v"
 9:55 -> 116:20 len 13  "await load(n)"
-9:69 -> 121:28 len 1  " "
+9:68 -> 121:27 len 2  "; "
 9:77 -> 121:70 len 5  "v + 1"
 9:85 -> 123:16 len 13  " as R<number>"
 9:98 -> 124:2 len 181  ";\nconsole.log(await g(Promise.resolve(V.A(3))), "...

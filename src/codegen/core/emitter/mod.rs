@@ -646,6 +646,26 @@ fn push_control_break(out: &mut Rope<'_>, depth: u16, label: Option<&str>) {
     }
 }
 
+impl<'a> Emitter<'a> {
+    /// `if (<test>) {` for a propagation, its test anchored as the `try`'s.
+    pub(super) fn push_failure_test(&self, propagate: &Propagate, temp: &str, out: &mut Rope<'a>) {
+        let span = self.span(propagate.node);
+        let mut test = Rope::new();
+        test.push_lit(result_failure_test(temp, propagate.layout));
+        out.push_lit("if (");
+        out.anchored(AnchorKind::TryTest, span.start, span.end, span.end, test);
+        out.push_lit(") {");
+    }
+
+    /// `exit` anchored as the early exit of a propagation's failure.
+    pub(super) fn anchored_failure_exit(&self, propagate: &Propagate, exit: Rope<'a>) -> Rope<'a> {
+        let span = self.span(propagate.node);
+        let mut out = Rope::new();
+        out.anchored(AnchorKind::TryExit, span.start, span.end, span.end, exit);
+        out
+    }
+}
+
 fn result_failure_test(temp: &str, layout: ResultLayout) -> String {
     match layout.discriminator {
         ResultDiscriminator::SuccessFieldPresent(field) => {

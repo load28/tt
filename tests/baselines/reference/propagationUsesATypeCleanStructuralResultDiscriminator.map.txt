@@ -2,5 +2,5 @@
 1:1 -> 1:1 len 17  "function run() { "
 1:24 -> 5:7 len 5  "value"
 1:36 -> 1:33 len 18  "Result.Err(\"boom\")"
-1:55 -> 5:28 len 28  " return Result.Ok(value); }\n"
+1:54 -> 5:27 len 29  "; return Result.Ok(value); }\n"
 
