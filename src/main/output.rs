@@ -135,9 +135,9 @@ pub(super) fn write_output_bytes(out_path: &Path, code: &[u8]) -> Result<(), Str
     if let Some(parent) = out_path.parent()
         && let Err(e) = create_dir_all(parent)
     {
-        return Err(format!("ttc: {}: {e}", out_path.display()));
+        return Err(format!("{}: {e}", out_path.display()));
     }
-    replace_file(out_path, code).map_err(|e| format!("ttc: {}: {e}", out_path.display()))
+    replace_file(out_path, code).map_err(|e| format!("{}: {e}", out_path.display()))
 }
 
 pub(super) fn create_dir_all(dir: &Path) -> std::io::Result<()> {
@@ -230,8 +230,16 @@ pub(super) fn watch_mode(
                 return Err("ttc: --print requires exactly one source file".to_string());
             }
             let files: Vec<PathBuf> = jobs.iter().map(|job| job.file.clone()).collect();
-            let jsx_preserve = project_jsx_preserve(opts.rewrite_imports, &files, project)
-                .map_err(|error| format!("ttc: {error}"))?;
+            let jsx_preserve = if opts.check {
+                JsxPreserve::new()
+            } else {
+                project_jsx_preserve(opts.rewrite_imports, &files, project).map_err(|error| {
+                    format!(
+                        "ttc: {error} (name the configuration with --project, or choose \
+                         --rewrite-imports ts or off)"
+                    )
+                })?
+            };
             Ok((jobs, jsx_preserve))
         });
         let (jobs, jsx_preserve) = match round {

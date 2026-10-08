@@ -19,18 +19,18 @@ error[ts2300]: Duplicate identifier 'kind'. (in code ttc generated for this cons
   |
 1 | export variant Token { Word(kind: string) }
   |                ^^^^^
-error[ts2717]: Subsequent property declarations must have the same type.  Property 'kind' must be of type '"Word"', but here has type 'string'. (in code ttc generated for this construct)
- --> main.ttx:1:16
-  |
-1 | export variant Token { Word(kind: string) }
-  |                ^^^^^
-  |                ----- 'kind' was also declared here.
 error[ts2322]: Type 'string' is not assignable to type '"Word"'. (in code ttc generated for this construct)
  --> main.ttx:1:16
   |
 1 | export variant Token { Word(kind: string) }
   |                ^^^^^
   |                ----- The expected type comes from property 'kind' which is declared here on type 'Token'
+error[ts2717]: Subsequent property declarations must have the same type.  Property 'kind' must be of type '"Word"', but here has type 'string'. (in code ttc generated for this construct)
+ --> main.ttx:1:16
+  |
+1 | export variant Token { Word(kind: string) }
+  |                ^^^^^
+  |                ----- 'kind' was also declared here.
 error[variant-field-shadows-tag]: variant Token: case "Word" cannot have a field named `kind` — that is where the case tag lives
  --> main.ttx:1:29
   |

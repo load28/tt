@@ -246,7 +246,9 @@ pub(crate) fn standalone(
         let backend = session.backend.as_ref().expect("backend initialized above");
         match backend.open(Some(&configuration), &root) {
             Ok(()) => true,
-            Err(failure) if failure.kind == FailureKind::Unavailable => false,
+            Err(failure) if failure.kind == FailureKind::Unavailable && options.node.is_none() => {
+                false
+            }
             Err(failure) => return Err(failure.into()),
         }
     };

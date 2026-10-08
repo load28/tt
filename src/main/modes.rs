@@ -210,21 +210,14 @@ pub(super) fn sidecar_mode(jobs: &[Job], decl_dir: &Path, inputs: &[String]) -> 
         // The map's `sources` is read relative to the map itself, so it has
         // to point back across whatever distance `-o` introduced.
         let sidecar = ttc::build_sidecar(&source, &declarations, &relative_path(&dir, &job.file));
-        if let Err(e) = fs::write(&dts_path, &sidecar.declarations) {
-            eprintln!("ttc: {}: {e}", dts_path.display());
-            failed = true;
-            continue;
-        }
-        if let Err(e) = fs::write(&map_path, &sidecar.map) {
-            eprintln!("ttc: {}: {e}", map_path.display());
-            failed = true;
-            continue;
-        }
-        if let Err(error) =
-            super::ownership::record_sidecar(&dts_path, &job.file, &sidecar.declarations)
-                .and_then(|()| super::ownership::record_sidecar(&map_path, &job.file, &sidecar.map))
+        if let Err(error) = write_owned_output(
+            &dts_path,
+            OutputOwner::Source(&job.file),
+            &sidecar.declarations,
+        )
+        .and_then(|()| write_owned_output(&map_path, OutputOwner::Source(&job.file), &sidecar.map))
         {
-            eprintln!("{error}");
+            eprintln!("ttc: {error}");
             failed = true;
             continue;
         }

@@ -67,8 +67,7 @@ pub(super) fn project_jsx_preserve(
             Err(error) => {
                 return Err(format!(
                     "cannot read the project's `jsx` option, which names a .ttx import's output: \
-                     {error} (name the configuration with --project, or choose --rewrite-imports \
-                     ts or off)"
+                     {error}"
                 ));
             }
         }
@@ -385,23 +384,20 @@ struct Emitted {
 /// printed in job order, so the output of a parallel run is identical to a
 /// sequential one.
 pub(super) fn compile_jobs(jobs: &[Job], support_root: Option<&Path>, opts: &BuildOptions) -> bool {
-    if opts.check && claim_conflicts(jobs).0 {
-        return true;
-    }
-    if !opts.check && !opts.print {
+    if !opts.print {
         let (mut conflicted, contested) = claim_conflicts(jobs);
         for job in jobs.iter().filter(|job| {
             !same_file(&job.file, &job.out_path) && !contested.contains(job.out_path.as_path())
         }) {
             if let Err(error) = check_output_owner(&job.out_path, OutputOwner::Source(&job.file)) {
-                eprintln!("{error}");
+                eprintln!("ttc: {error}");
                 conflicted = true;
             }
             if opts.source_map == SourceMapMode::File
                 && let Err(error) =
                     check_output_owner(&map_path(&job.out_path), OutputOwner::Source(&job.file))
             {
-                eprintln!("{error}");
+                eprintln!("ttc: {error}");
                 conflicted = true;
             }
         }
@@ -412,6 +408,9 @@ pub(super) fn compile_jobs(jobs: &[Job], support_root: Option<&Path>, opts: &Bui
 
     let outcomes = compile_outcomes(jobs, support_root, opts);
 
+    if opts.check && support_claim_conflict(jobs, &support_forms(jobs, &outcomes, support_root)) {
+        return true;
+    }
     if opts.print || opts.check {
         let mut failed = false;
         for outcome in outcomes {
@@ -419,7 +418,9 @@ pub(super) fn compile_jobs(jobs: &[Job], support_root: Option<&Path>, opts: &Bui
                 eprintln!("{message}");
             }
             failed |= outcome.failed;
-            if let Some(output) = outcome.output {
+            if opts.print
+                && let Some(output) = outcome.output
+            {
                 match &output.bytes {
                     Some(bytes) => crate::out::bytes(bytes),
                     None => crate::out::text(&output.code),
@@ -691,31 +692,23 @@ fn compile_outcomes(
                     out.failed = true;
                     return out;
                 }
-                if !opts.check {
-                    out.output = Some(Emitted {
-                        bytes: loaded.encoding.map(|encoding| encoding.encode(&code)),
-                        code,
-                        map: map.and_then(|rendered| rendered.document),
-                        support_imports: emit.support_imports,
-                        commonjs: emit.commonjs,
-                        in_place,
-                    });
-                }
+                out.output = Some(Emitted {
+                    bytes: loaded.encoding.map(|encoding| encoding.encode(&code)),
+                    code,
+                    map: map.and_then(|rendered| rendered.document),
+                    support_imports: emit.support_imports,
+                    commonjs: emit.commonjs,
+                    in_place,
+                });
                 out
             })
         },
     )
 }
 
-/// Writes the compiled outputs and the support modules they import.
-/// Returns true if any job failed or any write did.
-fn write_outcomes(
-    jobs: &[Job],
-    outcomes: &[Outcome],
-    support_root: Option<&Path>,
-    opts: &BuildOptions,
-) -> bool {
-    let mut failed = false;
+type SupportForms = Vec<(PathBuf, SupportForm, Vec<StdModule>)>;
+
+fn support_forms(jobs: &[Job], outcomes: &[Outcome], support_root: Option<&Path>) -> SupportForms {
     let std_dir = std_placement(support_root);
     // Compiler-owned support modules are written once for the project, not
     // once per source file, and only when an output being written imports
@@ -724,7 +717,7 @@ fn write_outcomes(
     // inlines its helpers. Standard-library imports materialize its three
     // public modules; the pipeline runtime is written on its own.
     let module_package = std_dir.as_deref().is_some_and(package_is_module);
-    let forms: Vec<(PathBuf, SupportForm, Vec<StdModule>)> = std_dir
+    std_dir
         .iter()
         .flat_map(|dir| {
             [
@@ -755,27 +748,13 @@ fn write_outcomes(
             (dir, form, modules)
         })
         .filter(|(_, _, modules): &(PathBuf, SupportForm, Vec<StdModule>)| !modules.is_empty())
-        .collect();
-    let manifest = |form: SupportForm| match form {
-        SupportForm::Module => None,
-        SupportForm::Commonjs => Some((OutputOwner::CommonjsManifest, ttc::STD_COMMONJS_MANIFEST)),
-        SupportForm::ExplicitModule => {
-            Some((OutputOwner::ModuleManifest, ttc::STD_MODULE_MANIFEST))
-        }
-    };
-    for (dir, form, modules) in &forms {
-        if let Some((owner, _)) = manifest(*form)
-            && let Err(error) = check_output_owner(&dir.join("package.json"), owner)
-        {
-            eprintln!("{error}");
-            return true;
-        }
+        .collect()
+}
+
+fn support_claim_conflict(jobs: &[Job], forms: &SupportForms) -> bool {
+    for (dir, _, modules) in forms {
         for module in modules {
             let support = dir.join(module.file_name());
-            if let Err(error) = check_output_owner(&support, OutputOwner::Support(*module)) {
-                eprintln!("{error}");
-                return true;
-            }
             for job in jobs {
                 if same_file(&job.file, &support) {
                     eprintln!(
@@ -793,6 +772,44 @@ fn write_outcomes(
                     );
                     return true;
                 }
+            }
+        }
+    }
+    false
+}
+
+/// Writes the compiled outputs and the support modules they import.
+/// Returns true if any job failed or any write did.
+fn write_outcomes(
+    jobs: &[Job],
+    outcomes: &[Outcome],
+    support_root: Option<&Path>,
+    opts: &BuildOptions,
+) -> bool {
+    let mut failed = false;
+    let forms = support_forms(jobs, outcomes, support_root);
+    let manifest = |form: SupportForm| match form {
+        SupportForm::Module => None,
+        SupportForm::Commonjs => Some((OutputOwner::CommonjsManifest, ttc::STD_COMMONJS_MANIFEST)),
+        SupportForm::ExplicitModule => {
+            Some((OutputOwner::ModuleManifest, ttc::STD_MODULE_MANIFEST))
+        }
+    };
+    if support_claim_conflict(jobs, &forms) {
+        return true;
+    }
+    for (dir, form, modules) in &forms {
+        if let Some((owner, _)) = manifest(*form)
+            && let Err(error) = check_output_owner(&dir.join("package.json"), owner)
+        {
+            eprintln!("ttc: {error}");
+            return true;
+        }
+        for module in modules {
+            let support = dir.join(module.file_name());
+            if let Err(error) = check_output_owner(&support, OutputOwner::Support(*module)) {
+                eprintln!("ttc: {error}");
+                return true;
             }
         }
     }
@@ -851,7 +868,7 @@ fn write_emitted(job: &Job, output: Option<&Emitted>) -> (Vec<String>, bool) {
     };
     let code = output.bytes.as_deref().unwrap_or(output.code.as_bytes());
     if let Err(e) = write_owned_bytes(&job.out_path, OutputOwner::Source(&job.file), code) {
-        return (vec![e], true);
+        return (vec![format!("ttc: {e}")], true);
     }
     if let Some(document) = &output.map
         && let Err(e) = write_owned_output(
@@ -860,7 +877,7 @@ fn write_emitted(job: &Job, output: Option<&Emitted>) -> (Vec<String>, bool) {
             document,
         )
     {
-        return (vec![e], true);
+        return (vec![format!("ttc: {e}")], true);
     }
     (
         vec![format!(

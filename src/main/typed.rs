@@ -552,12 +552,14 @@ pub(super) fn write_declarations(
     for (path, module, text) in &std_files {
         outcome.record(
             path,
-            super::output::create_dir_all(&std_dir)
-                .and_then(|()| super::output::replace_file(path, text.as_bytes()))
-                .and_then(|()| {
-                    super::ownership::record_support_declaration(path, *module, text)
-                        .map_err(std::io::Error::other)
-                }),
+            super::output::create_dir_all(&std_dir).and_then(|()| {
+                super::ownership::write_owned_output(
+                    path,
+                    super::ownership::OutputOwner::SupportDeclaration(*module),
+                    text,
+                )
+                .map_err(std::io::Error::other)
+            }),
         );
     }
     for (declaration, target) in declarations.modules.iter().zip(targets) {
@@ -571,23 +573,19 @@ pub(super) fn write_declarations(
             &relative_path(&dir, &file.source_path),
         );
         let owned = |path: &Path, code: &str| {
-            super::ownership::record_sidecar(path, &file.source_path, code)
-                .map_err(std::io::Error::other)
+            super::ownership::write_owned_output(
+                path,
+                super::ownership::OutputOwner::Source(&file.source_path),
+                code,
+            )
+            .map_err(std::io::Error::other)
         };
         let declared = outcome.record(
             &target,
-            created
-                .and_then(|()| {
-                    super::output::replace_file(&target, sidecar.declarations.as_bytes())
-                })
-                .and_then(|()| owned(&target, &sidecar.declarations)),
+            created.and_then(|()| owned(&target, &sidecar.declarations)),
         );
         if declared {
-            outcome.record(
-                &map,
-                super::output::replace_file(&map, sidecar.map.as_bytes())
-                    .and_then(|()| owned(&map, &sidecar.map)),
-            );
+            outcome.record(&map, owned(&map, &sidecar.map));
         } else {
             outcome.fail(
                 &map,

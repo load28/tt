@@ -667,11 +667,18 @@ pub(super) fn run() -> ExitCode {
     }
 
     let files: Vec<PathBuf> = jobs.iter().map(|job| job.file.clone()).collect();
-    let jsx_preserve = match project_jsx_preserve(rewrite_imports, &files, project.as_deref()) {
-        Ok(preserve) => preserve,
-        Err(error) => {
-            eprintln!("ttc: {error}");
-            return ExitCode::FAILURE;
+    let jsx_preserve = if check {
+        JsxPreserve::new()
+    } else {
+        match project_jsx_preserve(rewrite_imports, &files, project.as_deref()) {
+            Ok(preserve) => preserve,
+            Err(error) => {
+                eprintln!(
+                    "ttc: {error} (name the configuration with --project, or choose \
+                     --rewrite-imports ts or off)"
+                );
+                return ExitCode::FAILURE;
+            }
         }
     };
     let build = BuildOptions {

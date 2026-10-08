@@ -894,7 +894,7 @@ fn print(params: &serde_json::Value, node: Option<&Path>) -> Result<serde_json::
         &[std::path::PathBuf::from(path)],
         None,
     )
-    .map_err(|error| format!("print: {error}"))?;
+    .map_err(|error| format!("print: {error} (choose \"rewriteImports\": \"ts\" or \"off\")"))?;
     let printed = crate::build::print_input(
         path,
         &crate::build::BuildOptions {
@@ -1039,7 +1039,9 @@ fn typed_check(
     project.open_document(canonical.clone(), text);
     let files = {
         let mut scanned = project.scan().map_err(|e| e.to_string())?;
-        scanned.push(canonical.clone());
+        if ttc::SourceKind::from_tt_path(&canonical).is_some() {
+            scanned.push(canonical.clone());
+        }
         scanned.sort();
         scanned.dedup();
         scanned

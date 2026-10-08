@@ -88,15 +88,15 @@ pub(crate) fn client(from: &Path) -> Result<Client, String> {
         for distribution in &DISTRIBUTIONS {
             let package = node_modules.join(distribution.client);
             let api = package.join(API_IN_PACKAGE);
+            if let Some(version) = package_version(&package)
+                && major_minor(&version).is_some_and(|found| found < MINIMUM)
+            {
+                return Err(format!(
+                    "TypeScript {version} is installed, but ttc needs the {}.{} line — {INSTALL}",
+                    MINIMUM.0, MINIMUM.1
+                ));
+            }
             if api.exists() {
-                if let Some(version) = package_version(&package)
-                    && major_minor(&version).is_some_and(|found| found < MINIMUM)
-                {
-                    return Err(format!(
-                        "TypeScript {version} is installed, but ttc needs the {}.{} line — {INSTALL}",
-                        MINIMUM.0, MINIMUM.1
-                    ));
-                }
                 return Ok(Client { api: absolute(api) });
             }
         }
@@ -359,6 +359,19 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn a_typescript_without_the_api_is_named_by_its_version() {
+        let dir = scratch("version-5");
+        let package = dir.join("node_modules").join(DISTRIBUTIONS[0].client);
+        std::fs::create_dir_all(&package).unwrap();
+        std::fs::write(package.join("package.json"), "{ \"version\": \"5.4.5\" }").unwrap();
+        let message = client(&dir).unwrap_err();
+        assert!(
+            message.contains("TypeScript 5.4.5 is installed") && message.contains(INSTALL),
+            "unhelpful message: {message}"
+        );
     }
 
     /// Both halves fail the same way, and the message names the one fix —

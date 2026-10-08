@@ -319,11 +319,19 @@ pub(super) fn diagnostic_span(diagnostic: &TsDiagnostic) -> (usize, usize) {
 }
 
 pub(super) fn finish_diagnostics(mut diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {
+    let code_number = |diagnostic: &Diagnostic| {
+        let code = diagnostic.code.as_deref()?;
+        match code.strip_prefix("ts") {
+            Some(number) => number.parse::<u32>().ok(),
+            None => crate::DiagnosticCode::parse(code).map(crate::DiagnosticCode::number),
+        }
+    };
     diagnostics.sort_by(|left, right| {
         (
             &left.path,
             left.position,
             left.end,
+            code_number(left),
             &left.message,
             &left.code,
         )
@@ -331,6 +339,7 @@ pub(super) fn finish_diagnostics(mut diagnostics: Vec<Diagnostic>) -> Vec<Diagno
                 &right.path,
                 right.position,
                 right.end,
+                code_number(right),
                 &right.message,
                 &right.code,
             ))

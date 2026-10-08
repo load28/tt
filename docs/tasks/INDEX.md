@@ -833,7 +833,8 @@
 | TASK-790 | Fix the round-eight compiler findings | Complete | 2026-10-08 | 2026-10-08 | [TASK-790](./TASK-790-round-eight-compiler-findings.md) |
 | TASK-791 | Fix the round-eight CLI findings | Complete | 2026-10-08 | 2026-10-08 | [TASK-791](./TASK-791-round-eight-cli-findings.md) |
 | TASK-792 | Fix the round-eight editor findings | Complete | 2026-10-08 | 2026-10-08 | [TASK-792](./TASK-792-round-eight-editor-findings.md) |
+| TASK-793 | Fix the round-nine CLI findings | Complete | 2026-10-08 | 2026-10-08 | [TASK-793](./TASK-793-round-nine-cli-findings.md) |
 
 ## Next task number
 
-**TASK-793**
+**TASK-794**
