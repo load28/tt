@@ -379,10 +379,29 @@ pub(super) fn emit_adt<'a>(
         out.push_break(1);
     };
     let mut out = Rope::new();
-    out.push_lit(format!("{export}type "));
+    let name = span(adt.node);
+    push_gap(
+        source,
+        &mut out,
+        &format!("{export}type "),
+        Some(SourceSpan {
+            start: adt.header.start,
+            end: name.start,
+        }),
+        "",
+    );
     declared(&mut out, &adt.name, adt.node);
     push_generics(&mut out);
-    out.push_lit(" =");
+    push_gap(
+        source,
+        &mut out,
+        "",
+        Some(SourceSpan {
+            start: adt.generics.end,
+            end: adt.header.end,
+        }),
+        " =",
+    );
     let last = adt.variants.len().saturating_sub(1);
     let (member, depth) = if last == 0 { ("", 1) } else { ("| ", 2) };
     for (index, variant) in adt.variants.iter().enumerate() {

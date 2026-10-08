@@ -132,6 +132,7 @@ impl Lowering<'_> {
                         exported: item.exported,
                         declared: item.declared,
                         generics: item.generics_span,
+                        header: item.header,
                         variants: item
                             .variants
                             .iter()

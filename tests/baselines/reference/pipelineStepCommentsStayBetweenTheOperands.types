@@ -1,0 +1,44 @@
+=== pipelineStepCommentsStayBetweenTheOperands.tt ===
+const needsString = (s: string) => s.length;
+>needsString : const needsString: (s: string) => number
+>s : (parameter) s: string
+>s : (parameter) s: string
+>length : (property) String.length: number
+const f = (x: number) => x;
+>f : const f: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+const g = (n: number) => (x: number) => x + n;
+>g : const g: (n: number) => (x: number) => number
+>n : (parameter) n: number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>n : (parameter) n: number
+export const a = 1 /*c1*/ |> /*c2*/ f;
+>a : const a: number
+>f : const f: (x: number) => number
+export const b = [1, 2]
+>b : const b: string
+  |> .map((x) => x * 2)
+>map : (method) Array<number>.map<number>(callbackfn: (value: number, index: number, array: number[]) => number, thisArg?: any): number[]
+>x : (parameter) x: number
+>x : (parameter) x: number
+  |> .join(",");
+>join : (method) Array<number>.join(separator?: string): string
+export const q = flow
+>q : const q: (x: number) => string
+  |> f
+>f : const f: (x: number) => number
+  |> String;
+>String : var String: StringConstructor
+export const p = 1
+>p : const p: number
+  |> needsString;
+>needsString : const needsString: (s: string) => number
+export const c = 1
+>c : const c: number
+  |> g(1)
+>g : const g: (n: number) => (x: number) => number
+  |> g(2);
+>g : const g: (n: number) => (x: number) => number
+

@@ -1,0 +1,33 @@
+=== aMissingArmCommaIsOnlyAParseError.tt ===
+variant O { A, B, C }
+>O : type O = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   } | {
+>       kind: "C";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>C : (property) C: {
+>       readonly kind: "C";
+>   }
+declare const o: O;
+>o : const o: O
+>O : type O = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   } | {
+>       kind: "C";
+>   }
+export const r = match (o) {
+>r : const r: number
+>o : const o: O
+  B => 2,
+>B : (parameter) B: any
+

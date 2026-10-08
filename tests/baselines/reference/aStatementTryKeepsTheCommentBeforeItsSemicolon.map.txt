@@ -1,0 +1,7 @@
+//// [aStatementTryKeepsTheCommentBeforeItsSemicolon.tt] 5 mapping(s)
+1:1 -> 1:1 len 136  "import type { TResult } from \"@tt/std\";\ndeclare "...
+4:7 -> 4:18 len 19  "r() /* validated */"
+4:27 -> 7:4 len 3  "\n  "
+5:7 -> 8:18 len 11  "r() // note"
+6:4 -> 12:4 len 38  "\n  return { kind: \"Ok\", value: 1 };\n}\n"
+

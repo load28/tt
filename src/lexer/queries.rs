@@ -103,8 +103,7 @@ fn primary_expression(src: &str, from: usize, end: usize, kind: SourceKind) -> O
         matches!(token.kind, TokenKind::Ident).then(|| &src[token.span.start..token.span.end])
     };
     let head = tokens.first()?;
-    let mut shape = Primary::Closed;
-    let mut at = match head.kind {
+    let at = match head.kind {
         TokenKind::Ident => {
             if matches!(
                 word(0),
@@ -133,6 +132,14 @@ fn primary_expression(src: &str, from: usize, end: usize, kind: SourceKind) -> O
             .unwrap_or(tokens.len()),
         _ => return None,
     };
+    postfix_chain(&tokens, at)
+}
+
+/// The shape of `tokens[at..]` read as postfix operations on the operand
+/// before `at`: member access, optional chains, calls, indexing, non-null
+/// assertions and tagged templates, and nothing else.
+fn postfix_chain(tokens: &[Token], mut at: usize) -> Option<Primary> {
+    let mut shape = Primary::Closed;
     let name = |at: usize| {
         let at = match tokens.get(at).map(|token| &token.kind) {
             Some(TokenKind::Punct(b'#')) => at + 1,
@@ -150,7 +157,7 @@ fn primary_expression(src: &str, from: usize, end: usize, kind: SourceKind) -> O
             TokenKind::OptChain => {
                 shape = Primary::OptionalChain;
                 match tokens.get(at + 1).map(|token| &token.kind) {
-                    Some(TokenKind::Punct(b'(' | b'[')) => close_of(&tokens, at + 1)? + 1,
+                    Some(TokenKind::Punct(b'(' | b'[')) => close_of(tokens, at + 1)? + 1,
                     _ => name(at + 1)?,
                 }
             }
@@ -162,12 +169,125 @@ fn primary_expression(src: &str, from: usize, end: usize, kind: SourceKind) -> O
             {
                 at + 1
             }
-            TokenKind::Punct(b'(' | b'[') => close_of(&tokens, at)? + 1,
+            TokenKind::Punct(b'(' | b'[') => close_of(tokens, at)? + 1,
             TokenKind::Template(_) => at + 1,
             _ => return None,
         };
     }
     Some(shape)
+}
+
+/// True when `src[from..end]` is one left-hand-side expression read as an
+/// operand: a primary expression, or one whose head is a function or class
+/// expression, `new.target`, or a `new` with its arguments, followed only
+/// by the postfix operations a primary expression allows (ECMA-262
+/// §13.3, `MemberExpression` and `CallExpression`).
+pub(crate) fn is_operand_expression(src: &str, from: usize, end: usize, kind: SourceKind) -> bool {
+    if primary_expression(src, from, end, kind).is_some() {
+        return true;
+    }
+    let tokens = lex_with_kind(src, from, end, kind);
+    keyword_head_end(src, &tokens, 0).is_some_and(|at| postfix_chain(&tokens, at).is_some())
+}
+
+/// Where a member expression headed by a keyword ends in `tokens`,
+/// starting at `at`: `new.target`, `new <member> <arguments>`, or a
+/// function or class expression.
+fn keyword_head_end(src: &str, tokens: &[Token], at: usize) -> Option<usize> {
+    let word = |index: usize| {
+        let token = tokens.get(index)?;
+        matches!(token.kind, TokenKind::Ident).then(|| &src[token.span.start..token.span.end])
+    };
+    let punct = |index: usize, byte: u8| {
+        tokens
+            .get(index)
+            .is_some_and(|token| matches!(token.kind, TokenKind::Punct(found) if found == byte))
+    };
+    match word(at)? {
+        "new" if punct(at + 1, b'.') => (word(at + 2)? == "target").then_some(at + 3),
+        "new" => {
+            let mut head = match keyword_head_end(src, tokens, at + 1) {
+                Some(end) => end,
+                None => member_head_end(src, tokens, at + 1)?,
+            };
+            loop {
+                match tokens.get(head).map(|token| &token.kind) {
+                    Some(TokenKind::Punct(b'.')) if word(head + 1).is_some() => head += 2,
+                    Some(TokenKind::Punct(b'[')) => head = close_of(tokens, head)? + 1,
+                    Some(TokenKind::Template(_)) => head += 1,
+                    _ => break,
+                }
+            }
+            if punct(head, b'(') {
+                close_of(tokens, head).map(|close| close + 1)
+            } else {
+                (head == tokens.len()).then_some(head)
+            }
+        }
+        "async" if word(at + 1) == Some("function") => function_end(tokens, at + 2),
+        "function" => function_end(tokens, at + 1),
+        "class" => {
+            let mut index = at + 1;
+            while let Some(token) = tokens.get(index) {
+                match token.kind {
+                    TokenKind::Punct(b'{') => {
+                        return close_of(tokens, index).map(|close| close + 1);
+                    }
+                    _ if token.opens_bracket() => index = close_of(tokens, index)? + 1,
+                    _ => index += 1,
+                }
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
+/// Where the head of a `new` operand that is not itself keyword-headed
+/// ends: an identifier, a bracketed group, or a literal.
+fn member_head_end(src: &str, tokens: &[Token], at: usize) -> Option<usize> {
+    let token = tokens.get(at)?;
+    match token.kind {
+        TokenKind::Ident
+            if !matches!(
+                &src[token.span.start..token.span.end],
+                "await" | "delete" | "typeof" | "void" | "yield" | "async" | "new"
+            ) =>
+        {
+            Some(at + 1)
+        }
+        _ if token.opens_bracket() => close_of(tokens, at).map(|close| close + 1),
+        TokenKind::Str | TokenKind::Template(_) => Some(at + 1),
+        _ => None,
+    }
+}
+
+/// Where a function expression ends, from the token after `function`:
+/// an optional `*` and name, optional type parameters, the parameter list,
+/// and the body. A return type annotation is not read.
+fn function_end(tokens: &[Token], mut at: usize) -> Option<usize> {
+    let is = |index: usize, byte: u8| {
+        tokens
+            .get(index)
+            .is_some_and(|token| matches!(token.kind, TokenKind::Punct(found) if found == byte))
+    };
+    if is(at, b'*') {
+        at += 1;
+    }
+    if tokens
+        .get(at)
+        .is_some_and(|token| matches!(token.kind, TokenKind::Ident))
+    {
+        at += 1;
+    }
+    if is(at, b'<') {
+        at = close_of(tokens, at)? + 1;
+    }
+    if !is(at, b'(') {
+        return None;
+    }
+    at = close_of(tokens, at)? + 1;
+    is(at, b'{').then(|| close_of(tokens, at).map(|close| close + 1))?
 }
 
 /// The names a type parameter list (`<T, const U extends V = W>`, brackets

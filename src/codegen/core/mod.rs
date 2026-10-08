@@ -281,6 +281,7 @@ pub(crate) struct EmitSource<'a> {
     pub(crate) kind: SourceKind,
     pub(crate) automatic_semicolons: &'a [crate::lexer::AutomaticSemicolon],
     pub(crate) comments: &'a [crate::ast::Span],
+    pub(crate) tokens: &'a [crate::lexer::Token],
 }
 
 pub(crate) fn emit_with_map<'a>(
@@ -296,6 +297,7 @@ pub(crate) fn emit_with_map<'a>(
         kind: source_kind,
         automatic_semicolons,
         comments,
+        tokens,
     } = emit_source;
     let governed = crate::lexer::directive_governed_lines(source, comments);
     let target = TargetRewritePlan::build(semantic, core, source, lowering_plan);
@@ -363,16 +365,15 @@ pub(crate) fn emit_with_map<'a>(
                 if propagate.binding.is_some()
                     && !for_initializer_nodes.contains(&propagate.node) =>
             {
-                Some(propagate.owner)
+                semantic.hir.source_map.node_span(propagate.owner)
             }
             Statement::Decision(decision)
                 if matches!(decision.kind, DecisionKind::LetElse { .. }) =>
             {
-                Some(decision.extent)
+                semantic.hir.source_map.node_extent(decision.extent)
             }
             _ => None,
         })
-        .filter_map(|node| semantic.hir.source_map.node_span(node))
         .map(|span| span.start);
     let relocated_documentation: HashMap<usize, SourceSpan> = target
         .owner_slots
@@ -406,6 +407,7 @@ pub(crate) fn emit_with_map<'a>(
         core,
         source,
         source_kind,
+        tokens,
         direct_apply_inputs,
         member_apply_steps,
         reference_apply_steps,

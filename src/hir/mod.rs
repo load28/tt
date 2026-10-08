@@ -339,6 +339,8 @@ pub struct VariantItem {
     pub generics: String,
     /// Where [`VariantItem::generics`] is written in the source.
     pub generics_span: Span,
+    /// From the end of the `variant` keyword to the opening brace.
+    pub header: Span,
     /// The declaration's variants, in order.
     pub variants: Vec<VariantId>,
     pub(crate) scope: Option<Span>,

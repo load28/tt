@@ -491,6 +491,17 @@ impl<'a> Rope<'a> {
         Some((*start, end))
     }
 
+    pub(crate) fn source_edges(&self) -> Option<(usize, usize)> {
+        let text = |piece: &&Piece<'a>| piece.is_text() && !piece.text().is_empty();
+        let Piece::Src { src: first, .. } = self.pieces.iter().find(text)? else {
+            return None;
+        };
+        let Piece::Src { text: last, src } = self.pieces.iter().rev().find(text)? else {
+            return None;
+        };
+        Some((*first, src + last.len()))
+    }
+
     pub(crate) fn is_resolved(&self) -> bool {
         !self.pieces.iter().any(|piece| piece.is_break())
     }

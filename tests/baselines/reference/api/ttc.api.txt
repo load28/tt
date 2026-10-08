@@ -2872,6 +2872,7 @@ pub struct VariantItem {
     pub declared: bool,
     pub generics: String,
     pub generics_span: Span,
+    pub header: Span,
     pub variants: Vec<VariantId>,
     /* private fields */
 }

@@ -219,6 +219,15 @@ impl Lower<'_> {
             declared: decl.declared,
             generics: decl.generics.clone(),
             generics_span: Span::new(decl.generics_off, decl.generics_off + decl.generics.len()),
+            header: Span::new(
+                decl.keyword_off + "variant".len(),
+                crate::scanner::skip_trivia(
+                    self.source.as_bytes(),
+                    decl.generics_off + decl.generics.len(),
+                    decl.span.end,
+                )
+                .0,
+            ),
             variants,
             scope: decl.scope.map(Self::span),
         }));
@@ -602,7 +611,7 @@ impl Lower<'_> {
                     Span::new(stmt.expr.span.end, stmt.else_body.span.start),
                 ],
             }],
-            trailing: None,
+            trailing: Some(Span::new(stmt.else_body.span.end, stmt.owner_span.end)),
         });
         let else_body = self.lower_body(&stmt.else_body);
         LetElseStmt {

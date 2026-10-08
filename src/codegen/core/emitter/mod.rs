@@ -15,6 +15,7 @@ pub(super) struct Emitter<'a> {
     pub(super) core: &'a CoreFile,
     pub(super) source: &'a str,
     pub(super) source_kind: SourceKind,
+    pub(super) tokens: &'a [crate::lexer::Token],
     pub(super) direct_apply_inputs: HashSet<ExprId>,
     pub(super) member_apply_steps: HashMap<ExprId, crate::program_syntax::MemberCallee>,
     pub(super) reference_apply_steps: HashSet<ExprId>,
@@ -147,6 +148,28 @@ impl<'a> Emitter<'a> {
     /// ([`crate::core_ir::DecisionArm::gap`]), each on a line of its own at
     /// `depth`, and says whether there were any. A line comment there ends
     /// its line, so what follows starts on the next one.
+    pub(super) fn keyword_gap(
+        &self,
+        node: NodeId,
+        keyword: &str,
+        operand: ExprId,
+    ) -> Option<SourceSpan> {
+        let start = self.span(node).start;
+        if !self.source[start..].starts_with(keyword) {
+            return None;
+        }
+        let end = super::structured_expr_span(self.semantic, self.core, operand)
+            .map(|span| span.start)
+            .or_else(|| match &self.core.exprs[operand.index()] {
+                Expr::Opaque(node) => Some(self.span(*node).start),
+                _ => None,
+            })?;
+        (start + keyword.len() < end).then_some(SourceSpan {
+            start: start + keyword.len(),
+            end,
+        })
+    }
+
     pub(super) fn push_gap_comments(
         &self,
         gap: Option<crate::hir::Span>,

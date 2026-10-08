@@ -1,0 +1,20 @@
+//// [aTryOperandMayStartWithNewFunctionOrClass.tt] 18 mapping(s)
+1:1 -> 1:1 len 274  "import type { TResult } from \"@tt/std\";\ndeclare "...
+6:9 -> 10:9 len 1  "n"
+6:17 -> 6:18 len 21  "new Parser(s).parse()"
+6:39 -> 10:26 len 3  "\n  "
+7:3 -> 17:3 len 10  "const a = "
+7:17 -> 12:18 len 28  "function () { return rr; }()"
+7:45 -> 17:19 len 4  ";\n  "
+8:3 -> 24:3 len 10  "const b = "
+8:17 -> 19:18 len 26  "class { static r = rr; }.r"
+8:43 -> 24:19 len 4  ";\n  "
+9:9 -> 29:9 len 1  "c"
+9:17 -> 25:18 len 11  "new Box().r"
+9:29 -> 29:26 len 3  "\n  "
+10:7 -> 30:18 len 11  "new Box().r"
+10:19 -> 33:4 len 3  "\n  "
+11:9 -> 38:9 len 1  "d"
+11:17 -> 34:18 len 13  "(new Box()).r"
+11:31 -> 38:26 len 54  "\n  return { kind: \"Ok\", value: n + a + b + c + d"...
+

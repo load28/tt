@@ -200,7 +200,7 @@ fn scan_primary_operand(cur: &Cursor) -> Option<(usize, usize)> {
                 operand_token_end = k;
             }
         } else if open.is_empty()
-            && crate::lexer::is_primary_expression(
+            && crate::lexer::is_operand_expression(
                 cur.parser.src,
                 operand_start,
                 token.span.end,
@@ -385,8 +385,8 @@ fn parse_try_tail<'t>(
     if cur.parser.src[span.start..span.end].trim().is_empty() {
         return None;
     }
-    let (operand_token_end, operand_end) = scan_primary_operand(&cur)?;
-    if operand_token_end != semi_idx || !cur.parser.src[operand_end..semi_byte].trim().is_empty() {
+    let (operand_token_end, _) = scan_primary_operand(&cur)?;
+    if operand_token_end != semi_idx {
         return None;
     }
     let expr_tokens = &cur.tokens[cur.idx..semi_idx];

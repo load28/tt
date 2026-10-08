@@ -327,6 +327,7 @@ pub(crate) struct Adt {
     pub exported: bool,
     pub declared: bool,
     pub generics: hir::Span,
+    pub header: hir::Span,
     pub variants: Vec<AdtVariant>,
 }
 

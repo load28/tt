@@ -12,7 +12,13 @@ impl<'a> Emitter<'a> {
         );
         let inner = match apply.head {
             Some(head) => {
-                let mut acc = guard_line_comment(self.emit_expr(head).trim(), 0, self.source_kind);
+                let head_rope = self.emit_expr(head).trim();
+                let head_group = self.source_group(&head_rope);
+                let mut acc = if head_group {
+                    head_rope
+                } else {
+                    guard_line_comment(head_rope, 0, self.source_kind)
+                };
                 let mut accumulator_is_inert = self.expression_is_inert(head);
                 // Where the value flowing into the current step was
                 // produced: the head, then each step in turn — the place a
@@ -35,12 +41,14 @@ impl<'a> Emitter<'a> {
                     let kind = self.source_kind;
                     let acc_grouped = match &shape {
                         Some(shape) => grouping_required(shape, kind),
+                        None if head_group => false,
                         None => needs_grouping(&acc, kind),
                     };
                     let acc_closed = || match &shape {
                         Some(shape) => {
                             crate::lexer::is_member_receiver(shape, 0, shape.len(), kind)
                         }
+                        None if head_group => true,
                         None => acc.resolved_text().is_some_and(|text| {
                             crate::lexer::is_member_receiver(&text, 0, text.len(), kind)
                         }),
@@ -73,6 +81,7 @@ impl<'a> Emitter<'a> {
                                 context,
                                 input,
                             );
+                            push_gap(self.source, &mut next, "", gap, "");
                             next.append(body);
                         }
                         ApplyMode::Call => {
@@ -91,6 +100,7 @@ impl<'a> Emitter<'a> {
                                 });
                                 push_callee(&mut next, body, self.source_kind);
                                 next.push_lit("(");
+                                push_gap(self.source, &mut input, "", gap, "");
                                 push_grouped_as(&mut input, acc, acc_grouped);
                                 next.anchored_with_context(
                                     AnchorKind::Pipe,
@@ -105,6 +115,7 @@ impl<'a> Emitter<'a> {
                                 self.member_apply_steps.get(&step.value).copied()
                             {
                                 next_shape = Some("(x)(x)".to_owned());
+                                push_gap(self.source, &mut input, "", gap, "");
                                 push_grouped_as(&mut input, acc, acc_grouped);
                                 let mut call = Rope::new();
                                 call.anchored_with_context(
@@ -199,6 +210,19 @@ impl<'a> Emitter<'a> {
         let mut out = Rope::new();
         out.anchored(AnchorKind::Pipe, start, end, end, inner);
         out
+    }
+
+    fn source_group(&self, emitted: &Rope<'_>) -> bool {
+        let Some((start, end)) = emitted.source_edges() else {
+            return false;
+        };
+        let open = self
+            .tokens
+            .partition_point(|token| token.span.start < start);
+        self.tokens.get(open).is_some_and(|token| {
+            token.span.start == start && matches!(token.kind, crate::lexer::TokenKind::Punct(b'('))
+        }) && crate::lexer::Token::matching_close(self.tokens, open)
+            .is_some_and(|close| self.tokens[close].span.end == end)
     }
 
     fn emit_member_step(
@@ -363,18 +387,38 @@ impl<'a> Emitter<'a> {
         let first = steps
             .next()
             .unwrap_or_else(|| crate::ice::bug!("flow has no step"));
+        let step_gap = |previous_end: Option<usize>, step: &ApplyStep| {
+            let value = super::structured_expr_span(self.semantic, self.core, step.value)?;
+            let end = previous_end?;
+            (end <= value.start).then_some(SourceSpan {
+                start: end,
+                end: value.start,
+            })
+        };
+        let head = self.span(apply.node);
+        let mut previous_end = self.source[head.start..]
+            .starts_with("flow")
+            .then_some(head.start + "flow".len());
         let mut acc = Rope::new();
         match first.mode {
             ApplyMode::Missing => acc.push_lit(RECOVERED_VALUE),
-            _ => push_grouped(
-                &mut acc,
-                self.emit_flow_function(first.value),
-                self.source_kind,
-            ),
+            _ => {
+                push_gap(self.source, &mut acc, "", step_gap(previous_end, first), "");
+                push_grouped(
+                    &mut acc,
+                    self.emit_flow_function(first.value),
+                    self.source_kind,
+                );
+            }
         }
+        previous_end =
+            super::structured_expr_span(self.semantic, self.core, first.value).map(|span| span.end);
         let mut produced = self.span(first.node);
         for step in steps {
             self.used_flow.set(true);
+            let gap = step_gap(previous_end, step);
+            previous_end = super::structured_expr_span(self.semantic, self.core, step.value)
+                .map(|span| span.end);
             let step_span = self.span(step.node);
             // The composition built so far is what this step composes onto;
             // a mismatch on it means this step rejected it (see
@@ -394,6 +438,7 @@ impl<'a> Emitter<'a> {
                 .copied()
                 .filter(|member| member.optional && matches!(step.mode, ApplyMode::Call));
             if let Some(member) = optional_member {
+                push_gap(self.source, &mut composed, "", gap, "");
                 acc = self.emit_optional_flow_step(step.value, member, composed);
                 produced = step_span;
                 continue;
@@ -422,7 +467,7 @@ impl<'a> Emitter<'a> {
                 );
                 next.push_lit(")))(");
                 next.append(composed);
-                next.push_lit(", ");
+                push_gap(self.source, &mut next, ", ", gap, "");
                 push_grouped(&mut next, body, self.source_kind);
                 next.push_lit(")");
                 acc = next;
@@ -434,12 +479,13 @@ impl<'a> Emitter<'a> {
             match step.mode {
                 ApplyMode::Postfix { .. } => {
                     let input_name = self.generated_name("$tt_v");
-                    next.push_lit(format!(", (({input_name}) => ({input_name})"));
+                    push_gap(self.source, &mut next, ", ", gap, "");
+                    next.push_lit(format!("(({input_name}) => ({input_name})"));
                     next.append(body);
                     next.push_lit("))");
                 }
                 ApplyMode::Call => {
-                    next.push_lit(", ");
+                    push_gap(self.source, &mut next, ", ", gap, "");
                     push_grouped(&mut next, body, self.source_kind);
                     next.push_lit(")");
                 }
@@ -556,11 +602,19 @@ impl<'a> Emitter<'a> {
         out.anchored(kind, span.start, span.end, span.end, inner);
     }
 
+    pub(super) fn match_leading(&self, decision: &Decision, index: usize) -> Option<SourceSpan> {
+        if index > 0 {
+            return None;
+        }
+        self.keyword_gap(decision.head, "match", decision.subjects[0].value)
+    }
+
     pub(super) fn emit_subject_initialization(
         &self,
         subject: &crate::core_ir::Subject,
         temp: &str,
         mark: NodeId,
+        leading: Option<SourceSpan>,
     ) -> Rope<'a> {
         let mut out = Rope::new();
         let continued = self
@@ -571,13 +625,12 @@ impl<'a> Emitter<'a> {
         if let Some(continued) = continued {
             out.push_lit("let ");
             out.push_mark(self.span(mark).start);
-            out.push_lit(format!("{temp};"));
-            out.push_lit(" ");
+            push_gap(self.source, &mut out, &format!("{temp};"), leading, " ");
             out.append(continued);
         } else {
             out.push_lit("const ");
             out.push_mark(self.span(mark).start);
-            out.push_lit(format!("{temp} = "));
+            push_gap(self.source, &mut out, &format!("{temp} ="), leading, " ");
             push_grouped(
                 &mut out,
                 self.emit_expr(subject.value).trim(),
@@ -598,7 +651,7 @@ impl<'a> Emitter<'a> {
         let subject = &decision.subjects[0];
         let temp = self.temp_name(subject.temporary);
         let arm = &decision.arms[0];
-        let mut out = self.emit_subject_initialization(subject, &temp, decision.head);
+        let mut out = self.emit_subject_initialization(subject, &temp, decision.head, None);
         out.push_break(0);
         out.push_lit("if (");
         let DecisionKind::LetElse {
@@ -632,8 +685,13 @@ impl<'a> Emitter<'a> {
         out.push_lit("}");
         let mut recovery = BindingRecovery::new(self, &arm.pattern);
         out.push_break(0);
-        if let Some(documentation) = self.relocated_documentation(self.span(decision.extent).start)
-        {
+        let extent = self
+            .semantic
+            .hir
+            .source_map
+            .node_extent(decision.extent)
+            .unwrap_or_else(|| self.span(decision.extent));
+        if let Some(documentation) = self.relocated_documentation(extent.start) {
             out.append(documentation);
         }
         out.append(
@@ -647,6 +705,7 @@ impl<'a> Emitter<'a> {
             .trim(),
         );
         self.push_head_comments(arm, 0, &mut out);
+        self.push_gap_comments(decision.trailing, 0, &mut out);
         Rope::scoped(out)
     }
 
@@ -669,7 +728,7 @@ impl<'a> Emitter<'a> {
         let mut out = Rope::new();
         out.push_lit("{");
         out.push_break(1);
-        out.append(self.emit_subject_initialization(subject, &temp, decision.head));
+        out.append(self.emit_subject_initialization(subject, &temp, decision.head, None));
         out.push_break(1);
         out.push_lit("if (");
         out.append(self.emit_condition(&arm.pattern, decision));
@@ -759,12 +818,13 @@ impl<'a> Emitter<'a> {
             crate::ice::bug!("match reached expression emission without a host rewrite")
         }
         out.push_lit("{");
-        for subject in &decision.subjects {
+        for (index, subject) in decision.subjects.iter().enumerate() {
             out.push_break(1);
             out.append(self.emit_subject_initialization(
                 subject,
                 &self.temp_name(subject.temporary),
                 decision.head,
+                self.match_leading(decision, index),
             ));
         }
         out.append(Rope::indented(
@@ -860,7 +920,7 @@ impl<'a> Emitter<'a> {
         continuation: &ValueContinuation<'_>,
     ) -> Rope<'a> {
         let temp = self.temp_name(propagate.temporary);
-        let mut out = self.emit_propagate_input(propagate.value, &temp);
+        let mut out = self.emit_propagate_input(propagate, &temp);
         out.push_break(0);
         out.push_lit(format!(
             "if ({}) {{",

@@ -1,0 +1,8 @@
+variant O { A(n: number), B, C(n: number) }
+declare const o: O;
+/** the count */
+export const x = match (o) { A(n) => n, B => 0, C(n) => n };
+/** binding doc */
+export const A(n: z) = o else { throw 0; };
+/** or doc */
+export const A(n: q) | C(n: q) = o else { throw 0; };

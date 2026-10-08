@@ -48,23 +48,25 @@ impl<'a> Emitter<'a> {
         };
         let mut out = Rope::new();
         if self.has_conditional_match_dispatch(expr) {
-            for subject in &decision.subjects {
+            for (index, subject) in decision.subjects.iter().enumerate() {
                 out.append(self.emit_subject_initialization(
                     subject,
                     &self.temp_name(subject.temporary),
                     decision.head,
+                    self.match_leading(decision, index),
                 ));
                 out.push_break(0);
             }
             return out;
         }
         out.push_lit("{");
-        for subject in &decision.subjects {
+        for (index, subject) in decision.subjects.iter().enumerate() {
             out.push_break(1);
             out.append(self.emit_subject_initialization(
                 subject,
                 &self.temp_name(subject.temporary),
                 decision.head,
+                self.match_leading(decision, index),
             ));
         }
         let DecisionKind::Match { dispatch, .. } = decision.kind else {

@@ -1,0 +1,50 @@
+=== aTryOperandMayStartWithNewFunctionOrClass.tt ===
+declare const rr: TResult<number, string>;
+>rr : const rr: TResult<number, string>
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+declare class Parser { constructor(s: string); parse(): TResult<number, string>; }
+>Parser : class Parser
+>s : (parameter) s: string
+>parse : (method) Parser.parse(): TResult<number, string>
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+declare class Box { r: TResult<number, string>; }
+>Box : class Box
+>r : (property) Box.r: TResult<number, string>
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+export function f(s: string): TResult<number, string> {
+>f : function f(s: string): TResult<number, string>
+>s : (parameter) s: string
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+  const n = try new Parser(s).parse();
+>n : const n: number
+>Parser : constructor Parser(s: string): Parser
+>s : (parameter) s: string
+>parse : (method) Parser.parse(): TResult<number, string>
+  const a = try function () { return rr; }();
+>a : const a: number
+>rr : const rr: TResult<number, string>
+  const b = try class { static r = rr; }.r;
+>b : const b: number
+>r : (property) (Anonymous class).r: TResult<number, string>
+>rr : const rr: TResult<number, string>
+>r : (property) (Anonymous class).r: TResult<number, string>
+  const c = try new Box().r;
+>c : const c: number
+>Box : constructor Box(): Box
+>r : (property) Box.r: TResult<number, string>
+  try new Box().r;
+>Box : constructor Box(): Box
+>r : (property) Box.r: TResult<number, string>
+  const d = try (new Box()).r;
+>d : const d: number
+>Box : constructor Box(): Box
+>r : (property) Box.r: TResult<number, string>
+  return { kind: "Ok", value: n + a + b + c + d };
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>n : const n: number
+>a : const a: number
+>b : const b: number
+>c : const c: number
+>d : const d: number
+

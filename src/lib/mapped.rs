@@ -367,6 +367,7 @@ pub(crate) fn emit_mapped_parsed(
             kind: source_kind,
             automatic_semicolons: &automatic_semicolons,
             comments: &comments,
+            tokens,
         },
         &plan,
         options.rewrite_imports.extensions(options.jsx_preserve),

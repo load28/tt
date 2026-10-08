@@ -39,7 +39,8 @@ pub(crate) use facts::{TokenFacts, statement_only_keyword};
 pub(crate) use names::identifier_names_with_prefix;
 pub(crate) use queries::{
     AutomaticSemicolon, automatic_semicolons, continues_statement, has_top_level_comma,
-    is_member_receiver, is_primary_expression, statement_continues_after, type_parameter_names,
+    is_member_receiver, is_operand_expression, is_primary_expression, statement_continues_after,
+    type_parameter_names,
 };
 pub(crate) use validation::{
     host_lexical_error, host_lexical_error_in, host_syntax_check, host_syntax_error,

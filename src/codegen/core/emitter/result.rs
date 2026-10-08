@@ -47,7 +47,7 @@ impl<'a> Emitter<'a> {
     /// structured propagation value writes block structure into it.
     pub(super) fn emit_propagate(&self, propagate: &Propagate) -> Rope<'a> {
         let temp = self.temp_name(propagate.temporary);
-        let mut out = self.emit_propagate_input(propagate.value, &temp);
+        let mut out = self.emit_propagate_input(propagate, &temp);
         out.push_break(0);
         out.push_lit(format!(
             "if ({}) {{",
@@ -90,7 +90,9 @@ impl<'a> Emitter<'a> {
         );
     }
 
-    pub(super) fn emit_propagate_input(&self, value: ExprId, temp: &str) -> Rope<'a> {
+    pub(super) fn emit_propagate_input(&self, propagate: &Propagate, temp: &str) -> Rope<'a> {
+        let value = propagate.value;
+        let keyword_gap = self.keyword_gap(propagate.node, "try", value);
         let mut out = Rope::new();
         let structured = self
             .core
@@ -113,15 +115,37 @@ impl<'a> Emitter<'a> {
             // is read once into the temporary.
             out.append(prelude.trim_end());
             out.push_break(0);
-            out.push_lit(format!("const {temp} = "));
+            push_gap(
+                self.source,
+                &mut out,
+                &format!("const {temp} ="),
+                keyword_gap,
+                " ",
+            );
             push_grouped(&mut out, operand.trim(), self.source_kind);
             out.push_lit(";");
         } else {
-            out.push_lit(format!("const {temp} = "));
+            push_gap(
+                self.source,
+                &mut out,
+                &format!("const {temp} ="),
+                keyword_gap,
+                " ",
+            );
             push_grouped(&mut out, self.emit_expr(value).trim(), self.source_kind);
             out.push_lit(";");
         }
         out
+    }
+
+    fn result_keyword_gap(&self, region: &ResultRegion) -> Option<SourceSpan> {
+        let span = self.span(region.node);
+        let start = span.start + "result".len();
+        if !self.source[span.start..].starts_with("result") {
+            return None;
+        }
+        let (open, _) = crate::scanner::skip_trivia(self.source.as_bytes(), start, span.end);
+        (start < open).then_some(SourceSpan { start, end: open })
     }
 
     pub(super) fn emit_result_region(&self, expr: ExprId, region: &ResultRegion) -> Rope<'a> {
@@ -134,13 +158,20 @@ impl<'a> Emitter<'a> {
         let mut out = Rope::new();
         self.used_expression_boundary.set(true);
         let mut boundary = Rope::new();
-        boundary.push_lit(if region.is_async {
+        let opener = if region.is_async {
             format!("(await {}(async () => {{", self.expression_boundary_name)
         } else {
             format!("{}(() => {{", self.expression_boundary_name)
-        });
+        };
+        boundary.push_lit(opener);
         let (start, end) = self.result_bind_anchor(region);
         out.anchored(AnchorKind::Result, start, end, end, boundary);
+        self.push_gap_comments(
+            self.result_keyword_gap(region)
+                .map(|gap| crate::hir::Span::new(gap.start, gap.end)),
+            1,
+            &mut out,
+        );
         out.push_break(1);
         for item in &region.items {
             let ResultRegionItem::Statements(body) = item;
@@ -618,10 +649,17 @@ impl<'a> Emitter<'a> {
         });
         let exit_label = distinct_label.as_deref().or(assignment_target);
         let _failure_scope = self.enter_result_failure(region.id, continuation, exit_label);
+        let keyword_gap = self.result_keyword_gap(region);
         if let Some(label) = exit_label {
-            out.push_lit(format!("{label}: {{"));
+            push_gap(
+                self.source,
+                &mut out,
+                &format!("{label}:"),
+                keyword_gap,
+                " {",
+            );
         } else {
-            out.push_lit("{");
+            push_gap(self.source, &mut out, "", keyword_gap, "{");
         }
         out.push_break(1);
         let success = continuation.wrap_result_ok();
@@ -675,7 +713,7 @@ impl<'a> Emitter<'a> {
         exit_label: Option<&str>,
     ) -> Rope<'a> {
         let temp = self.temp_name(propagate.temporary);
-        let mut out = self.emit_propagate_input(propagate.value, &temp);
+        let mut out = self.emit_propagate_input(propagate, &temp);
         out.push_break(0);
         out.push_lit(format!(
             "if ({}) {{",

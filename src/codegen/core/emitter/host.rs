@@ -171,7 +171,7 @@ impl<'a> Emitter<'a> {
                 crate::ice::bug!("for initializer propagation is missing from Core IR")
             });
         let temp = self.temp_name(propagate.temporary);
-        let mut out = self.emit_propagate_input(propagate.value, &temp);
+        let mut out = self.emit_propagate_input(propagate, &temp);
         out.push_break(0);
         out.push_lit(format!(
             "if ({}) {{",

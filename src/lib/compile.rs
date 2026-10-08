@@ -167,14 +167,16 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
     let semantics = analysis::coverage_semantics(source, &program, options.extern_variants);
     let core = core_ir::lower_semantic(&semantics, source, &tokens);
     let mut errors = tt_errors(source, &program, &tokens, options, &semantics);
-    if errors
-        .iter()
-        .any(|error| error.code == DiagnosticCode::ResultNoSuccessValue)
-    {
+    if errors.iter().any(|error| {
+        matches!(
+            error.code,
+            DiagnosticCode::ResultNoSuccessValue | DiagnosticCode::MatchNotExhaustive
+        )
+    }) {
         if let Err(failure) =
             codegen::lowering_plan(&semantics, &core, source, options.source_kind, &tokens)
         {
-            errors.push(verify::in_source(source, &failure));
+            push_source_error(&mut errors, source, &failure, &semantics);
         }
         suppress_discarded_result_fallthrough(&mut errors);
     }
@@ -212,6 +214,7 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
             kind: options.source_kind,
             automatic_semicolons: &automatic_semicolons,
             comments: &comments,
+            tokens: &tokens,
         },
         &plan,
         options.rewrite_imports.extensions(options.jsx_preserve),
@@ -373,7 +376,7 @@ pub fn analyze(source: &str, options: &Options) -> Vec<Diagnostic> {
         match codegen::lowering_plan(&semantics, &core, source, options.source_kind, &tokens) {
             Ok(plan) => errors.extend(nonredundant_target_errors(&plan, &errors)),
             Err(failure) => {
-                errors.push(verify::in_source(source, &failure));
+                push_source_error(&mut errors, source, &failure, &semantics);
                 errors.extend(recovered_target_errors(
                     &failure, &semantics, &core, source, &tokens, options, &errors,
                 ));
@@ -386,6 +389,33 @@ pub fn analyze(source: &str, options: &Options) -> Vec<Diagnostic> {
         .into_iter()
         .map(diagnostics::Diagnostic::from_tt)
         .collect()
+}
+
+fn push_source_error(
+    errors: &mut Vec<TtError>,
+    source: &str,
+    failure: &codegen::LoweringFailure,
+    semantics: &analysis::SemanticFile,
+) {
+    let error = verify::in_source(source, failure);
+    if error.code == DiagnosticCode::SourceNotTypeScript
+        && let Some(at) = error.offset
+    {
+        let unread: Vec<usize> = semantics
+            .patterns
+            .matches
+            .iter()
+            .filter(|analysis| analysis.body_open <= at && at <= analysis.body_close)
+            .map(|analysis| analysis.keyword_off)
+            .collect();
+        errors.retain(|existing| {
+            existing.code != DiagnosticCode::MatchNotExhaustive
+                || !existing
+                    .offset
+                    .is_some_and(|offset| unread.contains(&offset))
+        });
+    }
+    errors.push(error);
 }
 
 /// A discarded Result makes its value-use error primary. Reporting the
@@ -917,7 +947,7 @@ fn report_parsed(
         // no emittable form, and the cause is reported with everything
         // else already found.
         Err(failure) => {
-            errors.push(verify::in_source(source, &failure));
+            push_source_error(&mut errors, source, &failure, &semantics);
             errors.extend(recovered_target_errors(
                 &failure, &semantics, &core, source, tokens, options, &errors,
             ));
@@ -953,6 +983,7 @@ fn report_parsed(
             kind: options.source_kind,
             automatic_semicolons: &automatic_semicolons,
             comments: &comments,
+            tokens,
         },
         &plan,
         options.rewrite_imports.extensions(options.jsx_preserve),
