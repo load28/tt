@@ -162,7 +162,7 @@ pub(crate) fn pattern_of(text: &str) -> Option<Pattern> {
 }
 
 /// Whether the `{` at `brace` opens the body of a match.
-fn opens_match_body(src: &str, tokens: &[Token], brace: usize) -> bool {
+pub(crate) fn opens_match_body(src: &str, tokens: &[Token], brace: usize) -> bool {
     (0..brace).rev().any(|keyword| {
         super::parse::match_keyword_at(src, tokens, keyword)
             && matches::match_body_open(tokens, keyword + 1) == Some(brace)

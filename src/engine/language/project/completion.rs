@@ -47,7 +47,7 @@ impl Project {
         let session = self.session();
         let kind = crate::SourceKind::from_path(&path).unwrap_or_default();
         let source_at = {
-            let u16 = u16_offset(&doc.source, position);
+            let u16 = doc.source_offset(position);
             doc.source_utf16().to_byte(u16)
         };
         let recovered = doc
@@ -278,6 +278,8 @@ impl Project {
                 .iter()
                 .find(|&&(start, stop)| start <= at && end <= stop)
                 .and_then(|&(start, _)| closed_at(&repaired, start, end, kind))
+                .filter(|(_, closers)| closers.iter().all(|&(closer, _)| closer >= end))
+                .map(|(closed, _)| closed)
         };
         let Some((emit, out_start, out_end)) = lowered(source)
             .or_else(|| lowered(&repaired))

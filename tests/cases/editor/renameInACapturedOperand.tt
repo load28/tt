@@ -1,0 +1,9 @@
+// @rename: read
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+declare function parse(s: string): R<number>;
+declare function add(a: { n: number }, b: number): number;
+export function f(): R<number> {
+  const [|box|] = { n: 1 };
+  const v = add([|/*read*/box|], try parse("1"));
+  return { kind: "Ok", value: v + [|box|].n };
+}

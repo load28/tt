@@ -1,0 +1,21 @@
+=== signatureHelp /*arg*/ memberCompletionAfterAnUnfinishedArm.tt:8:16 ===
+  |     A => try h(
+  |                ^ /*arg*/
+signatureHelp: active signature 0, active parameter 0
+  h(s: string): R<number>
+    parameters: s: string
+
+=== completions /*member*/ memberCompletionAfterAnUnfinishedArm.tt:9:15 ===
+  |   const w = o.
+  |               ^ /*member*/
+completion: 1 item(s), member true, probe yes
+  name (Field, 11)
+ttCompletions: pattern false, member {"receiver":"o"}
+patternCompletions: null
+editor completion: 1 item(s)
+  name (Field, 211)
+
+=== parity with the TypeScript twin ===
+signatureHelp arg: same
+completions member: same
+

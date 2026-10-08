@@ -1047,3 +1047,46 @@ fn merging_tokens_compares_each_token_a_bounded_number_of_times() {
     }
     assert!(large["token merge comparisons"] > 0);
 }
+
+#[test]
+fn diagnostics_and_references_measure_their_document_once_whatever_their_count() {
+    let dir = crate::test_workspace::Workspace::in_repo("answers-measure-once");
+    if service_binary(&dir).is_err() {
+        assert!(
+            std::env::var_os("TTC_REQUIRE_TSGO").is_none(),
+            "TypeScript is required"
+        );
+        return;
+    }
+    let measured = |count: usize| {
+        let path = dir.join(format!("main{count}.tt"));
+        let source: String = std::iter::once("export const box = 1;\n".to_string())
+            .chain((0..count).map(|i| format!("export const v{i}: string = box;\n")))
+            .collect();
+        std::fs::write(&path, &source).unwrap();
+        let path = path.canonicalize().unwrap();
+        let mut project = crate::engine::Engine::new(None)
+            .open_project(
+                &[path.to_string_lossy().into_owned()],
+                &crate::engine::ProjectOptions::default(),
+            )
+            .unwrap();
+        project.open_document(path.clone(), source);
+        let position = Position {
+            line: 0,
+            character: 14,
+        };
+        project.service_diagnostics(&path).unwrap();
+        project.references(&path, position).unwrap();
+        let mut answers = (0, 0);
+        let work = crate::work::measure(|| {
+            answers = (
+                project.service_diagnostics(&path).unwrap().len(),
+                project.references(&path, position).unwrap().len(),
+            );
+        });
+        assert_eq!(answers, (count, count + 1));
+        work.get("line measurements").copied().unwrap_or(0)
+    };
+    assert_eq!(measured(20), measured(40));
+}

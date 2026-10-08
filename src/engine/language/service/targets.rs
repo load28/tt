@@ -81,6 +81,28 @@ fn target_coordinates(_session: &ServiceSession, uri: &str) -> Option<TargetCoor
 /// the target is not a file, cannot be read, or the span has no source
 /// counterpart for `purpose` — the caller decides whether that skips one
 /// result (navigation) or refuses the whole operation (rename).
+/// Whether `range` of the projected document `uri` names lies in text the
+/// lowering restates from the source (a capture's `typeof` query): the
+/// lowering writes it again from the source, so an edit of the source
+/// covers it.
+pub(in super::super) fn restated_target(
+    session: &mut ServiceSession,
+    overlays: &HashMap<PathBuf, String>,
+    uri: &str,
+    range: &serde_json::Value,
+) -> bool {
+    let Some(TargetCoordinates::Projected(tt_path)) = target_coordinates(session, uri) else {
+        return false;
+    };
+    let Some(doc) = serve_doc_only(session, overlays, &tt_path) else {
+        return false;
+    };
+    let code_lines = doc.code_lines();
+    let start = byte_at(&code_lines, position_of(&range["start"]));
+    let end = byte_at(&code_lines, position_of(&range["end"]));
+    crate::engine::projection::restated(&doc.restatements, start, end)
+}
+
 pub(in super::super) fn map_target(
     session: &mut ServiceSession,
     overlays: &HashMap<PathBuf, String>,

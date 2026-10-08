@@ -4,7 +4,9 @@ mod presentation;
 mod targets;
 
 pub(super) use presentation::{docs_text, parameter_span, split_hover};
-pub(super) use targets::{TargetUse, map_shared_target, map_target, source_byte_span, source_edit};
+pub(super) use targets::{
+    TargetUse, map_shared_target, map_target, restated_target, source_byte_span, source_edit,
+};
 
 use super::*;
 use crate::lines::LineMap;
@@ -735,13 +737,14 @@ pub(super) fn build_probe(path: &Path, source: &str, at: usize, version: u64) ->
     };
     let probe_end = at + PROBE_NAME.len();
     let report = crate::compile_projection_report(&spliced, &options);
+    let mut closers = Vec::new();
     let report = match report
         .recovered
         .iter()
         .find(|&&(start, end)| start <= at && probe_end <= end)
         .and_then(|&(start, _)| closed_at(&spliced, start, probe_end, options.source_kind))
     {
-        Some(closed) => {
+        Some((closed, inserted)) => {
             let mended = crate::compile_projection_report(&closed, &options);
             if mended
                 .recovered
@@ -750,12 +753,17 @@ pub(super) fn build_probe(path: &Path, source: &str, at: usize, version: u64) ->
             {
                 report
             } else {
+                closers = inserted;
                 mended
             }
         }
         None => report,
     };
-    let emit = report.emit.or(report.withheld)?;
+    let mut emit = report.emit.or(report.withheld)?;
+    emit.mappings = without_closers(&emit.mappings, &closers);
+    for glue in &mut emit.inserted {
+        glue.src = without_closer_at(glue.src, &closers);
+    }
     let out = mapper::to_output_inclusive(&emit.mappings, at)?;
     Some(ProbeDoc {
         path: path.to_path_buf(),
@@ -771,36 +779,119 @@ pub(super) fn build_probe(path: &Path, source: &str, at: usize, version: u64) ->
 }
 
 /// `text` with the brackets its construct starting at `start` leaves open
-/// before `at` closed right there — what TypeScript's parser assumes of a
-/// missing closer (`parseExpected` reports it and parses on), for a probe
+/// before `at` closed where TypeScript's parser ends them, for a probe
 /// written where the whole construct was recovered because it never
-/// closes. `None` when nothing is open.
+/// closes. A statement keyword directly in an open argument list or index
+/// ends that list and every expression bracket around it up to the
+/// enclosing block (`abortParsingListOrMoveToNextToken`: a token that
+/// starts a statement in an enclosing context ends the lists inside it), so
+/// those close before the keyword; a match body is such a bracket, since an
+/// arm list holds no statements. What is still open at `at` closes there,
+/// as `parseExpected` assumes of a missing closer. `None` when nothing is
+/// open.
 pub(super) fn closed_at(
     text: &str,
     start: usize,
     at: usize,
     source_kind: crate::SourceKind,
-) -> Option<String> {
+) -> Option<(String, Vec<(usize, usize)>)> {
     use crate::lexer::TokenKind;
     let tokens = crate::lexer::lex_with_kind(text, start, at, source_kind);
-    let mut open = Vec::new();
-    for token in &tokens {
+    let mut open: Vec<(char, bool)> = Vec::new();
+    let mut inserted: Vec<(usize, String)> = Vec::new();
+    for (index, token) in tokens.iter().enumerate() {
+        if matches!(open.last(), Some((')' | ']', _)))
+            && crate::lexer::statement_keyword_at(text, &tokens, index)
+        {
+            let mut closers = String::new();
+            while let Some(&(closer, expression)) = open.last() {
+                if !expression {
+                    break;
+                }
+                closers.push(closer);
+                open.pop();
+            }
+            inserted.push((token.span.start, closers));
+        }
         if token.opens_bracket() {
             open.push(match token.kind {
-                TokenKind::Punct(b'(') => ')',
-                TokenKind::Punct(b'[') => ']',
-                TokenKind::Punct(b'{') => '}',
-                _ => '>',
+                TokenKind::Punct(b'(') => (')', true),
+                TokenKind::Punct(b'[') => (']', true),
+                TokenKind::Punct(b'{') => {
+                    ('}', crate::parser::opens_match_body(text, &tokens, index))
+                }
+                _ => ('>', true),
             });
         } else if token.closes_bracket() {
             open.pop();
         }
     }
-    if open.is_empty() {
+    if open.is_empty() && inserted.is_empty() {
         return None;
     }
-    let closers: String = open.into_iter().rev().collect();
-    Some(format!("{}{closers}{}", &text[..at], &text[at..]))
+    inserted.push((
+        at,
+        open.into_iter().rev().map(|(closer, _)| closer).collect(),
+    ));
+    let mut out = String::with_capacity(text.len() + inserted.len());
+    let mut closers = Vec::new();
+    let mut copied = 0;
+    for (position, written) in inserted {
+        out.push_str(&text[copied..position]);
+        if !written.is_empty() {
+            closers.push((out.len(), written.len()));
+        }
+        out.push_str(&written);
+        copied = position;
+    }
+    out.push_str(&text[copied..]);
+    Some((out, closers))
+}
+
+/// `mappings` of a text with `closers` (start, length) inserted, as
+/// mappings of the text without them: a chunk loses the bytes a closer
+/// occupies and moves back by the closers before it.
+fn without_closers(mappings: &[EmitMapping], closers: &[(usize, usize)]) -> Vec<EmitMapping> {
+    if closers.is_empty() {
+        return mappings.to_vec();
+    }
+    let mut out = Vec::with_capacity(mappings.len());
+    for mapping in mappings {
+        let (mut src, mut emitted, end) = (mapping.src, mapping.out, mapping.src + mapping.len);
+        for &(at, len) in closers {
+            if at >= end || at + len <= src {
+                continue;
+            }
+            if src < at {
+                out.push(EmitMapping {
+                    src: without_closer_at(src, closers),
+                    out: emitted,
+                    len: at - src,
+                });
+            }
+            let skip = (at + len).max(src);
+            emitted += skip - src;
+            src = skip;
+        }
+        if src < end {
+            out.push(EmitMapping {
+                src: without_closer_at(src, closers),
+                out: emitted,
+                len: end - src,
+            });
+        }
+    }
+    out
+}
+
+/// A byte of a text with `closers` inserted, in the text without them.
+fn without_closer_at(byte: usize, closers: &[(usize, usize)]) -> usize {
+    let before: usize = closers
+        .iter()
+        .filter(|&&(at, _)| at < byte)
+        .map(|&(at, len)| len.min(byte - at))
+        .sum();
+    byte - before
 }
 
 pub(super) fn signature_position(
@@ -1001,18 +1092,33 @@ pub(super) fn serve_doc_only(
     overlays: &HashMap<PathBuf, String>,
     path: &Path,
 ) -> Option<Arc<ServiceDoc>> {
-    let text = match overlays.get(path) {
-        Some(text) => text.clone(),
-        None => std::fs::read_to_string(path).ok()?,
-    };
-    match session.docs.get(path) {
-        Some(doc) if doc.source == text => Some(doc.clone()),
-        _ => {
-            let doc = Arc::new(service_doc(path, text));
-            session.docs.insert(path.to_path_buf(), doc.clone());
-            Some(doc)
-        }
+    if let Some(doc) = session
+        .answering
+        .as_ref()
+        .and_then(|answering| answering.get(path))
+    {
+        return Some(doc.clone());
     }
+    let read;
+    let text = match overlays.get(path) {
+        Some(text) => text,
+        None => {
+            read = std::fs::read_to_string(path).ok()?;
+            &read
+        }
+    };
+    let doc = match session.docs.get(path) {
+        Some(doc) if doc.source == *text => doc.clone(),
+        _ => {
+            let doc = Arc::new(service_doc(path, text.clone()));
+            session.docs.insert(path.to_path_buf(), doc.clone());
+            doc
+        }
+    };
+    if let Some(answering) = session.answering.as_mut() {
+        answering.insert(path.to_path_buf(), doc.clone());
+    }
+    Some(doc)
 }
 
 /// A tt position translated into the served text for a question about the
@@ -1021,11 +1127,9 @@ pub(super) fn serve_doc_only(
 /// starting at the cursor wins over the one ending there.
 pub(super) fn to_service(doc: &ServiceDoc, position: Position) -> Option<usize> {
     if doc.coordinates == CoordinateSpace::Authored {
-        return Some(u16_offset(&doc.source, position));
+        return Some(doc.source_offset(position));
     }
-    let byte = doc
-        .source_utf16()
-        .to_byte(u16_offset(&doc.source, position));
+    let byte = doc.source_utf16().to_byte(doc.source_offset(position));
     let affinity = match doc.source.as_bytes().get(byte) {
         Some(&b) if crate::scanner::is_ident_start(b) || b == b'#' || !b.is_ascii() => {
             mapper::Affinity::Following
@@ -1039,18 +1143,16 @@ pub(super) fn to_service(doc: &ServiceDoc, position: Position) -> Option<usize> 
 /// A tt position translated into the served text for a question about what
 /// is being typed before the cursor (completion, signature help).
 pub(super) fn to_service_typed(doc: &ServiceDoc, position: Position) -> Option<usize> {
-    let byte = doc
-        .source_utf16()
-        .to_byte(u16_offset(&doc.source, position));
+    let byte = doc.source_utf16().to_byte(doc.source_offset(position));
     let out = mapper::typed_cursor_to_output(&doc.mappings, &doc.anchors, &doc.source, byte)?;
     if doc.coordinates == CoordinateSpace::Authored {
-        return Some(u16_offset(&doc.source, position));
+        return Some(doc.source_offset(position));
     }
     Some(doc.code_utf16().to_utf16(out))
 }
 
 pub(super) fn to_service_name(doc: &ServiceDoc, position: Position) -> Option<usize> {
-    let at = u16_offset(&doc.source, position);
+    let at = doc.source_offset(position);
     if recovery_intersects(doc, at, at + 1) {
         return None;
     }
@@ -1074,9 +1176,7 @@ pub(super) fn to_service_name(doc: &ServiceDoc, position: Position) -> Option<us
     if let Some(at) = to_service(doc, position) {
         return Some(at);
     }
-    let byte = doc
-        .source_utf16()
-        .to_byte(u16_offset(&doc.source, position));
+    let byte = doc.source_utf16().to_byte(doc.source_offset(position));
     doc.shared_bindings.iter().find_map(|binding| {
         let occurrence = binding
             .occurrences
@@ -1095,13 +1195,11 @@ pub(super) fn to_service_names(doc: &ServiceDoc, position: Position) -> Vec<usiz
     if let Some(at) = to_service_name(doc, position) {
         return vec![at];
     }
-    let at = u16_offset(&doc.source, position);
+    let at = doc.source_offset(position);
     if recovery_intersects(doc, at, at + 1) {
         return Vec::new();
     }
-    let byte = doc
-        .source_utf16()
-        .to_byte(u16_offset(&doc.source, position));
+    let byte = doc.source_utf16().to_byte(doc.source_offset(position));
     doc.declared_names
         .iter()
         .filter(|name| name.src <= byte && byte <= name.src_end)
@@ -1116,9 +1214,7 @@ pub(super) fn to_service_names(doc: &ServiceDoc, position: Position) -> Vec<usiz
 
 /// The source span (UTF-16) of the glue-declared name covering `position`.
 pub(super) fn declared_name_at(doc: &ServiceDoc, position: Position) -> Option<(usize, usize)> {
-    let byte = doc
-        .source_utf16()
-        .to_byte(u16_offset(&doc.source, position));
+    let byte = doc.source_utf16().to_byte(doc.source_offset(position));
     doc.declared_names
         .iter()
         .find(|name| name.src <= byte && byte <= name.src_end)
@@ -1488,8 +1584,8 @@ pub(super) fn projected_service_diagnostics(
             let tags = item["tags"].as_array();
             EditorDiagnostic {
                 file: module.clone(),
-                start: u16_offset(&doc.code, position_of(&item["range"]["start"])),
-                end: u16_offset(&doc.code, position_of(&item["range"]["end"])),
+                start: doc.code_offset(position_of(&item["range"]["start"])),
+                end: doc.code_offset(position_of(&item["range"]["end"])),
                 code: item["code"].as_u64().unwrap_or(0) as u32,
                 message: item["message"].as_str().unwrap_or_default().to_string(),
                 category: match item["severity"].as_u64() {
@@ -1508,11 +1604,8 @@ pub(super) fn projected_service_diagnostics(
                     .filter(|entry| entry["location"]["uri"].as_str() == Some(served.as_str()))
                     .map(|entry| RelatedInformation {
                         file: module.clone(),
-                        start: u16_offset(
-                            &doc.code,
-                            position_of(&entry["location"]["range"]["start"]),
-                        ),
-                        end: u16_offset(&doc.code, position_of(&entry["location"]["range"]["end"])),
+                        start: doc.code_offset(position_of(&entry["location"]["range"]["start"])),
+                        end: doc.code_offset(position_of(&entry["location"]["range"]["end"])),
                         message: entry["message"].as_str().unwrap_or_default().to_string(),
                     })
                     .collect(),

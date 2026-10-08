@@ -116,7 +116,7 @@ impl Project {
             return Ok(Some(HoverInfo {
                 signature,
                 documentation,
-                range: source_range(&doc.source, s, e),
+                range: doc.source_range(s, e),
             }));
         }
         Ok(None)
@@ -136,8 +136,7 @@ impl Project {
         let semantics = self.semantic_analyses(path, &doc.source);
         let analyses = &semantics.analyses;
         if let Some(binding) = analyses.binding_at(byte) {
-            let range = source_range(
-                &doc.source,
+            let range = doc.source_range(
                 doc.source_utf16().to_utf16(binding.start),
                 doc.source_utf16().to_utf16(binding.end),
             );
@@ -156,8 +155,7 @@ impl Project {
             return Ok(Some(HoverInfo {
                 signature: format!("const {}: {}", binding.name, ty),
                 documentation: String::new(),
-                range: source_range(
-                    &doc.source,
+                range: doc.source_range(
                     doc.source_utf16().to_utf16(start),
                     doc.source_utf16().to_utf16(end),
                 ),
@@ -332,8 +330,7 @@ impl Project {
             .into_iter()
             .map(|(start, end)| Location {
                 path: path.clone(),
-                range: source_range(
-                    &doc.source,
+                range: doc.source_range(
                     doc.source_utf16().to_utf16(start),
                     doc.source_utf16().to_utf16(end),
                 ),
@@ -659,6 +656,8 @@ impl Project {
             }
         }
         let mut out = Vec::new();
+        let mut seen = HashSet::new();
+        session.answering = Some(HashMap::new());
         for location in raw {
             let Some(uri) = location["uri"].as_str() else {
                 continue;
@@ -680,15 +679,16 @@ impl Project {
             };
             for mapped in mapped {
                 let recovered = session.docs.get(&mapped.path).is_some_and(|target| {
-                    let start = u16_offset(&target.source, mapped.range.start);
-                    let end = u16_offset(&target.source, mapped.range.end);
+                    let start = target.source_offset(mapped.range.start);
+                    let end = target.source_offset(mapped.range.end);
                     recovery_intersects(target, start, end)
                 });
-                if !recovered && !out.contains(&mapped) {
+                if !recovered && seen.insert(location_key(&mapped)) {
                     out.push(mapped);
                 }
             }
         }
+        session.answering = None;
         Ok(out)
     }
 
@@ -819,61 +819,10 @@ impl Project {
         };
 
         let changes = changes.clone();
-        let mut out = Vec::new();
-        for (edited_uri, edits) in &changes {
-            let Some(edits) = edits.as_array() else {
-                return Ok(Err(None));
-            };
-            for one in edits {
-                let Some(location) = map_target(
-                    session,
-                    overlays,
-                    edited_uri,
-                    &one["range"],
-                    TargetUse::Edit,
-                ) else {
-                    let Some((generated, targets)) =
-                        map_shared_target(session, overlays, edited_uri, &one["range"])
-                    else {
-                        return Ok(Err(None));
-                    };
-                    let text = one["newText"].as_str().unwrap_or(RENAME_PLACEHOLDER);
-                    if text != RENAME_PLACEHOLDER
-                        && text != format!("{generated}: {RENAME_PLACEHOLDER}")
-                    {
-                        return Ok(Err(None));
-                    }
-                    for target in targets {
-                        out.push(RenameEdit {
-                            location: target.location,
-                            new_text: Some(if target.shorthand {
-                                format!("{}: {RENAME_PLACEHOLDER}", target.name)
-                            } else {
-                                RENAME_PLACEHOLDER.to_string()
-                            }),
-                        });
-                    }
-                    continue;
-                };
-                let new_text = one["newText"].as_str().map(String::from);
-                if let Some(text) = &new_text
-                    && text != RENAME_PLACEHOLDER
-                    && !text.contains(RENAME_PLACEHOLDER)
-                {
-                    // A shape we cannot account for — refusing beats
-                    // silently rebinding a different field.
-                    return Ok(Err(None));
-                }
-                // Text a lowering writes more than once (a variant field's
-                // type, in its union and its constructor) is one place in
-                // the source, renamed once.
-                let edit = RenameEdit { location, new_text };
-                if !out.contains(&edit) {
-                    out.push(edit);
-                }
-            }
-        }
-        Ok(if out.is_empty() { Err(None) } else { Ok(out) })
+        session.answering = Some(HashMap::new());
+        let edits = rename_edits(session, overlays, &changes);
+        session.answering = None;
+        Ok(edits)
     }
 
     /// The file's outline as TypeScript sees its declarations, on the source.
@@ -940,9 +889,7 @@ impl Project {
         let session = self.session();
         // A cursor the served text has no place for is asked through a
         // probe, as completion asks there.
-        let source_at = doc
-            .source_utf16()
-            .to_byte(u16_offset(&doc.source, position));
+        let source_at = doc.source_utf16().to_byte(doc.source_offset(position));
         // Text inside a recovered construct is not served, so a cursor there
         // has no place in the served text even where an offset maps.
         let recovered = doc
@@ -971,9 +918,7 @@ impl Project {
                 at,
             ),
             None => {
-                let source_at = doc
-                    .source_utf16()
-                    .to_byte(u16_offset(&doc.source, position));
+                let source_at = doc.source_utf16().to_byte(doc.source_offset(position));
                 let Some(probe) =
                     build_probe(&path, &doc.source, source_at, session.probe_count + 1)
                 else {
@@ -1168,7 +1113,7 @@ impl Project {
                 let to = doc.source_utf16().to_utf16(context_end).max(from + 1);
                 related.push(ServiceRelated {
                     path: None,
-                    range: source_range(&doc.source, from, to),
+                    range: doc.source_range(from, to),
                     message: "the piped value is produced here".to_string(),
                 });
             }
@@ -1187,7 +1132,7 @@ impl Project {
                 let to = if to > from { to } else { from + 1 };
                 related.push(ServiceRelated {
                     path: None,
-                    range: source_range(&doc.source, from, to),
+                    range: doc.source_range(from, to),
                     message: entry.message,
                 });
                 if related.len() >= 3 {
@@ -1219,7 +1164,7 @@ impl Project {
                 let (display_start, display_end) = anchor.display();
                 let from = doc.source_utf16().to_utf16(display_start);
                 let to = doc.source_utf16().to_utf16(display_end).max(from + 1);
-                let range = source_range(&doc.source, from, to);
+                let range = doc.source_range(from, to);
                 let declared = declarations.get_or_insert_with(|| {
                     self.semantic_analyses(&path, &doc.source)
                         .analyses
@@ -1268,7 +1213,7 @@ impl Project {
                 message.push_str(" (in code ttc generated for this construct)");
             }
             let entry = ServiceDiagnostic {
-                range: source_range(&doc.source, s, e),
+                range: doc.source_range(s, e),
                 message,
                 code,
                 severity,
@@ -1390,6 +1335,7 @@ impl Project {
                 last_completion: HashMap::new(),
                 last_probe: None,
                 probe_count: 0,
+                answering: None,
             });
         }
         let documents = self.overlays.clone();
@@ -1578,13 +1524,95 @@ enum Reach {
 /// Adds `found` to `references`, once per place: a place both lists name is
 /// a definition when either says so.
 fn merge_references(references: &mut Vec<Reference>, found: Vec<Reference>) {
+    let key = |reference: &Reference| {
+        let path = &reference.location.path;
+        let mut location = reference.location.clone();
+        location.path =
+            crate::engine::normalize_document_path(path).unwrap_or_else(|_| path.clone());
+        location_key(&location)
+    };
+    let mut known: HashMap<_, usize> = references
+        .iter()
+        .enumerate()
+        .map(|(index, reference)| (key(reference), index))
+        .collect();
     for reference in found {
-        match references
-            .iter_mut()
-            .find(|r| crate::engine::names::same_location(&r.location, &reference.location))
-        {
-            Some(known) => known.is_definition |= reference.is_definition,
-            None => references.push(reference),
+        match known.entry(key(&reference)) {
+            std::collections::hash_map::Entry::Occupied(entry) => {
+                references[*entry.get()].is_definition |= reference.is_definition;
+            }
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                entry.insert(references.len());
+                references.push(reference);
+            }
         }
     }
+}
+
+/// A rename's edits over the served texts, as edits of the sources: `Err`
+/// when an edit lands somewhere no source change accounts for.
+fn rename_edits(
+    session: &mut ServiceSession,
+    overlays: &HashMap<PathBuf, String>,
+    changes: &serde_json::Map<String, serde_json::Value>,
+) -> Result<Vec<RenameEdit>, Option<String>> {
+    let mut out = Vec::new();
+    let mut seen = HashSet::new();
+    for (edited_uri, edits) in changes {
+        let Some(edits) = edits.as_array() else {
+            return Err(None);
+        };
+        for one in edits {
+            let Some(location) = map_target(
+                session,
+                overlays,
+                edited_uri,
+                &one["range"],
+                TargetUse::Edit,
+            ) else {
+                if restated_target(session, overlays, edited_uri, &one["range"]) {
+                    continue;
+                }
+                let Some((generated, targets)) =
+                    map_shared_target(session, overlays, edited_uri, &one["range"])
+                else {
+                    return Err(None);
+                };
+                let text = one["newText"].as_str().unwrap_or(RENAME_PLACEHOLDER);
+                if text != RENAME_PLACEHOLDER
+                    && text != format!("{generated}: {RENAME_PLACEHOLDER}")
+                {
+                    return Err(None);
+                }
+                for target in targets {
+                    out.push(RenameEdit {
+                        location: target.location,
+                        new_text: Some(if target.shorthand {
+                            format!("{}: {RENAME_PLACEHOLDER}", target.name)
+                        } else {
+                            RENAME_PLACEHOLDER.to_string()
+                        }),
+                    });
+                }
+                continue;
+            };
+            let new_text = one["newText"].as_str().map(String::from);
+            if let Some(text) = &new_text
+                && text != RENAME_PLACEHOLDER
+                && !text.contains(RENAME_PLACEHOLDER)
+            {
+                // A shape we cannot account for — refusing beats
+                // silently rebinding a different field.
+                return Err(None);
+            }
+            // Text a lowering writes more than once (a variant field's
+            // type, in its union and its constructor) is one place in
+            // the source, renamed once.
+            let edit = RenameEdit { location, new_text };
+            if seen.insert((location_key(&edit.location), edit.new_text.clone())) {
+                out.push(edit);
+            }
+        }
+    }
+    if out.is_empty() { Err(None) } else { Ok(out) }
 }

@@ -70,7 +70,8 @@ pub(crate) use parse::{
     val_modifiers,
 };
 pub(crate) use partial::{
-    ArmHeader, PatternSite, arm_headers, pattern_of, pattern_site_at, tuple_arm_headers,
+    ArmHeader, PatternSite, arm_headers, opens_match_body, pattern_of, pattern_site_at,
+    tuple_arm_headers,
 };
 pub(crate) use vals::is_param_modifier;
 

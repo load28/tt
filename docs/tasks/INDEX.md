@@ -832,7 +832,8 @@
 | TASK-789 | Recover the first-snapshot time this branch lost to main | Complete | 2026-10-08 | 2026-10-08 | [TASK-789](./TASK-789-first-snapshot-regression.md) |
 | TASK-790 | Fix the round-eight compiler findings | Complete | 2026-10-08 | 2026-10-08 | [TASK-790](./TASK-790-round-eight-compiler-findings.md) |
 | TASK-791 | Fix the round-eight CLI findings | Complete | 2026-10-08 | 2026-10-08 | [TASK-791](./TASK-791-round-eight-cli-findings.md) |
+| TASK-792 | Fix the round-eight editor findings | Complete | 2026-10-08 | 2026-10-08 | [TASK-792](./TASK-792-round-eight-editor-findings.md) |
 
 ## Next task number
 
-**TASK-792**
+**TASK-793**

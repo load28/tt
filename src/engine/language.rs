@@ -507,6 +507,18 @@ pub(crate) struct ServiceSession {
     /// resolving one of its items can install it again.
     last_probe: Option<ProbeDoc>,
     probe_count: u64,
+    /// The documents read while one answer's targets are mapped back: the
+    /// texts cannot change within an answer, so each is compared once.
+    answering: Option<HashMap<PathBuf, Arc<ServiceDoc>>>,
+}
+
+/// Where a location is, as a set can hold it.
+fn location_key(location: &Location) -> (PathBuf, [u32; 4]) {
+    let Range { start, end } = location.range;
+    (
+        location.path.clone(),
+        [start.line, start.character, end.line, end.character],
+    )
 }
 
 type CompletionKey = (PathBuf, usize, String, Option<String>);
@@ -609,6 +621,32 @@ impl ServiceDoc {
             self.source_lines
                 .get_or_init(|| crate::lines::LineMap::lsp(&self.source).index()),
         )
+    }
+
+    /// [`service::source_range`] over the source, with its measurements
+    /// taken once.
+    pub(super) fn source_range(&self, start: usize, end: usize) -> Range {
+        let lines = self.source_lines();
+        let position =
+            |offset: usize| service::byte_position(&lines, self.source_utf16().to_byte(offset));
+        Range {
+            start: position(start),
+            end: position(end),
+        }
+    }
+
+    /// [`service::u16_offset`] over the served code, with its measurements
+    /// taken once.
+    pub(super) fn code_offset(&self, position: Position) -> usize {
+        self.code_utf16()
+            .to_utf16(service::byte_at(&self.code_lines(), position))
+    }
+
+    /// [`service::u16_offset`] over the source, with its measurements
+    /// taken once.
+    pub(super) fn source_offset(&self, position: Position) -> usize {
+        self.source_utf16()
+            .to_utf16(service::byte_at(&self.source_lines(), position))
     }
 
     fn code_lines(&self) -> crate::lines::LineMap<'_> {
