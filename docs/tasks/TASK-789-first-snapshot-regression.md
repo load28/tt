@@ -106,7 +106,7 @@ branch spends the extra time and removes it without changing any output.
 - **Resolution**: Restored the rule as `ProjectionSegments::exactly`, which
   visits the segments starting at the span's start in place.
 
-## Regression test (fails before the fix)## Regression test (fails before the fix)
+## Regression test (fails before the fix)
 
 Not applicable: no output changes; the work is measured by
 `benches/compile.rs`, whose comparison against `main` is the CI
