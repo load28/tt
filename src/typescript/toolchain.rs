@@ -27,9 +27,21 @@ const API_IN_PACKAGE: &str = "dist/api/sync/api.js";
 
 /// How to install what is missing — the one sentence every error here ends
 /// with, so the fix never depends on which half reported it.
-const INSTALL: &str = "install TypeScript in this project (`npm i -D typescript@7.1` — the 7.1 \
-     line, whose project and declaration-emit APIs ttc drives; a plain `7` \
-     resolves to 7.0)";
+/// The TypeScript the repository's `package.json` pins: the version the
+/// install advice names, since no stable 7.1 is published yet.
+macro_rules! pinned_typescript {
+    () => {
+        "7.1.0-dev.20260826.1"
+    };
+}
+pub(crate) use pinned_typescript;
+
+const INSTALL: &str = concat!(
+    "install TypeScript in this project (`npm i -D typescript@",
+    pinned_typescript!(),
+    "` — the 7.1 line, whose project and declaration-emit APIs ttc drives; \
+     a plain `7` resolves to 7.0)"
+);
 
 /// One npm distribution of TypeScript 7.
 struct Distribution {
@@ -304,6 +316,18 @@ mod tests {
             std::fs::remove_dir_all(consumer.join("node_modules")).unwrap();
             std::fs::remove_dir_all(source.join("node_modules")).unwrap();
         }
+    }
+
+    #[test]
+    fn the_install_advice_names_the_typescript_the_repository_pins() {
+        let manifest: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/package.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            manifest["devDependencies"]["typescript"],
+            pinned_typescript!()
+        );
     }
 
     #[test]

@@ -27,27 +27,75 @@ pub fn jsx_preserve(files: &[PathBuf], tsconfig: Option<&Path>) -> Result<bool, 
     let Some(config) = config else {
         return Ok(false);
     };
+    if tsconfig.is_none() && solution_style(&config)? {
+        return Err(format!(
+            "{}: a solution-style configuration (`\"files\": []` with `references`) leaves \
+             each file to the referenced project that contains it",
+            config.display()
+        ));
+    }
     Ok(jsx_option(&config, &mut Vec::new())?
+        .flatten()
         .is_some_and(|value| value.eq_ignore_ascii_case("preserve")))
 }
 
-fn jsx_option(config: &Path, reading: &mut Vec<PathBuf>) -> Result<Option<String>, String> {
+fn solution_style(config: &Path) -> Result<bool, String> {
+    let value = read_config(config)?;
+    Ok(value["files"].as_array().is_some_and(Vec::is_empty)
+        && value["references"]
+            .as_array()
+            .is_some_and(|references| !references.is_empty()))
+}
+
+fn read_config(config: &Path) -> Result<serde_json::Value, String> {
+    let text = std::fs::read_to_string(config)
+        .map_err(|error| format!("{}: {error}", config.display()))?;
+    let text = json_text(text.strip_prefix('\u{feff}').unwrap_or(&text));
+    if text.trim().is_empty() {
+        Ok(serde_json::json!({}))
+    } else {
+        serde_json::from_str(&text).map_err(|error| format!("{}: {error}", config.display()))
+    }
+}
+
+const JSX_VALUES: [&str; 5] = [
+    "preserve",
+    "react-native",
+    "react-jsx",
+    "react-jsxdev",
+    "react",
+];
+
+fn jsx_option(config: &Path, reading: &mut Vec<PathBuf>) -> Result<Option<Option<String>>, String> {
     if reading.iter().any(|open| open == config) {
         return Err(format!(
             "{}: circularity detected while resolving configuration",
             config.display()
         ));
     }
-    let text = std::fs::read_to_string(config)
-        .map_err(|error| format!("{}: {error}", config.display()))?;
-    let text = json_text(text.strip_prefix('\u{feff}').unwrap_or(&text));
-    let value: serde_json::Value = if text.trim().is_empty() {
-        serde_json::json!({})
-    } else {
-        serde_json::from_str(&text).map_err(|error| format!("{}: {error}", config.display()))?
-    };
-    if let Some(jsx) = value["compilerOptions"]["jsx"].as_str() {
-        return Ok(Some(jsx.to_string()));
+    let value = read_config(config)?;
+    match value["compilerOptions"].get("jsx") {
+        Some(serde_json::Value::Null) => return Ok(Some(None)),
+        Some(serde_json::Value::String(jsx)) => {
+            if !JSX_VALUES
+                .iter()
+                .any(|known| known.eq_ignore_ascii_case(jsx))
+            {
+                return Err(format!(
+                    "{}: Argument for '--jsx' option must be: {}.",
+                    config.display(),
+                    JSX_VALUES.map(|known| format!("'{known}'")).join(", ")
+                ));
+            }
+            return Ok(Some(Some(jsx.clone())));
+        }
+        Some(_) => {
+            return Err(format!(
+                "{}: Compiler option 'jsx' requires a value of type enum.",
+                config.display()
+            ));
+        }
+        None => {}
     }
     let bases: Vec<&str> = match &value["extends"] {
         serde_json::Value::String(base) => vec![base.as_str()],
@@ -64,8 +112,8 @@ fn jsx_option(config: &Path, reading: &mut Vec<PathBuf>) -> Result<Option<String
                 config.display()
             )
         })?;
-        if let Some(jsx) = jsx_option(&path, reading)? {
-            found = Some(jsx);
+        if let Some(setting) = jsx_option(&path, reading)? {
+            found = Some(setting);
         }
     }
     reading.pop();
@@ -356,6 +404,7 @@ mod tests {
             assert_eq!(
                 super::jsx_option(&config, &mut Vec::new())
                     .unwrap()
+                    .flatten()
                     .as_deref(),
                 Some("preserve"),
                 "{base}"
@@ -379,10 +428,81 @@ mod tests {
             assert_eq!(
                 super::jsx_option(&config, &mut Vec::new())
                     .unwrap()
+                    .flatten()
                     .as_deref(),
                 jsx,
                 "{text:?}"
             );
         }
+    }
+
+    #[test]
+    fn a_null_jsx_unsets_the_value_a_configuration_extends() {
+        let dir = crate::test_workspace::Workspace::new("config-jsx-null");
+        let write = |name: &str, text: &str| std::fs::write(dir.join(name), text).unwrap();
+        write("base.json", "{\"compilerOptions\":{\"jsx\":\"preserve\"}}");
+        write("unset.json", "{\"compilerOptions\":{\"jsx\":null}}");
+        let config = dir.join("tsconfig.json");
+        for (text, preserve) in [
+            (
+                "{\"extends\":\"./base.json\",\"compilerOptions\":{\"jsx\":null}}",
+                false,
+            ),
+            ("{\"extends\":[\"./base.json\",\"./unset.json\"]}", false),
+            ("{\"extends\":[\"./unset.json\",\"./base.json\"]}", true),
+        ] {
+            write("tsconfig.json", text);
+            assert_eq!(
+                super::jsx_preserve(&[], Some(&config)),
+                Ok(preserve),
+                "{text}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_jsx_value_typescript_rejects_is_an_error() {
+        let dir = crate::test_workspace::Workspace::new("config-jsx-invalid");
+        let config = dir.join("tsconfig.json");
+        for (text, message) in [
+            (
+                "{\"compilerOptions\":{\"jsx\":\"bogus\"}}",
+                "Argument for '--jsx' option must be: 'preserve', 'react-native', 'react-jsx', 'react-jsxdev', 'react'.",
+            ),
+            (
+                "{\"compilerOptions\":{\"jsx\":5}}",
+                "Compiler option 'jsx' requires a value of type enum.",
+            ),
+        ] {
+            std::fs::write(&config, text).unwrap();
+            let error = super::jsx_preserve(&[], Some(&config)).unwrap_err();
+            assert!(error.ends_with(message), "{error}");
+        }
+    }
+
+    #[test]
+    fn a_solution_style_configuration_names_no_jsx_option_for_a_file() {
+        let dir = crate::test_workspace::Workspace::new("config-solution");
+        let write = |name: &str, text: &str| std::fs::write(dir.join(name), text).unwrap();
+        write(
+            "tsconfig.app.json",
+            "{\"compilerOptions\":{\"jsx\":\"preserve\"},\"include\":[\"src\"]}",
+        );
+        write(
+            "tsconfig.json",
+            "{\"files\":[],\"references\":[{\"path\":\"./tsconfig.app.json\"}]}",
+        );
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        write("src/a.tt", "");
+        let file = dir.join("src/a.tt");
+        let error = super::jsx_preserve(std::slice::from_ref(&file), None).unwrap_err();
+        assert!(error.contains("solution-style"), "{error}");
+        assert_eq!(
+            super::jsx_preserve(
+                std::slice::from_ref(&file),
+                Some(&dir.join("tsconfig.app.json"))
+            ),
+            Ok(true)
+        );
     }
 }

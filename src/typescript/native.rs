@@ -184,12 +184,13 @@ fn host_died(child: &mut Child, phase: Phase) -> Failure {
         let _ = pipe.read_to_string(&mut stderr);
     }
     if status.and_then(|s| s.code()) == Some(5) {
-        return Failure::unavailable(
+        return Failure::unavailable(concat!(
             "the installed TypeScript can check but cannot emit \
                 declarations — that API arrived in TypeScript 7.1. Install a \
-                7.1 in this project (`npm i -D typescript@7.1`), or use \
-                --check-types, which writes nothing",
-        );
+                7.1 in this project (`npm i -D typescript@",
+            super::toolchain::pinned_typescript!(),
+            "`), or use --check-types, which writes nothing",
+        ));
     }
     let stderr = stderr.trim();
     let message = format!(

@@ -211,6 +211,70 @@ fn an_in_place_build_reports_a_hand_written_twin_as_the_out_dir_build_does() {
 }
 
 #[test]
+fn check_reports_a_hand_written_twin_as_the_build_does() {
+    let dir = tmpdir();
+    let source = dir.join("src");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(source.join("model.tt"), "export const a = 1;\n").unwrap();
+    fs::write(source.join("model.ts"), "export const a = 2;\n").unwrap();
+    let output = ttc(&["--check", source.to_str().unwrap()]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert!(
+        stderr.contains("model.ts: multiple inputs claim this output"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn a_directory_at_an_output_path_is_named_as_a_directory() {
+    let dir = tmpdir();
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::create_dir_all(dir.join("out/a.ts")).unwrap();
+    fs::write(dir.join("src/a.tt"), "export const a = 1;\n").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["src", "-o", "out"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run ttc");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert_eq!(
+        stderr.trim_end(),
+        "ttc: out/a.ts: a directory is at this output path; refusing to replace it — remove it, or write the outputs to another directory with -o <dir>"
+    );
+}
+
+#[test]
+fn verify_failed_offers_no_verify_only_where_it_is_accepted() {
+    let dir = tmpdir();
+    fs::write(dir.join("a.tt"), "const = 5;\n").unwrap();
+    let run = |args: &[&str]| {
+        let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .args(args)
+            .current_dir(&dir)
+            .output()
+            .expect("failed to run ttc");
+        String::from_utf8_lossy(&output.stderr).into_owned()
+    };
+    for args in [&["a.tt", "-o", "out"][..], &["--check", "a.tt"][..]] {
+        let stderr = run(args);
+        assert!(
+            stderr.contains("error[verify-failed]"),
+            "{args:?}: {stderr}"
+        );
+        assert!(
+            !stderr.lines().next().unwrap_or("").contains("--no-verify"),
+            "{args:?}: {stderr}"
+        );
+        assert!(
+            stderr.contains("= help: use --no-verify to bypass"),
+            "{args:?}: {stderr}"
+        );
+    }
+}
+
+#[test]
 fn separate_input_roots_mirror_under_the_directory_they_share() {
     let dir = tmpdir();
     let left = dir.join("left");

@@ -315,7 +315,7 @@ pub(super) fn watch_mode(
                 .cloned()
                 .collect()
         };
-        let claimed = selected.is_empty() || opts.check || opts.print || !claim_conflicts(&jobs).0;
+        let claimed = selected.is_empty() || opts.print || !claim_conflicts(&jobs).0;
         refused = !claimed;
         if !claimed {
             eprintln!("ttc: 0 file(s) rebuilt, with errors — watching");

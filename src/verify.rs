@@ -354,12 +354,11 @@ pub(crate) fn at_source(
     let generic = || match failure.kind {
         FailureKind::Parse => format!(
             "generated TypeScript failed to parse: {}. This is either invalid TypeScript passed \
-             through from the source or a ttc bug; use --no-verify to bypass.",
+             through from the source or a ttc bug.",
             failure.message.trim_end_matches('.'),
         ),
         FailureKind::StatementBoundary => format!(
-            "generated TypeScript changed the meaning of this code: {}. This is a ttc bug; use \
-             --no-verify to bypass.",
+            "generated TypeScript changed the meaning of this code: {}. This is a ttc bug.",
             failure.message.trim_end_matches('.'),
         ),
     };

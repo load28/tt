@@ -385,6 +385,9 @@ struct Emitted {
 /// printed in job order, so the output of a parallel run is identical to a
 /// sequential one.
 pub(super) fn compile_jobs(jobs: &[Job], support_root: Option<&Path>, opts: &BuildOptions) -> bool {
+    if opts.check && claim_conflicts(jobs).0 {
+        return true;
+    }
     if !opts.check && !opts.print {
         let (mut conflicted, contested) = claim_conflicts(jobs);
         for job in jobs.iter().filter(|job| {
@@ -605,13 +608,20 @@ fn compile_outcomes(
                     .collect();
                 if !errors.is_empty() {
                     for diagnostic in errors {
+                        let mut diagnostic = diagnostic.clone();
+                        if diagnostic.code == ttc::DiagnosticCode::VerifyFailed {
+                            diagnostic.suggestions.push(ttc::Suggestion {
+                                message: "use --no-verify to bypass".to_string(),
+                                edit: None,
+                            });
+                        }
                         // Trailing newline: `eprintln!` then separates the
                         // blocks with a blank line, so two diagnostics do not
                         // read as one.
                         out.messages.push(format!(
                             "{}\n",
                             ttc::render::diagnostic(
-                                diagnostic,
+                                &diagnostic,
                                 &loaded.source,
                                 &filename,
                                 styles(),
@@ -676,7 +686,7 @@ fn compile_outcomes(
                 }
                 if in_place && code != loaded.source {
                     out.messages.push(format!(
-                        "ttc: {filename}: output would overwrite the input — pass -o <dir>"
+                        "ttc: {filename}: output would overwrite the input — write the outputs to another directory with -o <dir>"
                     ));
                     out.failed = true;
                     return out;
@@ -769,7 +779,7 @@ fn write_outcomes(
             for job in jobs {
                 if same_file(&job.file, &support) {
                     eprintln!(
-                        "ttc: {}: the compiler support module would overwrite input {} — pass -o <dir>",
+                        "ttc: {}: the compiler support module would overwrite input {} — write the outputs to another directory with -o <dir>",
                         support.display(),
                         job.file.display()
                     );

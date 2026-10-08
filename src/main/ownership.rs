@@ -80,12 +80,18 @@ pub(super) fn check_output_owner(output: &Path, owner: OutputOwner) -> Result<()
         && same_file(output, source)
     {
         return Err(format!(
-            "ttc: {}: output would overwrite the input — pass -o <dir>",
+            "ttc: {}: output would overwrite the input — write the outputs to another directory with -o <dir>",
             output.display()
         ));
     }
     if !output.exists() {
         return Ok(());
+    }
+    if output.is_dir() {
+        return Err(format!(
+            "ttc: {}: a directory is at this output path; refusing to replace it — remove it, or write the outputs to another directory with -o <dir>",
+            output.display()
+        ));
     }
     if owned_output(output)
         && record(output).is_some_and(|record| owns(&record, owner) || orphaned(&record))
