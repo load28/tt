@@ -679,7 +679,12 @@ impl Project {
                     .unwrap_or_default(),
             };
             for mapped in mapped {
-                if !out.contains(&mapped) {
+                let recovered = session.docs.get(&mapped.path).is_some_and(|target| {
+                    let start = u16_offset(&target.source, mapped.range.start);
+                    let end = u16_offset(&target.source, mapped.range.end);
+                    recovery_intersects(target, start, end)
+                });
+                if !recovered && !out.contains(&mapped) {
                     out.push(mapped);
                 }
             }
@@ -947,11 +952,24 @@ impl Project {
         let projected_at = (!recovered)
             .then(|| {
                 mapper::typed_cursor_to_output(&doc.mappings, &doc.anchors, &doc.source, source_at)
+                    .or_else(|| {
+                        relocated_read_end(
+                            &doc.code,
+                            &doc.relocated_operands,
+                            crate::SourceKind::from_path(&path).unwrap_or_default(),
+                            source_at,
+                        )
+                    })
             })
             .flatten()
             .map(|at| doc.code_utf16().to_utf16(at));
-        let (code, mappings, at) = match projected_at {
-            Some(at) => (doc.code.clone(), doc.mappings.clone(), at),
+        let (code, mappings, relocated, at) = match projected_at {
+            Some(at) => (
+                doc.code.clone(),
+                doc.mappings.clone(),
+                doc.relocated_operands.clone(),
+                at,
+            ),
             None => {
                 let source_at = doc
                     .source_utf16()
@@ -963,12 +981,18 @@ impl Project {
                 };
                 session.probe_count += 1;
                 open_served(session, &path, &probe.code);
-                (probe.code, probe.mappings, probe.offset)
+                (probe.code, probe.mappings, Vec::new(), probe.offset)
             }
         };
         open_served(session, &path, &code);
         let kind = crate::SourceKind::from_path(&path).unwrap_or_default();
-        let at = signature_position(&code, &mappings, kind, mapper::from_utf16(&code, at));
+        let at = signature_position(
+            &code,
+            &mappings,
+            &relocated,
+            kind,
+            mapper::from_utf16(&code, at),
+        );
         let question = signature_question(&code, &mappings, &doc.source, kind, at);
         let (asked, at) = match &question {
             Some((question, at)) => {
@@ -1479,6 +1503,7 @@ impl Project {
                 declared_names: projected.emit.declared_names.clone(),
                 shared_bindings: projected.emit.shared_bindings.clone(),
                 destructured_lists: projected.emit.destructured_lists.clone(),
+                relocated_operands: projected.emit.relocated_operands.clone(),
                 completion_scopes: projected.emit.completion_scopes.clone(),
                 recovered: projected.recovered.clone(),
                 syntax_repairs: projected.syntax_repairs.clone(),

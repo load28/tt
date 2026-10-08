@@ -347,7 +347,9 @@ pub struct UnresolvedUse {
     /// only: a case suggestion comes from `against`'s own variants, a
     /// field suggestion from the named case's own fields.
     pub suggestion: String,
-    pub(crate) replacement: String,
+    /// The text that replaces the name, when one names something the site
+    /// does not already cover.
+    pub(crate) replacement: Option<String>,
 }
 
 /// What kind of name an [`UnresolvedUse`] is.
@@ -730,10 +732,22 @@ impl Resolver {
                         .resolution
                         .variant_of(variant_def)
                         .expect("the id came from the variant table");
-                    nearest(&path.name, data.variants.iter().map(|v| v.name.as_str()))
+                    let covered = cases_covered_beside(hir, site, path.node);
+                    nearest(&path.name, data.variants.iter().map(|v| v.name.as_str())).map(
+                        |suggestion| {
+                            let replacement = nearest(
+                                &path.name,
+                                data.variants
+                                    .iter()
+                                    .map(|v| v.name.as_str())
+                                    .filter(|name| !covered.contains(name)),
+                            );
+                            (suggestion, replacement)
+                        },
+                    )
                 };
                 self.resolution.uses.insert(path.node, Res::Unresolved);
-                if let Some(suggestion) = suggestion {
+                if let Some((suggestion, replacement)) = suggestion {
                     self.resolution.unresolved.push(UnresolvedUse {
                         site,
                         node: path.node,
@@ -741,7 +755,7 @@ impl Resolver {
                         kind: UseKind::Case,
                         against: variant_def,
                         tag: None,
-                        replacement: suggestion.clone(),
+                        replacement,
                         suggestion,
                     });
                 }
@@ -834,7 +848,7 @@ impl Resolver {
                             against: variant.variant_def,
                             tag: Some(variant_name.clone()),
                             suggestion,
-                            replacement,
+                            replacement: Some(replacement),
                         });
                     }
                 }
@@ -985,6 +999,33 @@ fn builtin_variants() -> Vec<(String, &'static str, Vec<VariantDecl>)> {
 /// assert_eq!(found.unresolved[0].name, "Circel");
 /// assert_eq!(found.unresolved[0].suggestion, "Circle");
 /// ```
+fn cases_covered_beside(hir: &HirFile, site: PatternSiteId, node: hir::NodeId) -> Vec<&str> {
+    let arms = &hir.sites[site].arms;
+    let top = |arm: &hir::SiteArm| match &hir.patterns[arm.pattern] {
+        hir::Pat::Constructor { path, fields, .. } => Some((path, fields)),
+        _ => None,
+    };
+    if !arms
+        .iter()
+        .any(|arm| top(arm).is_some_and(|(path, _)| path.node == node))
+    {
+        return Vec::new();
+    }
+    arms.iter()
+        .filter(|arm| arm.guard.is_none())
+        .filter_map(|arm| {
+            let (path, fields) = top(arm)?;
+            (path.node != node
+                && fields.as_ref().is_none_or(|fields| {
+                    fields
+                        .iter()
+                        .all(|field| matches!(field.binding, hir::FieldBinding::Named { .. }))
+                }))
+            .then_some(path.name.as_str())
+        })
+        .collect()
+}
+
 fn nearest<'a>(written: &str, declared: impl Iterator<Item = &'a str>) -> Option<String> {
     nearest_within(written, declared, usize::MAX).map(|(name, _)| name)
 }

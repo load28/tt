@@ -412,6 +412,25 @@ impl<T> Segments<T> {
         }
         found.into_iter().rev().flatten().collect()
     }
+
+    /// [`Self::fresh`] for segments read under `key`: a segment already
+    /// read under the same key is skipped, with everything before it.
+    pub(crate) fn fresh_under<K: std::hash::Hash + Eq + Clone>(
+        &self,
+        key: K,
+        seen: &mut std::collections::HashSet<(K, usize)>,
+    ) -> Vec<&T> {
+        let mut found = Vec::new();
+        let mut at = self;
+        while let Some(segment) = at.0.as_deref() {
+            if !seen.insert((key.clone(), at.identity())) {
+                break;
+            }
+            found.push(segment.own.as_slice());
+            at = &segment.earlier;
+        }
+        found.into_iter().rev().flatten().collect()
+    }
 }
 
 impl<T: Clone> Segments<T> {

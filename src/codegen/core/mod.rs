@@ -442,6 +442,35 @@ pub(crate) fn emit_with_map<'a>(
                 .iter()
                 .map(|replacement| replacement.source),
         ),
+        replacement_order: crate::span_index::NestedOrder::new(
+            target
+                .source_replacements
+                .iter()
+                .map(|replacement| (replacement.source.start, replacement.source.end)),
+        ),
+        claim_order: {
+            let claims: Vec<usize> = target
+                .source_replacements
+                .iter()
+                .enumerate()
+                .filter(|(_, replacement)| replacement.claim)
+                .map(|(index, _)| index)
+                .collect();
+            (
+                crate::span_index::NestedOrder::new(claims.iter().map(|&index| {
+                    let source = target.source_replacements[index].source;
+                    (source.start, source.end)
+                })),
+                claims,
+            )
+        },
+        value_order: std::cell::OnceCell::new(),
+        slot_value_order: std::cell::OnceCell::new(),
+        nested_input_order: std::cell::OnceCell::new(),
+        piped_steps: std::cell::OnceCell::new(),
+        slots_named: std::cell::OnceCell::new(),
+        deferred_arm_values: std::cell::OnceCell::new(),
+        statement_order: std::cell::OnceCell::new(),
         claimed_frames: target
             .source_replacements
             .iter()

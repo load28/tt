@@ -177,7 +177,10 @@ impl<'a> Emitter<'a> {
             out.push_break(0);
         }
         out.push_lit(")");
-        self.scoped_if_commented(decision, out)
+        let (_, start, _, extent) = self.value_anchor(expr);
+        let mut read = Rope::new();
+        read.relocated_operand(start, extent, self.scoped_if_commented(decision, out));
+        read
     }
 
     fn emit_deferred_arm_value(&self, expr: ExprId, action: &ArmAction) -> Rope<'a> {

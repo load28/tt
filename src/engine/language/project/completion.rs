@@ -163,11 +163,11 @@ impl Project {
                 let at =
                     prefix.map_or_else(|| source_byte(&doc.source, position), |(start, _)| start);
                 let source = match (prefix, statement) {
-                    (Some(_), true) => doc.source.clone(),
-                    (None, true) => {
+                    (prefix, true) => {
+                        let after = prefix.map_or(at, |(_, end)| end);
                         let called = crate::lexer::lex_with_kind(
                             &doc.source,
-                            at,
+                            after,
                             doc.source.len(),
                             crate::SourceKind::from_path(&path).unwrap_or_default(),
                         )
@@ -180,7 +180,7 @@ impl Project {
                         } else {
                             format!("{STATEMENT_TAG_PLACEHOLDER}()")
                         };
-                        format!("{}{tag}{}", &doc.source[..at], &doc.source[at..])
+                        format!("{}{tag}{}", &doc.source[..at], &doc.source[after..])
                     }
                     (Some((start, end)), false) => {
                         format!("{}{}", &doc.source[..start], &doc.source[end..])

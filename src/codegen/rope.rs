@@ -55,6 +55,8 @@ pub(crate) enum MarkKind {
     DeclaredNameEnd,
     DestructuredListStart,
     DestructuredListEnd,
+    RelocatedOperandStart,
+    RelocatedOperandEnd,
     SharedBindingStart,
     SharedBindingOccurrence {
         end: usize,
@@ -761,6 +763,8 @@ impl<'a> TargetFile<'a> {
         let mut declared_names: Vec<DeclaredName> = Vec::new();
         let mut shared_bindings: Vec<SharedBinding> = Vec::new();
         let mut destructured_lists: Vec<crate::DestructuredList> = Vec::new();
+        let mut relocated_operands: Vec<crate::RelocatedOperand> = Vec::new();
+        let mut open_operands: Vec<usize> = Vec::new();
         let mut anchors: Vec<EmitAnchor> = Vec::new();
         let mut inserted: Vec<crate::InsertedGlue> = Vec::new();
         let mut open: Vec<OpenAnchor> = Vec::new();
@@ -960,6 +964,32 @@ impl<'a> TargetFile<'a> {
                     list.out_end = out.len();
                 }
                 TargetPiece::Mark {
+                    src,
+                    kind: MarkKind::RelocatedOperandStart,
+                } => {
+                    open_operands.push(relocated_operands.len());
+                    relocated_operands.push(crate::RelocatedOperand {
+                        src: *src,
+                        src_end: *src,
+                        out: out.len(),
+                        out_end: out.len(),
+                    });
+                }
+                TargetPiece::Mark {
+                    src,
+                    kind: MarkKind::RelocatedOperandEnd,
+                } => {
+                    let operand = open_operands
+                        .pop()
+                        .map(|index| &mut relocated_operands[index])
+                        .filter(|operand| operand.src <= *src)
+                        .unwrap_or_else(|| {
+                            crate::ice::bug!("relocated operand end has no matching start")
+                        });
+                    operand.src_end = *src;
+                    operand.out_end = out.len();
+                }
+                TargetPiece::Mark {
                     kind: MarkKind::SharedBindingStart,
                     ..
                 } => shared_bindings.push(SharedBinding {
@@ -1108,6 +1138,7 @@ impl<'a> TargetFile<'a> {
             declared_names,
             shared_bindings,
             destructured_lists,
+            relocated_operands,
             inserted,
             support_imports: Vec::new(),
             commonjs: false,

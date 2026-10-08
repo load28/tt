@@ -43,6 +43,18 @@ pub(super) struct Emitter<'a> {
     pub(super) delivered_conditional_values: RefCell<HashSet<ExprId>>,
     pub(super) source_replacements: Vec<SourceReplacement>,
     pub(super) replacement_index: crate::span_index::SpanIndex,
+    pub(super) replacement_order: crate::span_index::NestedOrder,
+    pub(super) claim_order: (crate::span_index::NestedOrder, Vec<usize>),
+    pub(super) value_order: std::cell::OnceCell<(crate::span_index::NestedOrder, Vec<ExprId>)>,
+    pub(super) slot_value_order: std::cell::OnceCell<(crate::span_index::NestedOrder, Vec<ExprId>)>,
+    pub(super) nested_input_order:
+        std::cell::OnceCell<(crate::span_index::NestedOrder, Vec<NestedInput>)>,
+    pub(super) piped_steps: std::cell::OnceCell<HashMap<usize, (ExprId, usize)>>,
+    pub(super) deferred_arm_values: std::cell::OnceCell<HashSet<ExprId>>,
+    pub(super) slots_named:
+        std::cell::OnceCell<HashMap<String, Vec<crate::evaluation_ir::ValueSlotId>>>,
+    pub(super) statement_order:
+        std::cell::OnceCell<(crate::span_index::NestedOrder, Vec<(usize, usize)>)>,
     pub(super) claimed_frames: std::collections::BTreeMap<usize, Vec<(usize, usize)>>,
     pub(super) consumed_exprs: HashSet<ExprId>,
     pub(super) arrow_return_rewrites: Vec<ArrowReturnRewrite>,
@@ -239,6 +251,49 @@ impl Emitter<'_> {
     }
 }
 
+/// One source input a nested schedule captures, or the comma after a
+/// discarded one.
+pub(super) struct NestedInput {
+    pub(super) step: PlannedEvaluationStep,
+    pub(super) input: PlannedEvaluationInput,
+    pub(super) comma: bool,
+}
+
+/// The slots one emission has captured, and the input segments whose
+/// captures it has written: a segment's inputs are all captured once it is
+/// written, so a later step that shares it has nothing left to write there.
+#[derive(Default)]
+pub(super) struct CapturedSlots {
+    slots: HashSet<crate::evaluation_ir::ValueSlotId>,
+    written: HashSet<usize>,
+}
+
+impl CapturedSlots {
+    pub(super) fn unwritten<'s>(
+        &mut self,
+        inputs: &'s crate::chain::Segments<PlannedEvaluationInput>,
+    ) -> (usize, Vec<&'s PlannedEvaluationInput>) {
+        let (segments, unwritten) = inputs.unseen(&self.written);
+        self.written.extend(segments);
+        let skipped = inputs.len() - unwritten.len();
+        (skipped, unwritten)
+    }
+}
+
+impl std::ops::Deref for CapturedSlots {
+    type Target = HashSet<crate::evaluation_ir::ValueSlotId>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.slots
+    }
+}
+
+impl std::ops::DerefMut for CapturedSlots {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.slots
+    }
+}
+
 /// A recursion stack whose guard never holds a `RefCell` borrow while target
 /// emission calls back into itself. This state belongs to the emitter rather
 /// than a single Core walk because opaque source scanning and structured
@@ -266,6 +321,15 @@ impl ActiveExprStack {
             expr,
             anchor,
         }
+    }
+
+    pub(super) fn innermost_anchor_end(&self, at: usize) -> Option<usize> {
+        self.anchors
+            .borrow()
+            .range(..=(at, usize::MAX))
+            .rev()
+            .find(|((_, end), _)| *end > at)
+            .map(|((_, end), _)| *end)
     }
 
     pub(super) fn any_anchor_within(&self, start: usize, end: usize) -> bool {

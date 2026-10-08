@@ -260,7 +260,8 @@ impl<'a> Emitter<'a> {
             out.push_value_declaration(slot);
             out.push_break(depth);
         }
-        let mut captured = HashSet::new();
+        let mut emitted_steps = HashMap::new();
+        let mut captured = CapturedSlots::default();
         let mut regions = 0usize;
         for action in &rewrite.actions {
             match action {
@@ -317,7 +318,7 @@ impl<'a> Emitter<'a> {
                                 crate::ice::bug!("compose value is not structurally emit-able")
                             })
                         };
-                    for step in &value.steps {
+                    for step in steps_to_emit(&value.steps, &mut emitted_steps) {
                         lowered = self.emit_scheduled_step(step, lowered, &mut captured);
                     }
                     if regions > 0 {
@@ -390,7 +391,7 @@ impl<'a> Emitter<'a> {
             out.push_break(1);
         }
         self.loop_region_depth.set(self.loop_region_depth.get() + 1);
-        let mut captured = HashSet::new();
+        let mut captured = CapturedSlots::default();
         let guarded = self.guarded_test_operation(rewrite);
         for action in &rewrite.actions {
             let lowered = match action {
@@ -450,7 +451,7 @@ impl<'a> Emitter<'a> {
         &self,
         operation: &PlannedConditionalOperation,
         facts: &crate::program_syntax::IfTestFacts,
-        captured: &mut HashSet<crate::evaluation_ir::ValueSlotId>,
+        captured: &mut CapturedSlots,
     ) -> Rope<'a> {
         let result = self.value_slot_name(operation.result);
         let mut out = Rope::new();
@@ -527,7 +528,7 @@ impl<'a> Emitter<'a> {
     fn emit_test_guards(
         &self,
         operation: &PlannedConditionalOperation,
-        captured: &mut HashSet<crate::evaluation_ir::ValueSlotId>,
+        captured: &mut CapturedSlots,
     ) -> Rope<'a> {
         let result = self.value_slot_name(operation.result);
         let mut out = Rope::new();
@@ -586,7 +587,7 @@ impl<'a> Emitter<'a> {
     pub(super) fn emit_conditional_operation(
         &self,
         operation: &PlannedConditionalOperation,
-        captured: &mut HashSet<crate::evaluation_ir::ValueSlotId>,
+        captured: &mut CapturedSlots,
     ) -> Rope<'a> {
         let emitted =
             crate::stack::grow(|| self.emit_conditional_operation_grown(operation, captured));
@@ -601,7 +602,7 @@ impl<'a> Emitter<'a> {
     fn emit_conditional_operation_grown(
         &self,
         operation: &PlannedConditionalOperation,
-        captured: &mut HashSet<crate::evaluation_ir::ValueSlotId>,
+        captured: &mut CapturedSlots,
     ) -> Rope<'a> {
         self.conditional_region_depth
             .set(self.conditional_region_depth.get() + 1);
@@ -1035,7 +1036,7 @@ impl<'a> Emitter<'a> {
         result: &str,
         left: Option<(Rope<'a>, &str)>,
         gap: Option<SourceSpan>,
-        captured: &mut HashSet<crate::evaluation_ir::ValueSlotId>,
+        captured: &mut CapturedSlots,
     ) -> Rope<'a> {
         let entries: Vec<_> = values
             .iter()
@@ -1108,7 +1109,7 @@ impl<'a> Emitter<'a> {
         &self,
         operation: &PlannedConditionalOperation,
         assign: Rope<'a>,
-        captured: &mut HashSet<crate::evaluation_ir::ValueSlotId>,
+        captured: &mut CapturedSlots,
     ) -> Rope<'a> {
         let entries: Vec<_> = operation
             .values
@@ -1143,7 +1144,7 @@ impl<'a> Emitter<'a> {
         &self,
         operation: &PlannedConditionalOperation,
         values: &[ExprId],
-        captured: &mut HashSet<crate::evaluation_ir::ValueSlotId>,
+        captured: &mut CapturedSlots,
     ) -> Rope<'a> {
         let mut out = Rope::new();
         for value in values {
@@ -1176,19 +1177,71 @@ impl<'a> Emitter<'a> {
     }
 
     pub(super) fn carried_by_capture(&self, start: usize, end: usize) -> bool {
-        self.replacements_covering(start, end).any(|captured| {
-            captured.anchor.is_none()
-                && captured.source.start <= start
-                && end <= captured.source.end
-                && (captured.source.start < start || end < captured.source.end)
-                && !self.capture_is_active(captured.source)
-                && self.slot_exprs.keys().any(|expr| {
-                    let (_, value_start, _, extent) = self.value_anchor(*expr);
-                    captured.source.start <= value_start
-                        && extent <= captured.source.end
-                        && value_start <= start
-                        && end <= extent
-                })
+        let (values, exprs) = self.slot_value_order();
+        let Some(value) = values.containing(start, end, true).next() else {
+            return false;
+        };
+        let (_, value_start, _, value_end) = self.value_anchor(exprs[value]);
+        self.replacement_order
+            .containing(value_start, value_end, true)
+            .map(|index| &self.source_replacements[index])
+            .any(|captured| {
+                captured.anchor.is_none()
+                    && (captured.source.start < start || end < captured.source.end)
+                    && !self.capture_is_active(captured.source)
+            })
+    }
+
+    fn nested_input_order(&self) -> &(crate::span_index::NestedOrder, Vec<NestedInput>) {
+        self.nested_input_order.get_or_init(|| {
+            let mut covered = HashMap::new();
+            let mut read = HashSet::new();
+            let mut spans = Vec::new();
+            let mut list = Vec::new();
+            let mut exprs: Vec<&ExprId> = self.nested_schedules.keys().collect();
+            exprs.sort_unstable_by_key(|expr| expr.index());
+            for expr in exprs {
+                for step in self.nested_schedules[expr].steps().fresh(&mut covered) {
+                    for input in step.inputs.fresh(&mut read) {
+                        let PlannedEvaluationInput::Source {
+                            source: dependency,
+                            mode,
+                            ..
+                        } = input
+                        else {
+                            continue;
+                        };
+                        spans.push((dependency.start, dependency.end));
+                        list.push(NestedInput {
+                            step: step.clone(),
+                            input: *input,
+                            comma: false,
+                        });
+                        if *mode == EvaluationInputMode::Discarded {
+                            let comma = discarded_operand_comma(self.source, *dependency);
+                            spans.push((comma.start, comma.end));
+                            list.push(NestedInput {
+                                step: step.clone(),
+                                input: *input,
+                                comma: true,
+                            });
+                        }
+                    }
+                }
+            }
+            (crate::span_index::NestedOrder::new(spans), list)
+        })
+    }
+
+    fn slot_value_order(&self) -> &(crate::span_index::NestedOrder, Vec<ExprId>) {
+        self.slot_value_order.get_or_init(|| {
+            let mut exprs: Vec<ExprId> = self.slot_exprs.keys().copied().collect();
+            exprs.sort_unstable_by_key(|expr| expr.index());
+            let order = crate::span_index::NestedOrder::new(exprs.iter().map(|expr| {
+                let (_, start, _, extent) = self.value_anchor(*expr);
+                (start, extent)
+            }));
+            (order, exprs)
         })
     }
 
@@ -1198,13 +1251,14 @@ impl<'a> Emitter<'a> {
         start: usize,
         end: usize,
     ) -> bool {
-        self.slot_exprs.keys().any(|expr| {
-            let (_, value_start, _, extent) = self.value_anchor(*expr);
-            captured.start <= value_start
-                && extent <= captured.end
-                && value_start <= start
-                && end <= extent
-        })
+        let (values, exprs) = self.slot_value_order();
+        values
+            .containing(start, end, true)
+            .next()
+            .is_some_and(|value| {
+                let (_, value_start, _, extent) = self.value_anchor(exprs[value]);
+                captured.start <= value_start && extent <= captured.end
+            })
     }
 
     fn captured_source(
@@ -1244,9 +1298,9 @@ impl<'a> Emitter<'a> {
             Unclaimed(Option<SourceSpan>),
             CapturedReplacement(&'b str),
         }
-        let mut parts = Vec::new();
+        let mut eager = Vec::new();
         if let Some(piped) = piped {
-            parts.push((
+            eager.push((
                 SourceSpan {
                     start: source.start,
                     end: source.start,
@@ -1255,93 +1309,165 @@ impl<'a> Emitter<'a> {
                 Admit::Always,
             ));
         }
-        for replacement in self
-            .replacement_index
-            .starting_in(source.start, source.end.saturating_add(1))
-            .into_iter()
-            .map(|index| &self.source_replacements[index])
-        {
-            if (replacement.anchor.is_none() || !replacement.claim)
-                && source.start <= replacement.source.start
-                && replacement.source.end <= source.end
-                && (replacement.source != source || replacement.anchor.is_some())
-            {
-                parts.push((
-                    replacement.source,
-                    Part::Captured(replacement.written()),
-                    Admit::CapturedReplacement(&replacement.slot),
-                ));
-            }
-        }
-        for (step, input) in self
-            .nested_schedules
-            .values()
-            .flat_map(EvaluationSchedule::steps)
-            .flat_map(|step| step.inputs.iter().map(move |input| (step, input)))
-        {
-            if let PlannedEvaluationInput::Source {
-                source: dependency,
-                target,
-                mode,
-                ..
-            } = input
-                && source.start <= dependency.start
-                && dependency.end <= source.end
-                && *dependency != source
-                && captured.contains(target)
-            {
-                if *mode == EvaluationInputMode::Discarded {
-                    parts.push((*dependency, Part::Read(String::new()), Admit::Always));
-                    let comma = discarded_operand_comma(self.source, *dependency);
-                    if comma.end <= source.end {
-                        parts.push((comma, Part::Read(String::new()), Admit::Always));
-                    }
-                } else {
-                    parts.push((
-                        *dependency,
-                        Part::Piped(self.captured_reading_rope(step, input)),
-                        Admit::Always,
-                    ));
-                }
-            }
-        }
-        for expr in self.value_slots.keys() {
-            let (_, start, _, extent) = self.value_anchor(*expr);
-            let span = SourceSpan { start, end: extent };
-            if source.start <= start && extent <= source.end {
-                parts.push((span, Part::Value(*expr), Admit::Unclaimed(Some(source))));
-            }
-        }
-        for (span, statement) in self.statements_within(source) {
-            parts.push((
-                span,
-                Part::Statement(statement),
-                Admit::Unclaimed(Some(source)),
-            ));
-        }
-        parts.sort_by_key(|(span, part, _)| {
-            (
-                span.start,
-                std::cmp::Reverse(span.end),
-                !matches!(part, Part::Captured(_)),
-            )
-        });
+        eager.sort_by_key(|(span, ..)| (span.start, std::cmp::Reverse(span.end)));
+        let (values, value_exprs) = self.value_order();
+        let (statements, statement_list) = self.statement_order();
+        let (inputs, input_list) = self.nested_input_order();
+        let mut input_at = 0;
         self.active_capture_sources.borrow_mut().push(source);
         self.rebuilt_sources.borrow_mut().push(source);
         let mut out = Rope::new();
         let mut cursor = source.start;
-        for (span, part, admit) in parts {
-            if span.start < cursor {
-                continue;
+        let (mut eager_at, mut replacement_at, mut value_at, mut statement_at) = (0, 0, 0, 0);
+        let mut eager = eager.into_iter().map(Some).collect::<Vec<_>>();
+        loop {
+            while eager_at < eager.len()
+                && eager[eager_at]
+                    .as_ref()
+                    .is_none_or(|(span, ..)| span.start < cursor)
+            {
+                eager_at += 1;
             }
+            let replacement = loop {
+                let Some(position) =
+                    self.replacement_order
+                        .next_within(cursor, source.end, replacement_at)
+                else {
+                    break None;
+                };
+                let replacement = &self.source_replacements[self.replacement_order.index(position)];
+                if (replacement.anchor.is_none() || !replacement.claim)
+                    && (replacement.source != source || replacement.anchor.is_some())
+                {
+                    break Some(position);
+                }
+                replacement_at = position + 1;
+            };
+            let input = loop {
+                let Some(position) = inputs.next_within(cursor, source.end, input_at) else {
+                    break None;
+                };
+                let entry = &input_list[inputs.index(position)];
+                if let PlannedEvaluationInput::Source {
+                    source: dependency,
+                    target,
+                    ..
+                } = entry.input
+                    && dependency != source
+                    && captured.contains(&target)
+                {
+                    break Some(position);
+                }
+                input_at = position + 1;
+            };
+            let value = values.next_within(cursor, source.end, value_at);
+            let statement = statements.next_within(cursor, source.end, statement_at);
+            let span_of = |(start, end): (usize, usize)| SourceSpan { start, end };
+            let mut candidates: Vec<(SourceSpan, u8)> = Vec::with_capacity(4);
+            if let Some(position) = replacement {
+                candidates.push((span_of(self.replacement_order.span(position)), 0));
+            }
+            if let Some(Some((span, ..))) = eager.get(eager_at) {
+                candidates.push((*span, 1));
+            }
+            if let Some(position) = input {
+                candidates.push((span_of(inputs.span(position)), 1));
+            }
+            if let Some(position) = value {
+                candidates.push((span_of(values.span(position)), 2));
+            }
+            if let Some(position) = statement {
+                candidates.push((span_of(statements.span(position)), 3));
+            }
+            let Some(&(span, kind)) = candidates
+                .iter()
+                .enumerate()
+                .min_by_key(|(order, (span, kind))| {
+                    (span.start, std::cmp::Reverse(span.end), *kind, *order)
+                })
+                .map(|(_, candidate)| candidate)
+            else {
+                break;
+            };
+            let kind = if kind == 1
+                && input.is_some_and(|position| span_of(inputs.span(position)) == span)
+                && !eager
+                    .get(eager_at)
+                    .is_some_and(|entry| entry.as_ref().is_some_and(|(other, ..)| *other == span))
+            {
+                4
+            } else {
+                kind
+            };
+            let (part, admit) = match kind {
+                0 => {
+                    let position = replacement.expect("a replacement candidate");
+                    replacement_at = position + 1;
+                    let replacement =
+                        &self.source_replacements[self.replacement_order.index(position)];
+                    (
+                        Part::Captured(replacement.written()),
+                        Admit::CapturedReplacement(&replacement.slot),
+                    )
+                }
+                1 => {
+                    let (_, part, admit) = eager[eager_at].take().expect("an eager candidate");
+                    eager_at += 1;
+                    (part, admit)
+                }
+                4 => {
+                    let position = input.expect("an input candidate");
+                    input_at = position + 1;
+                    let entry = &input_list[inputs.index(position)];
+                    let part = match entry.input {
+                        PlannedEvaluationInput::Source {
+                            mode: EvaluationInputMode::Discarded,
+                            ..
+                        } => Part::Read(String::new()),
+                        _ if entry.comma => Part::Read(String::new()),
+                        _ => Part::Piped(self.captured_reading_rope(&entry.step, &entry.input)),
+                    };
+                    (part, Admit::Always)
+                }
+                2 => {
+                    let position = value.expect("a value candidate");
+                    value_at = position + 1;
+                    (
+                        Part::Value(value_exprs[values.index(position)]),
+                        Admit::Unclaimed(Some(source)),
+                    )
+                }
+                _ => {
+                    let position = statement.expect("a statement candidate");
+                    statement_at = position + 1;
+                    (
+                        Part::Statement({
+                            let (body, at) = statement_list[statements.index(position)];
+                            &self.core.bodies[body].statements[at]
+                        }),
+                        Admit::Unclaimed(Some(source)),
+                    )
+                }
+            };
             let admitted = match admit {
                 Admit::Always => true,
                 Admit::Unclaimed(within) => !self.inside_claimed_frame(span, within),
                 Admit::CapturedReplacement(slot) => {
                     !self.inside_claimed_frame(span, None)
-                        && captured
-                            .iter()
-                            .any(|captured| self.value_slot_name(*captured) == slot)
+                        && self
+                            .slots_named
+                            .get_or_init(|| {
+                                let mut named = HashMap::<String, Vec<_>>::new();
+                                for (slot, name) in &self.scheduled_slots {
+                                    named.entry(name.clone()).or_default().push(*slot);
+                                }
+                                named
+                            })
+                            .get(slot)
+                            .is_some_and(|slots| {
+                                crate::work::tick_by("captured slot checks", slots.len());
+                                slots.iter().any(|slot| captured.contains(slot))
+                            })
                 }
             };
             if !admitted {
@@ -1372,7 +1498,7 @@ impl<'a> Emitter<'a> {
                             self.emit_selected_arm_values(expr, name)
                         } else {
                             let mut slot = Rope::new();
-                            slot.push_lit(name.clone());
+                            slot.push_relocated_operand(name.clone(), start, extent);
                             slot
                         };
                         out.anchored(kind, start, head_end, extent, slot);
@@ -1393,6 +1519,44 @@ impl<'a> Emitter<'a> {
         self.active_capture_sources.borrow_mut().pop();
         self.rebuilt_sources.borrow_mut().pop();
         out
+    }
+
+    fn value_order(&self) -> &(crate::span_index::NestedOrder, Vec<ExprId>) {
+        self.value_order.get_or_init(|| {
+            let mut exprs: Vec<ExprId> = self.value_slots.keys().copied().collect();
+            exprs.sort_unstable_by_key(|expr| expr.index());
+            let order = crate::span_index::NestedOrder::new(exprs.iter().map(|expr| {
+                let (_, start, _, extent) = self.value_anchor(*expr);
+                (start, extent)
+            }));
+            (order, exprs)
+        })
+    }
+
+    fn statement_order(&self) -> &(crate::span_index::NestedOrder, Vec<(usize, usize)>) {
+        self.statement_order.get_or_init(|| {
+            let mut spans = Vec::new();
+            let mut places = Vec::new();
+            for (body, statements) in self.core.bodies.iter().enumerate() {
+                for (at, statement) in statements.statements.iter().enumerate() {
+                    let node = match statement {
+                        Statement::Decision(decision) => decision.extent,
+                        Statement::Propagate(propagate) => propagate.owner,
+                        Statement::Adt(adt) => adt.node,
+                        _ => continue,
+                    };
+                    let span = self
+                        .semantic
+                        .hir
+                        .source_map
+                        .node_extent(node)
+                        .expect("statement extent");
+                    spans.push((span.start, span.end));
+                    places.push((body, at));
+                }
+            }
+            (crate::span_index::NestedOrder::new(spans), places)
+        })
     }
 
     fn expressions_within(&self, source: SourceSpan) -> impl Iterator<Item = ExprId> + '_ {
@@ -1606,7 +1770,7 @@ impl<'a> Emitter<'a> {
                 });
             (!covered).then(|| {
                 let mut slot = Rope::new();
-                slot.push_lit(self.value_name_of(*expr).to_owned());
+                slot.push_relocated_operand(self.value_name_of(*expr).to_owned(), start, extent);
                 let mut rendered = Rope::new();
                 rendered.anchored(kind, start, head_end, extent, slot);
                 (source, rendered)
@@ -1968,22 +2132,40 @@ impl<'a> Emitter<'a> {
     }
 
     pub(super) fn piped_value_at(&self, position: usize) -> Option<Rope<'a>> {
-        self.core
-            .exprs
-            .iter()
-            .enumerate()
-            .find_map(|(index, expr)| {
-                let Expr::Apply(apply) = expr else {
-                    return None;
-                };
-                apply.head?;
-                let piped = self.piped_slots.get(&ExprId::new(index))?;
-                let step = apply.steps.iter().position(|step| {
-                    matches!(step.mode, ApplyMode::Postfix { .. })
-                        && self.span(step.node).start == position
-                })?;
-                Some(self.pipe_input(apply, step, piped.get(step)?))
+        let (expr, step) = *self
+            .piped_steps
+            .get_or_init(|| {
+                let mut steps = HashMap::new();
+                for (index, expr) in self.core.exprs.iter().enumerate() {
+                    crate::work::tick("piped step lookups");
+                    let Expr::Apply(apply) = expr else {
+                        continue;
+                    };
+                    if apply.head.is_none() {
+                        continue;
+                    }
+                    let id = ExprId::new(index);
+                    let Some(piped) = self.piped_slots.get(&id) else {
+                        continue;
+                    };
+                    let mut seen = HashSet::new();
+                    for (step, planned) in apply.steps.iter().enumerate() {
+                        if !matches!(planned.mode, ApplyMode::Postfix { .. }) {
+                            continue;
+                        }
+                        let start = self.span(planned.node).start;
+                        if seen.insert(start) && piped.get(step).is_some() {
+                            steps.entry(start).or_insert((id, step));
+                        }
+                    }
+                }
+                steps
             })
+            .get(&position)?;
+        let Expr::Apply(apply) = &self.core.exprs[expr.index()] else {
+            crate::ice::bug!("a piped step belongs to an application");
+        };
+        Some(self.pipe_input(apply, step, &self.piped_slots[&expr][step]))
     }
 
     pub(super) fn pipe_input(&self, apply: &Apply, step: usize, piped: &str) -> Rope<'a> {
@@ -2042,7 +2224,7 @@ impl<'a> Emitter<'a> {
         &self,
         step: &PlannedEvaluationStep,
         action: Rope<'a>,
-        captured: &mut HashSet<crate::evaluation_ir::ValueSlotId>,
+        captured: &mut CapturedSlots,
     ) -> Rope<'a> {
         crate::stack::grow(|| self.emit_scheduled_step_grown(step, action, captured))
     }
@@ -2051,7 +2233,7 @@ impl<'a> Emitter<'a> {
         &self,
         step: &PlannedEvaluationStep,
         action: Rope<'a>,
-        captured: &mut HashSet<crate::evaluation_ir::ValueSlotId>,
+        captured: &mut CapturedSlots,
     ) -> Rope<'a> {
         let optional_reference = matches!(
             step.operation,
@@ -2067,7 +2249,9 @@ impl<'a> Emitter<'a> {
                 == Some(OptionalCallTest::Receiver);
         let mut prefix = Rope::new();
         let mut guarded = Rope::new();
-        for (index, input) in step.inputs.iter().enumerate() {
+        let (skipped, unwritten) = captured.unwritten(&step.inputs);
+        crate::work::tick_by("scheduled input visits", unwritten.len());
+        for (index, input) in (skipped..).zip(unwritten) {
             let PlannedEvaluationInput::Source {
                 source,
                 mode,
@@ -2458,4 +2642,35 @@ impl<'a> Emitter<'a> {
             _ => (String::new(), ""),
         }
     }
+}
+
+/// The steps of `steps` a value of a compose rewrite still has to write.
+/// A run of steps an earlier value of the rewrite already wrote captured
+/// every input it reads, so a later value sharing that run adds nothing by
+/// writing it again, unless the run holds a conditional step, whose guard
+/// each value is written under.
+fn steps_to_emit<'s>(
+    steps: &'s crate::chain::ChainSlice<PlannedEvaluationStep>,
+    emitted: &mut HashMap<usize, (usize, bool)>,
+) -> Vec<&'s PlannedEvaluationStep> {
+    let mut fresh = Vec::new();
+    let mut rest_conditional = false;
+    for (identity, remaining, step) in steps.links() {
+        if let Some(&(seen, conditional)) = emitted.get(&identity)
+            && seen >= remaining
+        {
+            rest_conditional = conditional;
+            break;
+        }
+        fresh.push((identity, remaining, step));
+    }
+    let mut conditional = rest_conditional;
+    for &(identity, remaining, step) in fresh.iter().rev() {
+        conditional |= matches!(step.operation, HostEvaluationOperation::Conditional(_));
+        emitted.insert(identity, (remaining, conditional));
+    }
+    if rest_conditional {
+        return steps.iter().collect();
+    }
+    fresh.into_iter().map(|(_, _, step)| step).collect()
 }

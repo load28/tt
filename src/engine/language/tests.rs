@@ -708,16 +708,16 @@ fn signature_help_is_asked_outside_every_generated_argument_list() {
         },
     ];
     let kind = crate::SourceKind::TypeScript;
-    assert_eq!(signature_position(code, &mappings, kind, 12), 7);
-    assert_eq!(signature_position(code, &mappings, kind, 9), 7);
-    assert_eq!(signature_position(code, &mappings, kind, 23), 21);
-    assert_eq!(signature_position(code, &mappings, kind, 2), 2);
+    assert_eq!(signature_position(code, &mappings, &[], kind, 12), 7);
+    assert_eq!(signature_position(code, &mappings, &[], kind, 9), 7);
+    assert_eq!(signature_position(code, &mappings, &[], kind, 23), 21);
+    assert_eq!(signature_position(code, &mappings, &[], kind, 2), 2);
     let copied = [EmitMapping {
         src: 0,
         out: 0,
         len: 9,
     }];
-    assert_eq!(signature_position("foo(a, b)", &copied, kind, 6), 6);
+    assert_eq!(signature_position("foo(a, b)", &copied, &[], kind, 6), 6);
 }
 
 #[test]

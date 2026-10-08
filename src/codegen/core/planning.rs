@@ -1385,29 +1385,37 @@ impl TargetRewritePlan {
                     })
             })
         };
-        let planned_steps = || {
-            all_values()
-                .flat_map(|value| &value.steps)
-                .chain(all_operations().flat_map(|operation| {
-                    operation
-                        .active
-                        .iter()
-                        .flat_map(|active| &active.steps)
-                        .chain(&operation.outer)
-                }))
-                .chain(lowering.nested_operations().iter().flat_map(|operation| {
-                    operation
-                        .active
-                        .iter()
-                        .flat_map(|active| &active.steps)
-                        .chain(&operation.outer)
-                }))
-                .chain(
-                    lowering
-                        .nested_value_schedules()
-                        .flat_map(|(_, schedule)| schedule.steps()),
-                )
-        };
+        fn operation_steps(
+            operation: &PlannedConditionalOperation,
+        ) -> impl Iterator<Item = &crate::chain::ChainSlice<PlannedEvaluationStep>> {
+            operation
+                .active
+                .iter()
+                .map(|active| &active.steps)
+                .chain(std::iter::once(&operation.outer))
+        }
+        let mut covered_steps = HashMap::new();
+        let mut rewritten_step_list: Vec<&PlannedEvaluationStep> = Vec::new();
+        for steps in all_values()
+            .map(|value| &value.steps)
+            .chain(all_operations().flat_map(operation_steps))
+        {
+            rewritten_step_list.extend(steps.fresh(&mut covered_steps));
+        }
+        let mut planned_step_list = rewritten_step_list.clone();
+        for steps in lowering
+            .nested_operations()
+            .iter()
+            .flat_map(operation_steps)
+            .chain(
+                lowering
+                    .nested_value_schedules()
+                    .map(|(_, schedule)| schedule.steps()),
+            )
+        {
+            planned_step_list.extend(steps.fresh(&mut covered_steps));
+        }
+        let planned_steps = || planned_step_list.iter().copied();
         let compound_assignments = compound_assignment_frames(source, planned_steps());
         let discarded_values: Vec<(ExprId, SourceSpan, SourceSpan)> = all_values()
             .filter_map(|value| {
@@ -1415,8 +1423,13 @@ impl TargetRewritePlan {
                     .map(|comma| (value.expr, value.source, comma))
             })
             .collect();
+        let mut read_tags = HashSet::new();
         let closing_tags: Vec<(SourceSpan, crate::evaluation_ir::ValueSlotId)> = planned_steps()
-            .flat_map(|step| step.inputs.iter().map(move |input| (step, input)))
+            .flat_map(|step| {
+                let inputs = step.inputs.fresh_under(step.parent, &mut read_tags);
+                crate::work::tick_by("planned input visits", inputs.len());
+                inputs.into_iter().map(move |input| (step, input))
+            })
             .filter_map(|(step, input)| match input {
                 PlannedEvaluationInput::Source {
                     target,
@@ -1492,16 +1505,17 @@ impl TargetRewritePlan {
                 }
             })
             .collect();
-        let mut source_replacements: Vec<_> = all_values()
-            .flat_map(|value| &value.steps)
-            .chain(all_operations().flat_map(|operation| {
-                operation
-                    .active
-                    .iter()
-                    .flat_map(|active| &active.steps)
-                    .chain(&operation.outer)
-            }))
-            .flat_map(|step| step.inputs.iter().map(move |input| (step, input)))
+        let mut read_inputs = HashSet::new();
+        let mut source_replacements: Vec<_> = rewritten_step_list
+            .iter()
+            .copied()
+            .flat_map(|step| {
+                let inputs = step
+                    .inputs
+                    .fresh_under(callee_tested_step(step), &mut read_inputs);
+                crate::work::tick_by("planned input visits", inputs.len());
+                inputs.into_iter().map(move |input| (step, input))
+            })
             .flat_map(|(step, input)| match input {
                 PlannedEvaluationInput::Source {
                     source: target_span,
@@ -1663,21 +1677,22 @@ impl TargetRewritePlan {
             // operand). Their actions still run, but their authored inline
             // occurrences must not be appended after the operation's join slot.
             .chain(composes.iter().flat_map(|rewrite| {
-                let operations = || {
+                let parents = crate::span_index::NestedOrder::new(
                     rewrite.actions.iter().filter_map(|action| match action {
-                        ComposeAction::Operation(operation) => Some(operation),
+                        ComposeAction::Operation(operation) => {
+                            Some((operation.parent.start, operation.parent.end))
+                        }
                         ComposeAction::Value(_) => None,
-                    })
-                };
+                    }),
+                );
                 rewrite
                     .actions
                     .iter()
                     .filter_map(move |action| match action {
-                        ComposeAction::Value(value) => operations()
-                            .any(|operation| {
-                                operation.parent.start <= value.source.start
-                                    && value.source.end <= operation.parent.end
-                            })
+                        ComposeAction::Value(value) => parents
+                            .containing(value.source.start, value.source.end, false)
+                            .next()
+                            .is_some()
                             .then_some(value.expr),
                         ComposeAction::Operation(_) => None,
                     })

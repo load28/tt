@@ -100,6 +100,10 @@ impl EditorSource {
                 occurrence.src_end = self.original(occurrence.src_end);
             }
         }
+        for operand in &mut emit.relocated_operands {
+            operand.src = self.original(operand.src);
+            operand.src_end = self.original(operand.src_end);
+        }
         for list in &mut emit.destructured_lists {
             list.src = self.original(list.src);
             list.src_end = self.original(list.src_end);

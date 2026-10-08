@@ -111,6 +111,114 @@ impl SpanIndex {
     }
 }
 
+/// Spans ordered by start, the wider of two spans with one start first, so
+/// a walk over a range meets each outermost span before the spans inside it.
+#[derive(Debug, Default)]
+pub(crate) struct NestedOrder {
+    starts: Vec<usize>,
+    ends: Vec<usize>,
+    indices: Vec<usize>,
+    max_end: Vec<usize>,
+    min_end: Vec<usize>,
+    leaves: usize,
+}
+
+impl NestedOrder {
+    pub(crate) fn new(spans: impl IntoIterator<Item = (usize, usize)>) -> Self {
+        let spans: Vec<(usize, usize)> = spans.into_iter().collect();
+        let mut indices: Vec<usize> = (0..spans.len()).collect();
+        indices.sort_by_key(|&index| (spans[index].0, std::cmp::Reverse(spans[index].1), index));
+        let leaves = indices.len().next_power_of_two();
+        let mut max_end = vec![0; 2 * leaves];
+        for (position, &index) in indices.iter().enumerate() {
+            max_end[leaves + position] = spans[index].1;
+        }
+        let mut min_end = vec![usize::MAX; 2 * leaves];
+        for (position, &index) in indices.iter().enumerate() {
+            min_end[leaves + position] = spans[index].1;
+        }
+        for node in (1..leaves).rev() {
+            max_end[node] = max_end[2 * node].max(max_end[2 * node + 1]);
+            min_end[node] = min_end[2 * node].min(min_end[2 * node + 1]);
+        }
+        Self {
+            starts: indices.iter().map(|&index| spans[index].0).collect(),
+            ends: indices.iter().map(|&index| spans[index].1).collect(),
+            indices,
+            max_end,
+            min_end,
+            leaves,
+        }
+    }
+
+    /// The spans that contain `start..end`, each once: the innermost first
+    /// when `innermost` is set, the outermost first otherwise.
+    pub(crate) fn containing(
+        &self,
+        start: usize,
+        end: usize,
+        innermost: bool,
+    ) -> impl Iterator<Item = usize> + '_ {
+        self.containing_within(start, end, usize::MAX, innermost)
+    }
+
+    /// [`Self::containing`], keeping only the spans that end at or before
+    /// `bound`.
+    pub(crate) fn containing_within(
+        &self,
+        start: usize,
+        end: usize,
+        bound: usize,
+        innermost: bool,
+    ) -> impl Iterator<Item = usize> + '_ {
+        let limit = self.starts.partition_point(|&at| at <= start);
+        let mut stack = vec![(1usize, 0usize, self.leaves)];
+        std::iter::from_fn(move || {
+            while let Some((node, low, high)) = stack.pop() {
+                if low >= limit || self.max_end[node] < end || self.min_end[node] > bound {
+                    continue;
+                }
+                if high - low == 1 {
+                    return Some(self.indices[low]);
+                }
+                let middle = low + (high - low) / 2;
+                if innermost {
+                    stack.push((2 * node, low, middle));
+                    stack.push((2 * node + 1, middle, high));
+                } else {
+                    stack.push((2 * node + 1, middle, high));
+                    stack.push((2 * node, low, middle));
+                }
+            }
+            None
+        })
+    }
+
+    /// The first position at or after `after` whose span starts at or after
+    /// `cursor` and ends at or before `bound`.
+    pub(crate) fn next_within(&self, cursor: usize, bound: usize, after: usize) -> Option<usize> {
+        let mut at = after.max(self.starts.partition_point(|&start| start < cursor));
+        while at < self.starts.len() && self.starts[at] <= bound {
+            let start = self.starts[at];
+            let group = self.starts.partition_point(|&other| other <= start);
+            let within = at + self.ends[at..group].partition_point(|&end| end > bound);
+            if within < group {
+                return Some(within);
+            }
+            at = group;
+        }
+        None
+    }
+
+    pub(crate) fn span(&self, position: usize) -> (usize, usize) {
+        (self.starts[position], self.ends[position])
+    }
+
+    pub(crate) fn index(&self, position: usize) -> usize {
+        self.indices[position]
+    }
+}
+
 pub(crate) fn innermost_containers(
     spans: &[(usize, usize)],
     queries: &[(usize, usize)],
@@ -244,6 +352,55 @@ mod tests {
                     index.ending_in(at, to),
                     scan(|_, end| at <= end && end < to)
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn a_containing_walk_meets_what_a_scan_of_the_spans_meets_in_order() {
+        let order = NestedOrder::new(SPANS);
+        for at in 0..65 {
+            for to in at..65 {
+                let mut outer = scan(|start, end| start <= at && to <= end);
+                outer.sort_by_key(|&index| {
+                    (SPANS[index].0, std::cmp::Reverse(SPANS[index].1), index)
+                });
+                assert_eq!(order.containing(at, to, false).collect::<Vec<_>>(), outer);
+                for bound in to..65 {
+                    let within: Vec<usize> = outer
+                        .iter()
+                        .copied()
+                        .filter(|&index| SPANS[index].1 <= bound)
+                        .collect();
+                    assert_eq!(
+                        order
+                            .containing_within(at, to, bound, false)
+                            .collect::<Vec<_>>(),
+                        within
+                    );
+                }
+                outer.reverse();
+                assert_eq!(order.containing(at, to, true).collect::<Vec<_>>(), outer);
+            }
+        }
+    }
+
+    #[test]
+    fn a_nested_walk_meets_what_a_scan_of_the_spans_meets_in_order() {
+        let order = NestedOrder::new(SPANS);
+        for cursor in 0..65 {
+            for bound in cursor..65 {
+                let mut expected: Vec<usize> = scan(|start, end| cursor <= start && end <= bound);
+                expected.sort_by_key(|&index| {
+                    (SPANS[index].0, std::cmp::Reverse(SPANS[index].1), index)
+                });
+                let mut walked = Vec::new();
+                let mut after = 0;
+                while let Some(position) = order.next_within(cursor, bound, after) {
+                    walked.push(order.index(position));
+                    after = position + 1;
+                }
+                assert_eq!(walked, expected);
             }
         }
     }

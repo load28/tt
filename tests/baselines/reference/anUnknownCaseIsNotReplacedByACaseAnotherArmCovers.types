@@ -1,0 +1,57 @@
+=== anUnknownCaseIsNotReplacedByACaseAnotherArmCovers.tt ===
+variant S { Alpha(x: number), Beta(y: string), Gamma }
+>S : type S = {
+>       kind: "Alpha";
+>       x: number;
+>   } | {
+>       kind: "Beta";
+>       y: string;
+>   } | {
+>       kind: "Gamma";
+>   }
+>Alpha : (property) Alpha: (x: number) => S
+>x : (property) x: number
+>Beta : (property) Beta: (y: string) => S
+>y : (property) y: string
+>Gamma : (property) Gamma: {
+>       readonly kind: "Gamma";
+>   }
+declare const s: S;
+>s : const s: S
+>S : type S = {
+>       kind: "Alpha";
+>       x: number;
+>   } | {
+>       kind: "Beta";
+>       y: string;
+>   } | {
+>       kind: "Gamma";
+>   }
+export const covered = match (s) { Alpha(x) => x, Beta(y) => y.length, Gamma => 0, Delta => 1 };
+>covered : const covered: number
+>s : const s: S
+>x : const x: number
+>x : const x: number
+>y : const y: string
+>y : const y: string
+>length : (property) String.length: number
+export const open = match (s) { Alpha(x) => x, Bta(y) => y.length, Gamma => 0 };
+>open : const open: any
+>s : const s: S
+>x : const x: number
+>x : const x: number
+>y : const y: never
+>y : const y: never
+export const guarded = match (s) {
+>guarded : const guarded: number
+>s : const s: S
+  Alpha(x) => x,
+>x : const x: number
+>x : const x: number
+  Beta(y) if y.length > 0 => 1,
+>y : const y: string
+>y : const y: string
+>length : (property) String.length: number
+  Bta(y) => 2,
+>y : const y: never
+

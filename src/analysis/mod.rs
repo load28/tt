@@ -208,7 +208,7 @@ pub struct UnresolvedName {
     /// a match pattern. `None` for `if let` and let-else sites, which have no
     /// exhaustiveness or match-glue consequences to suppress.
     pub match_owner: Option<usize>,
-    pub(crate) replacement: String,
+    pub(crate) replacement: Option<String>,
 }
 
 /// What kind of name an [`UnresolvedName`] is.

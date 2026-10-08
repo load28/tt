@@ -75,6 +75,8 @@ pub struct LineMap<'a> {
     starts: std::borrow::Cow<'a, [usize]>,
     /// Byte offset of each line's break, or of the text's end on the last.
     ends: std::borrow::Cow<'a, [usize]>,
+    /// Whether each line is ASCII, so its columns are its byte offsets.
+    ascii: std::borrow::Cow<'a, [bool]>,
 }
 
 /// A [`LineMap`]'s measurements, kept apart from the text they measure.
@@ -83,6 +85,7 @@ pub(crate) struct LineIndex {
     signature: usize,
     starts: Vec<usize>,
     ends: Vec<usize>,
+    ascii: Vec<bool>,
 }
 
 impl<'a> LineMap<'a> {
@@ -94,23 +97,32 @@ impl<'a> LineMap<'a> {
         let signature = signature_len(text);
         let mut starts = vec![signature];
         let mut ends = Vec::new();
+        let mut ascii = Vec::new();
+        let mut line_ascii = true;
         let mut at = signature;
         while at < bytes.len() {
             match breaks.break_end(bytes, at) {
                 Some(next) => {
                     ends.push(at);
+                    ascii.push(line_ascii);
+                    line_ascii = true;
                     starts.push(next);
                     at = next;
                 }
-                None => at += 1,
+                None => {
+                    line_ascii &= bytes[at].is_ascii();
+                    at += 1;
+                }
             }
         }
         ends.push(bytes.len());
+        ascii.push(line_ascii);
         Self {
             text,
             signature,
             starts: starts.into(),
             ends: ends.into(),
+            ascii: ascii.into(),
         }
     }
 
@@ -119,6 +131,7 @@ impl<'a> LineMap<'a> {
             signature: self.signature,
             starts: self.starts.to_vec(),
             ends: self.ends.to_vec(),
+            ascii: self.ascii.to_vec(),
         }
     }
 
@@ -128,6 +141,7 @@ impl<'a> LineMap<'a> {
             signature: index.signature,
             starts: std::borrow::Cow::Borrowed(&index.starts),
             ends: std::borrow::Cow::Borrowed(&index.ends),
+            ascii: std::borrow::Cow::Borrowed(&index.ascii),
         }
     }
 
@@ -200,6 +214,10 @@ impl<'a> LineMap<'a> {
     #[must_use]
     pub fn utf16_position(&self, byte: usize) -> (usize, usize) {
         let (line, prefix) = self.prefix(byte);
+        if self.ascii[line] {
+            return (line, prefix.len());
+        }
+        crate::work::tick_by("column scan bytes", prefix.len());
         (line, prefix.encode_utf16().count())
     }
 
@@ -208,6 +226,10 @@ impl<'a> LineMap<'a> {
     #[must_use]
     pub fn char_position(&self, byte: usize) -> (usize, usize) {
         let (line, prefix) = self.prefix(byte);
+        if self.ascii[line] {
+            return (line, prefix.len());
+        }
+        crate::work::tick_by("column scan bytes", prefix.len());
         (line, prefix.chars().count())
     }
 
@@ -220,6 +242,10 @@ impl<'a> LineMap<'a> {
         let Some(text) = self.line_text(line) else {
             return self.text.len();
         };
+        if self.ascii[line] {
+            return self.starts[line] + column.min(text.len());
+        }
+        crate::work::tick_by("column scan bytes", text.len());
         let mut units = 0;
         for (byte, ch) in text.char_indices() {
             units += ch.len_utf16();
@@ -237,6 +263,10 @@ impl<'a> LineMap<'a> {
     pub fn char_offset(&self, line: usize, column: usize) -> Option<usize> {
         let text = self.line_text(line)?;
         let start = self.starts[line];
+        if self.ascii[line] {
+            return (column <= text.len()).then_some(start + column);
+        }
+        crate::work::tick_by("column scan bytes", text.len());
         match text.char_indices().nth(column) {
             Some((byte, _)) => Some(start + byte),
             None => (column == text.chars().count()).then_some(self.ends[line]),

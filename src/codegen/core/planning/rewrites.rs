@@ -191,8 +191,9 @@ pub(super) fn discarded_operand_commas<'s>(
     source: &str,
     steps: impl Iterator<Item = &'s PlannedEvaluationStep>,
 ) -> Vec<SourceSpan> {
+    let mut read = std::collections::HashSet::new();
     steps
-        .flat_map(|step| &step.inputs)
+        .flat_map(|step| step.inputs.fresh(&mut read))
         .filter_map(|input| match input {
             PlannedEvaluationInput::Source {
                 source: operand,
@@ -212,8 +213,9 @@ pub(super) fn compound_assignment_frames<'s>(
     source: &str,
     steps: impl Iterator<Item = &'s PlannedEvaluationStep>,
 ) -> Vec<SourceSpan> {
+    let mut read = std::collections::HashSet::new();
     steps
-        .flat_map(|step| &step.inputs)
+        .flat_map(|step| step.inputs.fresh(&mut read))
         .filter_map(|input| match input {
             PlannedEvaluationInput::Source {
                 source: target,

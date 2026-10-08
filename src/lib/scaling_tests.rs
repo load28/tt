@@ -742,3 +742,29 @@ fn compiling_maps_each_projected_span_once_for_nested_tt_values() {
     assert_linear(&small, &large);
     assert!(large["projection span lookups"] > 0);
 }
+
+fn try_operands(count: usize, joined: impl Fn(Vec<&str>) -> String) -> String {
+    format!(
+        "type R = {{ kind: \"Ok\"; value: number }} | {{ kind: \"Err\"; error: string }};\n\
+         declare function g(): R;\ndeclare function h(...values: number[]): number;\n\
+         export function f(): R {{\n  const v = {};\n  return {{ kind: \"Ok\", value: v }};\n}}\n",
+        joined(vec!["try g()"; count]),
+    )
+}
+
+#[test]
+fn compiling_does_linear_work_in_the_number_of_try_operands_of_one_expression() {
+    let compile = |source: String| {
+        crate::compile(&source, &crate::Options::default()).expect("the file compiles");
+    };
+    for joined in [
+        (|operands: Vec<&str>| operands.join(" + ")) as fn(Vec<&str>) -> String,
+        |operands| format!("h({})", operands.join(", ")),
+    ] {
+        let small = measure(|| compile(try_operands(100, joined)));
+        let large = measure(|| compile(try_operands(200, joined)));
+        assert_linear(&small, &large);
+        assert!(large["scheduled input visits"] > 0);
+        assert!(large["planned input visits"] > 0);
+    }
+}

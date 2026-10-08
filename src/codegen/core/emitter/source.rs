@@ -82,9 +82,8 @@ impl<'a> Emitter<'a> {
         start: usize,
         end: usize,
     ) -> impl Iterator<Item = &SourceReplacement> {
-        self.replacement_index
-            .covering(start, end)
-            .into_iter()
+        self.replacement_order
+            .containing(start, end, false)
             .map(|index| &self.source_replacements[index])
     }
 
@@ -372,9 +371,21 @@ impl<'a> Emitter<'a> {
                 continue;
             }
             if let Some(replacement) = self
-                .replacement_index
-                .containing(cursor)
-                .into_iter()
+                .replacement_order
+                .containing_within(
+                    cursor,
+                    cursor.saturating_add(1),
+                    self.rebuilt_sources
+                        .borrow()
+                        .last()
+                        .map_or(usize::MAX, |rebuilt| rebuilt.end)
+                        .min(
+                            self.active_structured_exprs
+                                .innermost_anchor_end(cursor)
+                                .unwrap_or(usize::MAX),
+                        ),
+                    false,
+                )
                 .map(|index| &self.source_replacements[index])
                 .find(|replacement| {
                     if replacement.anchor.is_some() {
@@ -402,14 +413,22 @@ impl<'a> Emitter<'a> {
                     if replacement.jsx_child {
                         rope.push_lit("{");
                     }
+                    let mut name = Rope::new();
+                    if replacement.rewrite.is_none() {
+                        name.push_relocated_operand(
+                            replacement.slot.clone(),
+                            replacement.source.start,
+                            replacement.source.end,
+                        );
+                    } else {
+                        name.push_lit(replacement.written().to_owned());
+                    }
                     match replacement.anchor {
                         Some(expr) => {
                             let (kind, start, end, extent) = self.value_anchor(expr);
-                            let mut name = Rope::new();
-                            name.push_lit(replacement.written().to_owned());
                             rope.anchored(kind, start, end, extent, name);
                         }
-                        None => rope.push_lit(replacement.written().to_owned()),
+                        None => rope.append(name),
                     }
                     if replacement.jsx_child {
                         rope.push_lit("}");
@@ -928,16 +947,20 @@ impl<'a> Emitter<'a> {
     }
 
     fn claimed_by_completed_call(&self, start: usize, end: usize) -> bool {
-        self.replacements_covering(start, end).any(|frame| {
-            frame.claim
-                && frame.source.start <= start
-                && end <= frame.source.end
-                && !frame
-                    .anchor
-                    .is_some_and(|value| self.active_structured_exprs.contains(value))
-                && !self.capture_is_active(frame.source)
-                && !self.replacement_contains_active_value(frame.source)
-        })
+        self.claim_order
+            .0
+            .containing(start, end, true)
+            .map(|index| &self.source_replacements[self.claim_order.1[index]])
+            .any(|frame| {
+                frame.claim
+                    && frame.source.start <= start
+                    && end <= frame.source.end
+                    && !frame
+                        .anchor
+                        .is_some_and(|value| self.active_structured_exprs.contains(value))
+                    && !self.capture_is_active(frame.source)
+                    && !self.replacement_contains_active_value(frame.source)
+            })
     }
 
     pub(super) fn edits_after_statement(
@@ -1236,7 +1259,7 @@ impl<'a> Emitter<'a> {
             return None;
         }
         let mut out = Rope::new();
-        let mut captured = HashSet::new();
+        let mut captured = CapturedSlots::default();
         let mut scheduled = Vec::new();
         let mut operations: Vec<&PlannedConditionalOperation> = Vec::new();
         let substitutions = self.template_substitution_captures(span, templates);
@@ -1373,12 +1396,18 @@ impl<'a> Emitter<'a> {
     }
 
     pub(super) fn defers_arm_values(&self, expr: ExprId) -> bool {
-        self.compose_rewrites
-            .iter()
-            .flat_map(|rewrite| &rewrite.actions)
-            .any(|action| {
-                matches!(action, ComposeAction::Value(value) if value.expr == expr && value.defer_arm_values)
+        self.deferred_arm_values
+            .get_or_init(|| {
+                self.compose_rewrites
+                    .iter()
+                    .flat_map(|rewrite| &rewrite.actions)
+                    .filter_map(|action| match action {
+                        ComposeAction::Value(value) if value.defer_arm_values => Some(value.expr),
+                        _ => None,
+                    })
+                    .collect()
             })
+            .contains(&expr)
     }
 
     pub(super) fn emit_expr(&self, expr: ExprId) -> Rope<'a> {
@@ -1583,7 +1612,11 @@ impl<'a> Emitter<'a> {
                 }
             }
             let mut generated = Rope::new();
-            generated.push_lit(rendered_slot.to_owned());
+            if rendered_slot.is_empty() {
+                generated.push_lit(rendered_slot.to_owned());
+            } else {
+                generated.push_relocated_operand(rendered_slot.to_owned(), start, extent);
+            }
             out.anchored(kind, start, end, extent, generated);
             return out;
         }
@@ -1597,7 +1630,7 @@ impl<'a> Emitter<'a> {
         {
             let (kind, start, end, extent) = self.value_anchor(expr);
             let mut generated = Rope::new();
-            generated.push_lit(slot.clone());
+            generated.push_relocated_operand(slot.clone(), start, extent);
             let mut out = Rope::new();
             out.anchored(kind, start, end, extent, generated);
             return out;

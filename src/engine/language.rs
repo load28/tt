@@ -536,6 +536,7 @@ pub(crate) struct ServiceDoc {
     declared_names: Vec<crate::DeclaredName>,
     shared_bindings: Vec<crate::SharedBinding>,
     destructured_lists: Vec<crate::DestructuredList>,
+    relocated_operands: Vec<crate::RelocatedOperand>,
     /// What TypeScript's completion rules say at each construct's place
     /// in the source, which lowering moves its code away from.
     completion_scopes: Vec<crate::program_syntax::CompletionScope>,

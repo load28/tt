@@ -228,6 +228,29 @@ impl<'a> Rope<'a> {
         });
     }
 
+    pub(crate) fn push_relocated_operand(
+        &mut self,
+        text: impl Into<Cow<'a, str>>,
+        src: usize,
+        src_end: usize,
+    ) {
+        let mut read = Rope::new();
+        read.push_lit(text);
+        self.relocated_operand(src, src_end, read);
+    }
+
+    pub(crate) fn relocated_operand(&mut self, src: usize, src_end: usize, read: Rope<'a>) {
+        self.pieces.push_back(Piece::Mark {
+            src,
+            kind: MarkKind::RelocatedOperandStart,
+        });
+        self.append(read);
+        self.pieces.push_back(Piece::Mark {
+            src: src_end,
+            kind: MarkKind::RelocatedOperandEnd,
+        });
+    }
+
     pub(crate) fn push_destructured_list_start(&mut self, src: usize) {
         self.pieces.push_back(Piece::Mark {
             src,
@@ -663,6 +686,7 @@ pub(crate) struct Flat {
     pub declared_names: Vec<DeclaredName>,
     pub shared_bindings: Vec<SharedBinding>,
     pub destructured_lists: Vec<crate::DestructuredList>,
+    pub relocated_operands: Vec<crate::RelocatedOperand>,
     pub inserted: Vec<crate::InsertedGlue>,
     pub support_imports: Vec<crate::StdModule>,
     pub commonjs: bool,

@@ -1,0 +1,4 @@
+// @references: keyword, scrutinee
+declare const s: any;
+export const r = /*keyword*/match (/*scrutinee*/s) { 1 => 2;
+export const q = s;

@@ -1,0 +1,8 @@
+// @completions: other
+// @filename: a.tt
+variant S { A(x: number), B }
+declare const s: S;
+const total = match (s) { A(x) => x, B => 0 };
+const shown = s |> String;
+// @filename: b.tt
+const zz = $tt/*other*/;

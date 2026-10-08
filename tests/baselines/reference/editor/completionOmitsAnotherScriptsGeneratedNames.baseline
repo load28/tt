@@ -1,0 +1,11 @@
+=== completions /*other*/ b.tt:1:15 ===
+  | const zz = $tt;
+  |               ^ /*other*/
+completion: 1062 item(s), member false, probe no
+  ... 1062 global or keyword item(s) (sortText 15, no source)
+ttCompletions: pattern false, member null
+  keywords: match (15), flow (15), result (15)
+patternCompletions: null
+editor completion: 1065 item(s)
+  ... 1065 global or keyword item(s) (sortText 215, no source)
+

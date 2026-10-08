@@ -35,6 +35,7 @@ pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
             declared_names: Vec::new(),
             shared_bindings: Vec::new(),
             destructured_lists: Vec::new(),
+            relocated_operands: Vec::new(),
             completion_scopes: Vec::new(),
             recovered: Vec::new(),
             syntax_repairs: Vec::new(),
@@ -85,6 +86,7 @@ pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
         declared_names: emit.declared_names,
         shared_bindings: emit.shared_bindings,
         destructured_lists: emit.destructured_lists,
+        relocated_operands: emit.relocated_operands,
         completion_scopes: emit.completion_scopes,
         recovered,
         syntax_repairs: report.syntax_repairs,
@@ -287,6 +289,11 @@ pub(super) fn ts_completions(
     for item in items {
         let label = item["label"].as_str().unwrap_or_default().to_string();
         if generated_names.contains(&label)
+            || (label.starts_with("$tt_")
+                && session
+                    .docs
+                    .values()
+                    .any(|doc| doc.generated_names.contains(&label)))
             || imports_from_runtime(&item)
             || (item["data"]["source"].as_str() == Some(SWITCH_CASES_SOURCE) && generated_switch())
         {
@@ -799,18 +806,67 @@ pub(super) fn closed_at(
 pub(super) fn signature_position(
     code: &str,
     mappings: &[EmitMapping],
+    relocated: &[crate::RelocatedOperand],
     source_kind: crate::SourceKind,
     at: usize,
 ) -> usize {
     let tokens = crate::lexer::lex_with_kind(code, 0, code.len(), source_kind);
     let mut at = at;
-    while let Some(opener) = innermost_invocation(&tokens, at) {
-        if mapper::to_source(mappings, opener).is_some() {
+    for _ in 0..=relocated.len() {
+        let mut invocation = innermost_invocation(&tokens, at);
+        while let Some(opener) = invocation {
+            if mapper::to_source(mappings, opener).is_some() {
+                break;
+            }
+            at = opener;
+            invocation = innermost_invocation(&tokens, at);
+        }
+        let Some(source_at) = mapper::to_source_inclusive(mappings, at) else {
+            break;
+        };
+        let Some(operand) = relocated
+            .iter()
+            .filter(|operand| {
+                operand.src <= source_at
+                    && source_at <= operand.src_end
+                    && !(operand.out <= at && at <= operand.out_end)
+            })
+            .min_by_key(|operand| operand.src_end - operand.src)
+        else {
+            break;
+        };
+        let inside = invocation
+            .and_then(|opener| mapper::to_source(mappings, opener))
+            .is_some_and(|opener| operand.src <= opener && opener < operand.src_end);
+        let read = if source_at == operand.src {
+            operand.out
+        } else {
+            operand.out_end
+        };
+        if inside || innermost_invocation(&tokens, read).is_none() {
             break;
         }
-        at = opener;
+        at = read;
     }
     at
+}
+
+/// Where to ask about an unmapped cursor inside an operand moved out of its
+/// place: the end of the operand's read, when that read is an argument of a
+/// call. `None` when no operand holds the cursor or its read is not in a
+/// call (a call that moved with the operand is read whole).
+pub(super) fn relocated_read_end(
+    code: &str,
+    relocated: &[crate::RelocatedOperand],
+    source_kind: crate::SourceKind,
+    at: usize,
+) -> Option<usize> {
+    let operand = relocated
+        .iter()
+        .filter(|operand| operand.src < at && at < operand.src_end)
+        .min_by_key(|operand| operand.src_end - operand.src)?;
+    let tokens = crate::lexer::lex_with_kind(code, 0, code.len(), source_kind);
+    innermost_invocation(&tokens, operand.out_end).map(|_| operand.out_end)
 }
 
 pub(super) fn signature_question(
@@ -994,6 +1050,10 @@ pub(super) fn to_service_typed(doc: &ServiceDoc, position: Position) -> Option<u
 }
 
 pub(super) fn to_service_name(doc: &ServiceDoc, position: Position) -> Option<usize> {
+    let at = u16_offset(&doc.source, position);
+    if recovery_intersects(doc, at, at + 1) {
+        return None;
+    }
     if doc.coordinates == CoordinateSpace::Authored {
         let byte = source_byte(&doc.source, position);
         for binding in &doc.shared_bindings {
@@ -1034,6 +1094,10 @@ pub(super) fn to_service_name(doc: &ServiceDoc, position: Position) -> Option<us
 pub(super) fn to_service_names(doc: &ServiceDoc, position: Position) -> Vec<usize> {
     if let Some(at) = to_service_name(doc, position) {
         return vec![at];
+    }
+    let at = u16_offset(&doc.source, position);
+    if recovery_intersects(doc, at, at + 1) {
+        return Vec::new();
     }
     let byte = doc
         .source_utf16()

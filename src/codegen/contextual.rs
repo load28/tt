@@ -236,6 +236,10 @@ fn apply(emit: &mut MappedEmit, edits: &[Edit]) {
         list.out = shifted(edits, list.out, true);
         list.out_end = shifted(edits, list.out_end, false);
     }
+    for operand in &mut emit.relocated_operands {
+        operand.out = shifted(edits, operand.out, true);
+        operand.out_end = shifted(edits, operand.out_end, false);
+    }
     for glue in &mut emit.inserted {
         glue.out = shifted(edits, glue.out, true);
         glue.out_end = shifted(edits, glue.out_end, false);

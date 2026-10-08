@@ -828,7 +828,8 @@
 | TASK-785 | Remove the entity-name set that slowed every compile | Complete | 2026-10-07 | 2026-10-07 | [TASK-785](./TASK-785-entity-name-prefilter.md) |
 | TASK-786 | Keep authored comments inside the forms a lowering rebuilds | Complete | 2026-10-07 | 2026-10-07 | [TASK-786](./TASK-786-authored-gaps-in-rebuilt-forms.md) |
 | TASK-787 | Fix the seventh audit's remaining compiler findings | Complete | 2026-10-08 | 2026-10-08 | [TASK-787](./TASK-787-seventh-audit-compiler.md) |
+| TASK-788 | Fix the seventh audit's editor findings | Complete | 2026-10-08 | 2026-10-08 | [TASK-788](./TASK-788-seventh-audit-editor.md) |
 
 ## Next task number
 
-**TASK-788**
+**TASK-789**

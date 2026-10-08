@@ -79,6 +79,17 @@ pub(crate) struct InsertedGlue {
     pub out_end: usize,
 }
 
+/// Where the value of an operand moved out of its place is read back: the
+/// operand `src..src_end` was evaluated earlier into a slot, and
+/// `out..out_end` is the slot's name standing in the operand's place.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct RelocatedOperand {
+    pub src: usize,
+    pub src_end: usize,
+    pub out: usize,
+    pub out_end: usize,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct DestructuredList {
     pub src: usize,
@@ -232,6 +243,7 @@ pub struct MappedEmit {
     pub(crate) declared_names: Vec<DeclaredName>,
     pub(crate) shared_bindings: Vec<SharedBinding>,
     pub(crate) destructured_lists: Vec<DestructuredList>,
+    pub(crate) relocated_operands: Vec<RelocatedOperand>,
     /// Glue written at a source point, ordered by output offset.
     pub(crate) inserted: Vec<InsertedGlue>,
     pub(crate) single_line_breaks: Vec<usize>,
@@ -376,6 +388,7 @@ pub(crate) fn emit_mapped_parsed(
         declared_names: flat.declared_names,
         shared_bindings: flat.shared_bindings,
         destructured_lists: flat.destructured_lists,
+        relocated_operands: flat.relocated_operands,
         inserted: flat.inserted,
         single_line_breaks: flat.single_line_breaks,
         completion_scopes: std::mem::take(&mut plan.completion_scopes),

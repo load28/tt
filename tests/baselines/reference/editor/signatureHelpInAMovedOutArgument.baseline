@@ -1,0 +1,42 @@
+=== signatureHelp /*firstArgument*/ signatureHelpInAMovedOutArgument.tt:7:15 ===
+  |   return add(v, try g());
+  |               ^ /*firstArgument*/
+signatureHelp: active signature 0, active parameter 0
+  add(a: number, b: number, c?: number): R
+    parameters: a: number | b: number | c?: number
+
+=== signatureHelp /*operand*/ signatureHelpInAMovedOutArgument.tt:10:18 ===
+  |   return add(1 + 2, match (s) { A => 1, B => 2 }, 3);
+  |                  ^ /*operand*/
+signatureHelp: active signature 0, active parameter 0
+  add(a: number, b: number, c?: number): R
+    parameters: a: number | b: number | c?: number
+
+=== signatureHelp /*tryKeyword*/ signatureHelpInAMovedOutArgument.tt:7:20 ===
+  |   return add(v, try g());
+  |                    ^ /*tryKeyword*/
+signatureHelp: active signature 0, active parameter 1
+  add(a: number, b: number, c?: number): R
+    parameters: a: number | b: number | c?: number
+
+=== signatureHelp /*tryEnd*/ signatureHelpInAMovedOutArgument.tt:7:24 ===
+  |   return add(v, try g());
+  |                        ^ /*tryEnd*/
+signatureHelp: active signature 0, active parameter 1
+  add(a: number, b: number, c?: number): R
+    parameters: a: number | b: number | c?: number
+
+=== signatureHelp /*scrutinee*/ signatureHelpInAMovedOutArgument.tt:10:28 ===
+  |   return add(1 + 2, match (s) { A => 1, B => 2 }, 3);
+  |                            ^ /*scrutinee*/
+signatureHelp: active signature 0, active parameter 1
+  add(a: number, b: number, c?: number): R
+    parameters: a: number | b: number | c?: number
+
+=== signatureHelp /*pattern*/ signatureHelpInAMovedOutArgument.tt:10:34 ===
+  |   return add(1 + 2, match (s) { A => 1, B => 2 }, 3);
+  |                                  ^ /*pattern*/
+signatureHelp: active signature 0, active parameter 1
+  add(a: number, b: number, c?: number): R
+    parameters: a: number | b: number | c?: number
+
