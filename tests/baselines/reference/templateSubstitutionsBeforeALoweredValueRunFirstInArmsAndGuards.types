@@ -1,0 +1,127 @@
+=== templateSubstitutionsBeforeALoweredValueRunFirstInArmsAndGuards.tt ===
+variant S { A, B }
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const log: string[] = [];
+>log : const log: string[]
+function o(t: string): S { log.push("subject" + t); return S.A; }
+>o : function o(t: string): S
+>t : (parameter) t: string
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>t : (parameter) t: string
+>S : const S: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+const g = { get p() { log.push("g.p"); return 1; } };
+>g : const g: {
+>       readonly p: number;
+>   }
+>p : (accessor) p: number
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+function F(x: unknown) { return x; }
+>F : function F(x: unknown): unknown
+>x : (parameter) x: unknown
+>x : (parameter) x: unknown
+function main() {
+>main : function main(): void
+  const a = match (o("0")) { A if `${g.p}${match (o("1")) { A => 1, B => 2 }}` !== "" => 1, _ => 2 };
+>a : const a: number
+>o : function o(t: string): S
+>g : const g: {
+>       readonly p: number;
+>   }
+>p : (accessor) p: number
+>o : function o(t: string): S
+  log.push("|");
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  const b = match (o("0")) { A => { return `${g.p}${match (o("1")) { A => 1, B => 2 }}`; }, B => "" };
+>b : const b: string
+>o : function o(t: string): S
+>g : const g: {
+>       readonly p: number;
+>   }
+>p : (accessor) p: number
+>o : function o(t: string): S
+  log.push("|");
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  const c = match (o("0")) { A => [g.p, match (o("1")) { A => 1, B => 2 }], B => [] };
+>c : const c: number[]
+>o : function o(t: string): S
+>g : const g: {
+>       readonly p: number;
+>   }
+>p : (accessor) p: number
+>o : function o(t: string): S
+  log.push("|");
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  const d = match (o("0")) { A => g.p + match (o("1")) { A => 1, B => 2 }, B => 0 };
+>d : const d: number
+>o : function o(t: string): S
+>g : const g: {
+>       readonly p: number;
+>   }
+>p : (accessor) p: number
+>o : function o(t: string): S
+  log.push("|");
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  const e = match (o("0")) { A => ({ x: g.p, y: match (o("1")) { A => 1, B => 2 } }), B => 0 };
+>e : const e: number | {
+>       x: number;
+>       y: number;
+>   }
+>o : function o(t: string): S
+>x : (property) x: number
+>g : const g: {
+>       readonly p: number;
+>   }
+>p : (accessor) p: number
+>y : (property) y: number
+>o : function o(t: string): S
+  log.push("|");
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  const h = 1 |> F |> (v => `${g.p}${match (o("1")) { A => 1, B => 2 }}`);
+>h : const h: string
+>F : function F(x: unknown): unknown
+>v : (parameter) v: unknown
+>g : const g: {
+>       readonly p: number;
+>   }
+>p : (accessor) p: number
+>o : function o(t: string): S
+main();
+>main : function main(): void
+console.log(log.join(", "));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

@@ -77,7 +77,7 @@ impl<'a> Emitter<'a> {
     }
 
     fn emit_owner_slot_prelude(&self, rewrite: &OwnerSlotRewrite) -> Rope<'a> {
-        let _active = self.active_structured_exprs.enter(rewrite.expr);
+        let _active = self.enter_active(rewrite.expr);
         let anchored = self
             .emit_continued_expr(rewrite.expr, &ValueContinuation::assign(&rewrite.slot))
             .unwrap_or_else(|| {
@@ -268,7 +268,7 @@ impl<'a> Emitter<'a> {
                     if value.inline {
                         continue;
                     }
-                    let _active = self.active_structured_exprs.enter(value.expr);
+                    let _active = self.enter_active(value.expr);
                     let mut lowered =
                         if let Some(completion) = &value.call_completion {
                             let mut region = Rope::new();
@@ -853,7 +853,7 @@ impl<'a> Emitter<'a> {
                     );
                     let mut close = AuthoredText::default();
                     close.push_gap(self.source, "", operation.gaps.get(1).copied(), ")");
-                    let _active = self.active_structured_exprs.enter(*expr);
+                    let _active = self.enter_active(*expr);
                     let body = self
                         .emit_continued_expr(
                             *expr,
@@ -927,10 +927,30 @@ impl<'a> Emitter<'a> {
                                 body.push_break(0);
                             }
                         }
-                        PlannedOperand::Composed { values, .. } => {
+                        PlannedOperand::Composed {
+                            span,
+                            values,
+                            spread,
+                            capture,
+                        } => {
                             body.append(
                                 self.emit_conditional_active_values(operation, values, captured),
                             );
+                            if let Some(slot) = capture
+                                && captured.insert(*slot)
+                            {
+                                let (open, close) = self.capture_form(if *spread {
+                                    EvaluationInputMode::SpreadElement
+                                } else {
+                                    EvaluationInputMode::Value
+                                });
+                                body.push_value_capture(self.value_slot_name(*slot));
+                                body.push_lit(open);
+                                body.append(self.composed_operand(operation, *span, values));
+                                body.push_lit(close);
+                                body.push_lit(");");
+                                body.push_break(0);
+                            }
                         }
                         PlannedOperand::Source { capture: None, .. } => {}
                     }
@@ -1033,7 +1053,7 @@ impl<'a> Emitter<'a> {
             if left.is_some() {
                 crate::ice::bug!("a logical operation's right operand has no active plan")
             }
-            let _active = self.active_structured_exprs.enter(*value);
+            let _active = self.enter_active(*value);
             return self
                 .emit_continued_expr(*value, &ValueContinuation::assign(result))
                 .unwrap_or_else(|| {
@@ -1127,7 +1147,7 @@ impl<'a> Emitter<'a> {
     ) -> Rope<'a> {
         let mut out = Rope::new();
         for value in values {
-            let _active = self.active_structured_exprs.enter(*value);
+            let _active = self.enter_active(*value);
             let Some(active) = operation
                 .active
                 .iter()
@@ -1307,6 +1327,7 @@ impl<'a> Emitter<'a> {
             )
         });
         self.active_capture_sources.borrow_mut().push(source);
+        self.rebuilt_sources.borrow_mut().push(source);
         let mut out = Rope::new();
         let mut cursor = source.start;
         for (span, part, admit) in parts {
@@ -1356,7 +1377,7 @@ impl<'a> Emitter<'a> {
                         };
                         out.anchored(kind, start, head_end, extent, slot);
                     } else {
-                        let _active = self.active_structured_exprs.enter(expr);
+                        let _active = self.enter_active(expr);
                         out.append(self.emit_expr(expr));
                     }
                 }
@@ -1370,6 +1391,7 @@ impl<'a> Emitter<'a> {
             }));
         }
         self.active_capture_sources.borrow_mut().pop();
+        self.rebuilt_sources.borrow_mut().pop();
         out
     }
 
@@ -1520,22 +1542,38 @@ impl<'a> Emitter<'a> {
         steps: &[&PlannedEvaluationStep],
         operations: &[&PlannedConditionalOperation],
     ) -> Rope<'a> {
-        let mut replacements: Vec<(SourceSpan, Rope<'a>)> = operations
+        self.source_range_with_scheduled_values_and(span, values, steps, operations, &[])
+    }
+
+    pub(super) fn source_range_with_scheduled_values_and(
+        &self,
+        span: SourceSpan,
+        values: &[ExprId],
+        steps: &[&PlannedEvaluationStep],
+        operations: &[&PlannedConditionalOperation],
+        parts: &[(SourceSpan, String)],
+    ) -> Rope<'a> {
+        let mut replacements: Vec<(SourceSpan, Rope<'a>)> = parts
             .iter()
-            .map(|operation| {
-                let primary = operation
-                    .values
-                    .first()
-                    .copied()
-                    .unwrap_or_else(|| crate::ice::bug!("conditional operation has no value"));
-                let (kind, start, head_end, extent) = self.value_anchor(primary);
-                let mut slot = Rope::new();
-                slot.push_lit(self.value_slot_name(operation.result).to_owned());
+            .map(|(source, name)| {
                 let mut rendered = Rope::new();
-                rendered.anchored(kind, start, head_end, extent, slot);
-                (operation.parent, rendered)
+                rendered.push_lit(name.clone());
+                (*source, rendered)
             })
             .collect();
+        replacements.extend(operations.iter().map(|operation| {
+            let primary = operation
+                .values
+                .first()
+                .copied()
+                .unwrap_or_else(|| crate::ice::bug!("conditional operation has no value"));
+            let (kind, start, head_end, extent) = self.value_anchor(primary);
+            let mut slot = Rope::new();
+            slot.push_lit(self.value_slot_name(operation.result).to_owned());
+            let mut rendered = Rope::new();
+            rendered.anchored(kind, start, head_end, extent, slot);
+            (operation.parent, rendered)
+        }));
         let discarded: Vec<SourceSpan> = steps
             .iter()
             .flat_map(|step| &step.inputs)
@@ -1653,6 +1691,7 @@ impl<'a> Emitter<'a> {
         }));
         replacements.retain(|(source, _)| span.start <= source.start && source.end <= span.end);
         replacements.sort_by_key(|(source, _)| (source.start, usize::MAX - source.end));
+        self.rebuilt_sources.borrow_mut().push(span);
         let mut out = Rope::new();
         let mut cursor = span.start;
         for (source, rendered) in replacements {
@@ -1668,7 +1707,23 @@ impl<'a> Emitter<'a> {
         if cursor < span.end {
             out.append(self.source_range_rope(hir::Span::new(cursor, span.end)));
         }
+        self.rebuilt_sources.borrow_mut().pop();
         out
+    }
+
+    fn composed_operand(
+        &self,
+        operation: &PlannedConditionalOperation,
+        span: SourceSpan,
+        values: &[ExprId],
+    ) -> Rope<'a> {
+        let steps: Vec<_> = operation
+            .active
+            .iter()
+            .filter(|active| values.contains(&active.value))
+            .flat_map(|active| &active.steps)
+            .collect();
+        self.source_range_with_scheduled_values(span, &operation.values, &steps, &[])
     }
 
     /// One rebuilt argument of an optional call.
@@ -1683,25 +1738,25 @@ impl<'a> Emitter<'a> {
                 out.push_lit(self.value_name_of(*expr).to_owned());
             }
             PlannedOperand::Composed {
-                span,
                 spread,
-                values,
+                capture: Some(slot),
+                ..
             } => {
                 if *spread {
                     out.push_lit("...");
                 }
-                let steps: Vec<_> = operation
-                    .active
-                    .iter()
-                    .filter(|active| values.contains(&active.value))
-                    .flat_map(|active| &active.steps)
-                    .collect();
-                out.append(self.source_range_with_scheduled_values(
-                    *span,
-                    &operation.values,
-                    &steps,
-                    &[],
-                ));
+                out.push_lit(self.value_slot_name(*slot).to_owned());
+            }
+            PlannedOperand::Composed {
+                span,
+                spread,
+                values,
+                capture: None,
+            } => {
+                if *spread {
+                    out.push_lit("...");
+                }
+                out.append(self.composed_operand(operation, *span, values));
             }
             PlannedOperand::Source {
                 spread,

@@ -1,0 +1,22 @@
+// @run: templateSubstitutionsBeforeALoweredValueRunFirst.tt
+variant S { A, B }
+const log: string[] = [];
+function o(): S { log.push("subject"); return S.A; }
+const g = { get p() { log.push("g.p"); return 1; } };
+class K { constructor() { log.push("new K"); } toString() { return "K"; } }
+function tag(s: TemplateStringsArray, ...v: unknown[]) { return v.join(","); }
+function f(...a: unknown[]) { return a.join(","); }
+function main() {
+  const a = match (o()) { A => `a${g.p && 2}b${match (o()) { A => 1, B => 2 }}`, B => "" };
+  log.push("| " + a);
+  const b = match (o()) { A => tag`q${new K()}r${match (o()) { A => 1, B => 2 }}`, B => "" };
+  log.push("| " + b);
+  const c = match (o()) { A => f(g.p && 2, match (o()) { A => 1, B => 2 }), B => "" };
+  log.push("| " + c);
+  const d = match (o()) { A => `a${g.p}b${match (o()) { A => 1, B => 2 }}`, B => "" };
+  log.push("| " + d);
+  const e = f(`a${g.p && 2}b${match (o()) { A => 1, B => 2 }}`);
+  log.push("| " + e);
+}
+main();
+console.log(log.join(", "));

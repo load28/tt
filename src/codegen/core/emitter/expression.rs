@@ -799,7 +799,7 @@ impl<'a> Emitter<'a> {
         if !self.core.has_statement_form(expr) {
             return None;
         }
-        let _active = self.active_structured_exprs.enter(expr);
+        let _active = self.enter_active(expr);
         // Structural parents may consume a child's owner rewrite directly
         // (for example a Result body's declaration initializer). Mark that
         // plan at the common entry point so a later source-range walk only

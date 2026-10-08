@@ -827,7 +827,8 @@
 | TASK-784 | Fix two regressions of TASK-781 found by the seventh audit | Complete | 2026-10-07 | 2026-10-07 | [TASK-784](./TASK-784-super-optional-call-reference.md) |
 | TASK-785 | Remove the entity-name set that slowed every compile | Complete | 2026-10-07 | 2026-10-07 | [TASK-785](./TASK-785-entity-name-prefilter.md) |
 | TASK-786 | Keep authored comments inside the forms a lowering rebuilds | Complete | 2026-10-07 | 2026-10-07 | [TASK-786](./TASK-786-authored-gaps-in-rebuilt-forms.md) |
+| TASK-787 | Fix the seventh audit's remaining compiler findings | Complete | 2026-10-08 | 2026-10-08 | [TASK-787](./TASK-787-seventh-audit-compiler.md) |
 
 ## Next task number
 
-**TASK-787**
+**TASK-788**

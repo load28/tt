@@ -465,6 +465,7 @@ pub(crate) fn emit_with_map<'a>(
             .collect(),
         source_replacements: target.source_replacements,
         active_capture_sources: RefCell::new(Vec::new()),
+        rebuilt_sources: RefCell::new(Vec::new()),
         delivered_conditional_values: RefCell::new(HashSet::new()),
         consumed_exprs: target.consumed_exprs,
         arrow_returns_by_expr: target.arrow_returns.iter().enumerate().rev().fold(

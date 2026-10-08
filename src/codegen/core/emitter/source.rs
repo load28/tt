@@ -106,13 +106,31 @@ impl<'a> Emitter<'a> {
     // operation also contains its separately evaluated condition value.
     pub(super) fn replacement_contains_active_value(&self, source: SourceSpan) -> bool {
         self.active_structured_exprs
-            .exprs
-            .borrow()
-            .iter()
-            .any(|expr| {
-                let (_, start, _, end) = self.value_anchor(*expr);
-                source.start <= start && end <= source.end
-            })
+            .any_anchor_within(source.start, source.end)
+    }
+
+    pub(super) fn enter_active(&self, expr: ExprId) -> ActiveExprGuard<'_> {
+        let anchor = self.anchorable(expr).then(|| {
+            let (_, start, _, end) = self.value_anchor(expr);
+            (start, end)
+        });
+        self.active_structured_exprs.enter_anchored(expr, anchor)
+    }
+
+    fn anchorable(&self, expr: ExprId) -> bool {
+        match &self.core.exprs[expr.index()] {
+            Expr::Opaque(_) => false,
+            Expr::Sequence(body) => self
+                .core
+                .body_tail_expr(*body)
+                .is_some_and(|value| self.anchorable(value)),
+            Expr::Template(template) => template.parts.iter().any(|part| {
+                matches!(part, TemplatePart::Interpolation(inner) if self.core.has_statement_form(*inner))
+            }),
+            Expr::Decision(_) | Expr::Propagate(_) | Expr::ResultRegion(_) | Expr::Apply(_) => {
+                true
+            }
+        }
     }
 
     pub(super) fn capture_is_active(&self, replacement: SourceSpan) -> bool {
@@ -120,6 +138,12 @@ impl<'a> Emitter<'a> {
             .borrow()
             .iter()
             .any(|active| replacement.start <= active.start && active.end <= replacement.end)
+    }
+
+    fn rebuilds_inside(&self, replaced: SourceSpan) -> bool {
+        self.rebuilt_sources.borrow().last().is_some_and(|rebuilt| {
+            *rebuilt != replaced && replaced.start <= rebuilt.start && rebuilt.end <= replaced.end
+        })
     }
 
     pub(super) fn source_range_rope(&self, span: hir::Span) -> Rope<'a> {
@@ -361,6 +385,7 @@ impl<'a> Emitter<'a> {
                                 && self.loop_region_depth.get() == 0)
                                 || self.completed_call_emitted(replacement))
                             && !self.replacement_contains_active_value(replacement.source)
+                            && !self.rebuilds_inside(replacement.source)
                             && replacement.source.start <= cursor
                             && cursor < replacement.source.end
                     } else {
@@ -368,6 +393,7 @@ impl<'a> Emitter<'a> {
                             && replacement.source.start <= cursor
                             && cursor < replacement.source.end
                             && !self.replacement_contains_active_value(replacement.source)
+                            && !self.rebuilds_inside(replacement.source)
                             && !self.inside_captured_value(replacement.source, span.start, span.end)
                     }
                 })
@@ -1076,7 +1102,13 @@ impl<'a> Emitter<'a> {
     ) -> Option<(Rope<'a>, Rope<'a>)> {
         let mut nested = Vec::new();
         self.collect_operand_values(body, &mut nested);
-        self.emit_operand(self.body_extent(body), &nested, continuation)
+        let mut templates = Vec::new();
+        for statement in &self.core.bodies[body.index()].statements {
+            if let Statement::Expr(inner) = statement {
+                self.collect_operand_templates(*inner, &mut templates);
+            }
+        }
+        self.emit_operand(self.body_extent(body), &nested, &templates, continuation)
     }
 
     pub(super) fn emit_template_operand(
@@ -1099,13 +1131,105 @@ impl<'a> Emitter<'a> {
         }
         let span = structured_expr_span(self.semantic, self.core, expr)
             .unwrap_or_else(|| crate::ice::bug!("a template has no source extent"));
-        self.emit_operand(span, &nested, continuation)
+        let mut templates = Vec::new();
+        self.collect_operand_templates(expr, &mut templates);
+        self.emit_operand(span, &nested, &templates, continuation)
+    }
+
+    fn collect_operand_templates(&self, expr: ExprId, out: &mut Vec<ExprId>) {
+        crate::stack::grow(|| self.collect_operand_templates_grown(expr, out));
+    }
+
+    fn collect_operand_templates_grown(&self, expr: ExprId, out: &mut Vec<ExprId>) {
+        if !self.core.has_statement_form(expr) || self.slot_exprs.contains_key(&expr) {
+            return;
+        }
+        match &self.core.exprs[expr.index()] {
+            Expr::Sequence(body) => {
+                for statement in &self.core.bodies[body.index()].statements {
+                    if let Statement::Expr(inner) = statement {
+                        self.collect_operand_templates(*inner, out);
+                    }
+                }
+            }
+            Expr::Template(template) => {
+                out.push(expr);
+                for part in &template.parts {
+                    if let TemplatePart::Interpolation(inner) = part {
+                        self.collect_operand_templates(*inner, out);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn template_substitution_captures(
+        &self,
+        operand: SourceSpan,
+        templates: &[ExprId],
+    ) -> Vec<(SourceSpan, ExprId, bool, String)> {
+        let mut captures = Vec::new();
+        for expr in templates {
+            let Expr::Template(template) = &self.core.exprs[expr.index()] else {
+                continue;
+            };
+            let lowered: Vec<bool> = template
+                .parts
+                .iter()
+                .map(|part| match part {
+                    TemplatePart::Interpolation(inner) => {
+                        let mut values = Vec::new();
+                        self.collect_operand_value(*inner, &mut values);
+                        !values.is_empty()
+                    }
+                    TemplatePart::Raw(_) => false,
+                })
+                .collect();
+            let Some(last) = lowered.iter().rposition(|lowered| *lowered) else {
+                continue;
+            };
+            let Some(start) =
+                structured_expr_span(self.semantic, self.core, *expr).map(|span| span.start)
+            else {
+                continue;
+            };
+            let tagged = operand.start < start
+                && crate::lexer::lex_with_kind(self.source, operand.start, start, self.source_kind)
+                    .last()
+                    .is_some_and(|token| token.facts.ends_expression());
+            for (part, lowered) in template.parts[..last].iter().zip(&lowered) {
+                let TemplatePart::Interpolation(inner) = part else {
+                    continue;
+                };
+                if *lowered {
+                    continue;
+                }
+                let Some(source) = structured_expr_span(self.semantic, self.core, *inner) else {
+                    continue;
+                };
+                let text = self.source[source.start..source.end].trim_start();
+                let inert = crate::program_syntax::source_expression_effects(
+                    self.source,
+                    hir::Span::new(source.start, source.end),
+                    self.source_kind,
+                )
+                .is_inert()
+                    && (tagged || !text.starts_with(['{', '[', '(']));
+                if !inert {
+                    captures.push((source, *inner, tagged, self.generated_name("$tt_v")));
+                }
+            }
+        }
+        captures.sort_by_key(|(source, ..)| source.start);
+        captures
     }
 
     fn emit_operand(
         &self,
         span: SourceSpan,
         nested: &[(ExprId, String)],
+        templates: &[ExprId],
         continuation: &ValueContinuation<'_>,
     ) -> Option<(Rope<'a>, Rope<'a>)> {
         if nested.is_empty() {
@@ -1115,9 +1239,27 @@ impl<'a> Emitter<'a> {
         let mut captured = HashSet::new();
         let mut scheduled = Vec::new();
         let mut operations: Vec<&PlannedConditionalOperation> = Vec::new();
+        let substitutions = self.template_substitution_captures(span, templates);
+        let mut pending = substitutions.iter().peekable();
         for (inner, slot) in nested {
             if self.emitted_owner_rewrites.contains(*inner) {
                 continue;
+            }
+            let start = structured_expr_span(self.semantic, self.core, *inner)
+                .map_or(span.end, |source| source.start);
+            while let Some((_, substitution, tagged, name)) =
+                pending.next_if(|(source, ..)| source.end <= start)
+            {
+                out.push_lit(format!("const {name} = ("));
+                if !*tagged {
+                    out.push_lit("`${");
+                }
+                out.append(self.emit_expr(*substitution).trim());
+                if !*tagged {
+                    out.push_lit("}`");
+                }
+                out.push_lit(");");
+                out.push_break(0);
             }
             if let Some(operation) = self
                 .nested_operations
@@ -1155,9 +1297,19 @@ impl<'a> Emitter<'a> {
             out.push_break(0);
         }
         let values: Vec<_> = nested.iter().map(|(inner, _)| *inner).collect();
+        let parts: Vec<(SourceSpan, String)> = substitutions
+            .into_iter()
+            .map(|(source, .., name)| (source, name))
+            .collect();
         Some((
             out,
-            self.source_range_with_scheduled_values(span, &values, &scheduled, &operations),
+            self.source_range_with_scheduled_values_and(
+                span,
+                &values,
+                &scheduled,
+                &operations,
+                &parts,
+            ),
         ))
     }
 
@@ -1336,7 +1488,7 @@ impl<'a> Emitter<'a> {
             })
         {
             self.emitted_compose_rewrites.claim(rewrite.owner);
-            let _active = self.active_structured_exprs.enter(expr);
+            let _active = self.enter_active(expr);
             let mut out = self.emit_compose_rewrite(rewrite);
             if value.defer_arm_values {
                 out.append(self.emit_selected_arm_values(value.expr, &value.slot));

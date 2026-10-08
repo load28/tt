@@ -1,0 +1,14 @@
+// @run: aMatchWithAMatchArmInsideAScrutineeArgumentIsLowered.tt
+variant S { A, B }
+const s: S = S.A as S;
+function p(x: number): S { return x === 1 ? S.A : S.B; }
+export function t() {
+  const a = match (p(match (s) { A => match (s) { A => 1, B => 2 }, B => 2 })) { A => "a", B => "b" };
+  const b = (p(match (s) { A => match (s) { A => 1, B => 2 }, B => 2 })) |> String;
+  const c = match (p(match (s) { A => match (s) { A => 1, B => 2 }, B => 2 }), s) { (A, A) => "aa", _ => "x" };
+  let d = "none";
+  if let A() = p(match (s) { A => match (s) { A => 1, B => 2 }, B => 2 }) { d = "if-let"; }
+  let A() = p(match (s) { A => match (s) { A => 1, B => 2 }, B => 2 }) else { return "else"; };
+  return JSON.stringify([a, b, c, d]);
+}
+console.log(t());

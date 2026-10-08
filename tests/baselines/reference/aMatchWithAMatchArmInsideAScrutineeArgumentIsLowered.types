@@ -1,0 +1,109 @@
+=== aMatchWithAMatchArmInsideAScrutineeArgumentIsLowered.tt ===
+variant S { A, B }
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const s: S = S.A as S;
+>s : const s: S
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>S : const S: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+function p(x: number): S { return x === 1 ? S.A : S.B; }
+>p : function p(x: number): S
+>x : (parameter) x: number
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>x : (parameter) x: number
+>S : const S: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>S : const S: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+export function t() {
+>t : function t(): string
+  const a = match (p(match (s) { A => match (s) { A => 1, B => 2 }, B => 2 })) { A => "a", B => "b" };
+>a : const a: string
+>p : function p(x: number): S
+>s : const s: S
+>s : const s: S
+  const b = (p(match (s) { A => match (s) { A => 1, B => 2 }, B => 2 })) |> String;
+>b : const b: string
+>p : function p(x: number): S
+>s : const s: S
+>s : const s: S
+>String : var String: (value?: any) => string
+  const c = match (p(match (s) { A => match (s) { A => 1, B => 2 }, B => 2 }), s) { (A, A) => "aa", _ => "x" };
+>c : const c: string
+>p : function p(x: number): S
+>s : const s: S
+>s : const s: S
+>s : const s: S
+  let d = "none";
+>d : let d: string
+  if let A() = p(match (s) { A => match (s) { A => 1, B => 2 }, B => 2 }) { d = "if-let"; }
+>p : function p(x: number): S
+>s : const s: S
+>s : const s: S
+>d : let d: string
+  let A() = p(match (s) { A => match (s) { A => 1, B => 2 }, B => 2 }) else { return "else"; };
+>p : function p(x: number): S
+>s : const s: S
+>s : const s: S
+  return JSON.stringify([a, b, c, d]);
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>a : const a: string
+>b : const b: string
+>c : const c: string
+>d : let d: string
+console.log(t());
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>t : function t(): string
+

@@ -1,0 +1,5 @@
+//// [aMatchAfterACompleteExpressionOnItsLineIsNotAConstruct.tt] ////
+variant G { E, F }
+const g = G.E as G;
+const show = (n: number) => console.log(n)match (g) { E => 1, F => 2 } |> (show)
+

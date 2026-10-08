@@ -70,6 +70,16 @@ impl EvaluationFile {
                     .map(|(_, _, _, _, source, _, _)| source)
                     .collect(),
             ),
+            lowered_spans: TtSpans::new(
+                syntax
+                    .core_contexts()
+                    .filter(|(root, ..)| match root {
+                        CoreRoot::Expr(expr) => core.has_statement_form(*expr),
+                        CoreRoot::Decision(_) | CoreRoot::Adt(_) | CoreRoot::Propagate(_) => true,
+                    })
+                    .map(|(_, _, _, _, source, _, _)| source)
+                    .collect(),
+            ),
             script: syntax.is_script(),
             commonjs: syntax.uses_commonjs_syntax(),
             globals: syntax.globals().clone(),
@@ -266,6 +276,8 @@ impl EvaluationFile {
         let mut rewrites = Vec::with_capacity(owners.len());
         let mut structurally_owned_children = HashSet::new();
         let mut owned_child_schedules = Vec::new();
+        let mut group_captures = HashMap::new();
+        let mut owned_capabilities = HashMap::new();
         let mut owned_child_exits = Vec::new();
         let mut nested_operations = Vec::new();
         let mut unsupported_owned_children = Vec::new();
@@ -330,6 +342,7 @@ impl EvaluationFile {
                 captures.insert(slot.target, (group, *source));
                 captured_slots.insert((group, *source), slot.target);
             }
+            group_captures.insert(owner, (slots.clone(), source_slots.clone()));
             let mut values = values;
             // A statement-capable outer Core value owns same-host tt values
             // lexically nested inside it. Its structural emitter evaluates
@@ -407,6 +420,7 @@ impl EvaluationFile {
                     &child.context,
                     &schedule,
                 );
+                owned_capabilities.insert(child.expr, capability);
                 let owned = PlannedValue {
                     schedule,
                     capability,
@@ -423,7 +437,7 @@ impl EvaluationFile {
             for (_, mut group) in owned_groups {
                 let operations = plan_conditional_operations(
                     &mut group,
-                    &self.tt_spans,
+                    &self.lowered_spans,
                     &mut next_slot,
                     &mut slot_names,
                     &mut occupied_names,
@@ -449,7 +463,7 @@ impl EvaluationFile {
             values.retain(|value| !owned_children.contains(&value.expr));
             let operations = plan_conditional_operations(
                 &mut values,
-                &self.tt_spans,
+                &self.lowered_spans,
                 &mut next_slot,
                 &mut slot_names,
                 &mut occupied_names,
@@ -613,21 +627,46 @@ impl EvaluationFile {
             if step_count == 0 {
                 continue;
             }
-            let schedule = resolve_schedule_steps(
-                protocol.steps(),
-                step_count,
-                0,
-                Elision {
-                    tt_spans: &self.tt_spans,
-                    reserve_names: false,
-                },
-                &nested_sources,
-                &mut nested_source_slots,
-                &mut nested_links,
-                &mut next_slot,
-                &mut slot_names,
-                &mut occupied_names,
-            )?;
+            let group = match &host.placement {
+                RegionPlacement::Host { host_owner, .. } => group_captures.get_mut(host_owner),
+                _ => None,
+            };
+            let schedule = match group {
+                Some((group_slots, group_source_slots)) => {
+                    let mut sources = nested_sources.clone();
+                    sources.extend(group_slots.iter().map(|(source, slot)| (*source, *slot)));
+                    resolve_schedule_steps(
+                        protocol.steps(),
+                        step_count,
+                        0,
+                        Elision {
+                            tt_spans: &self.tt_spans,
+                            reserve_names: false,
+                        },
+                        &sources,
+                        group_source_slots,
+                        &mut nested_links,
+                        &mut next_slot,
+                        &mut slot_names,
+                        &mut occupied_names,
+                    )?
+                }
+                None => resolve_schedule_steps(
+                    protocol.steps(),
+                    step_count,
+                    0,
+                    Elision {
+                        tt_spans: &self.tt_spans,
+                        reserve_names: false,
+                    },
+                    &nested_sources,
+                    &mut nested_source_slots,
+                    &mut nested_links,
+                    &mut next_slot,
+                    &mut slot_names,
+                    &mut occupied_names,
+                )?,
+            };
             slot_anchors.resize(slot_names.len(), self.host_anchor(region));
             if let (
                 Expr::Propagate(_),
@@ -667,7 +706,7 @@ impl EvaluationFile {
         for (_, anchor, mut group) in nested_groups {
             let operations = plan_conditional_operations(
                 &mut group,
-                &self.tt_spans,
+                &self.lowered_spans,
                 &mut next_slot,
                 &mut slot_names,
                 &mut occupied_names,
@@ -896,7 +935,11 @@ impl EvaluationFile {
             let Some(CoreRoot::Expr(host_expr)) = ancestor.root else {
                 return None;
             };
-            let reason = match direct_capabilities.get(&host_expr).copied() {
+            let reason = match direct_capabilities
+                .get(&host_expr)
+                .or_else(|| owned_capabilities.get(&host_expr))
+                .copied()
+            {
                 Some(TargetCapability::ExpressionBoundary(reason)) => reason,
                 Some(TargetCapability::StatementRegion) => return None,
                 None => match context.owner {

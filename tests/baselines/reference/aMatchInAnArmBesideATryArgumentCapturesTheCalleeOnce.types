@@ -1,0 +1,88 @@
+=== aMatchInAnArmBesideATryArgumentCapturesTheCalleeOnce.tt ===
+variant S { A, B }
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const s: S = S.A as S;
+>s : const s: S
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>S : const S: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+function R(x: number): TResult<number, string> { return Result.Ok(x); }
+>R : function R(x: number): TResult<number, string>
+>x : (parameter) x: number
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>x : (parameter) x: number
+function f(...a: unknown[]) { return a.join(","); }
+>f : function f(...a: unknown[]): string
+>a : (parameter) a: unknown[]
+>a : (parameter) a: unknown[]
+>join : (method) Array<unknown>.join(separator?: string): string
+function declared(): TResult<unknown, string> {
+>declared : function declared(): TResult<unknown, string>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  const r = match (s) { A => f(match (s) { A => 1, B => 2 }, try R(1)), B => 2 };
+>r : const r: string | number
+>s : const s: S
+>f : function f(...a: unknown[]): string
+>s : const s: S
+>R : function R(x: number): TResult<number, string>
+  return Result.Ok(r);
+>Ok : const Ok: <string | number>(value: string | number) => Result.TOk<string | number>
+>r : const r: string | number
+function returned(): TResult<unknown, string> {
+>returned : function returned(): TResult<unknown, string>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  return Result.Ok(match (s) { A => f(match (s) { A => 1, B => 2 }, try R(1)), B => 2 });
+>Ok : const Ok: <string | number>(value: string | number) => Result.TOk<string | number>
+>s : const s: S
+>f : function f(...a: unknown[]): string
+>s : const s: S
+>R : function R(x: number): TResult<number, string>
+function tested(): TResult<unknown, string> {
+>tested : function tested(): TResult<unknown, string>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  if (match (s) { A => f(match (s) { A => 1, B => 2 }, try R(1)), B => 2 } === "1,1") { return Result.Ok("yes"); }
+>s : const s: S
+>f : function f(...a: unknown[]): string
+>s : const s: S
+>R : function R(x: number): TResult<number, string>
+>Ok : const Ok: <string>(value: string) => Result.TOk<string>
+  return Result.Ok("no");
+>Ok : const Ok: <string>(value: string) => Result.TOk<string>
+console.log(JSON.stringify([declared(), returned(), tested()]));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>declared : function declared(): TResult<unknown, string>
+>returned : function returned(): TResult<unknown, string>
+>tested : function tested(): TResult<unknown, string>
+

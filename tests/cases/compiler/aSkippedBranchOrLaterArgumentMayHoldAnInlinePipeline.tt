@@ -1,0 +1,26 @@
+// @run: aSkippedBranchOrLaterArgumentMayHoldAnInlinePipeline.tt
+variant S { A, B }
+const s: S = S.A as S;
+function p(): S { return S.A; }
+function F(x: number) { return x + 1; }
+function f(...x: unknown[]) { return x; }
+const g = { mm: (...x: unknown[]) => x };
+const h: ((...x: unknown[]) => unknown[]) | undefined = (...x) => x;
+function ternary(c: boolean) {
+  const a = c ? (1 |> F) : match (p()) { A => 3, B => 0 };
+  const b = c ? (1 |> F) : (match (p()) { A => 3, B => 0 } |> F);
+  const d = c ? (1 |> F) : F(match (p()) { A => 3, B => 0 });
+  return [a, b, d];
+}
+function conditionalTest() {
+  return g.mm?.(match (p()) { A => 1, B => 2 }) ? (1 |> F) : f(match (p()) { A => 1, B => 2 });
+}
+function laterArguments(a: number | undefined, c: boolean) {
+  return [
+    a ?? match (s) { A => 1, B => 2 },
+    g.mm?.(match (s) { A => 1, B => 2 }, (c ? 1 : (2 |> F))),
+    h?.(match (s) { A => 1, B => 2 }, 1 |> F),
+    c && f(match (s) { A => 1, B => 2 }, 1 |> F),
+  ];
+}
+console.log(JSON.stringify([ternary(true), ternary(false), conditionalTest(), laterArguments(undefined, false), laterArguments(7, true)]));

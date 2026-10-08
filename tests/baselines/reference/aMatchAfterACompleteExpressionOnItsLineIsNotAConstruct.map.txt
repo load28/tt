@@ -1,0 +1,6 @@
+//// [aMatchAfterACompleteExpressionOnItsLineIsNotAConstruct.tt] 4 mapping(s)
+1:19 -> 7:3 len 49  "\nconst g = G.E as G;\nconst show = (n: number) =>"...
+3:29 -> 9:62 len 42  "console.log(n)match (g) { E => 1, F => 2 }"
+3:75 -> 9:106 len 6  "(show)"
+3:81 -> 9:113 len 1  "\n"
+

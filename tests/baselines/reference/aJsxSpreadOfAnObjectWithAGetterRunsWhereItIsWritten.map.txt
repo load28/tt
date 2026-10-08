@@ -1,0 +1,12 @@
+//// [main.ttx] 10 mapping(s)
+1:19 -> 25:3 len 321  "\nconst log: string[] = [];\nconst React = {\n  cre"...
+12:3 -> 47:3 len 8  "return <"
+12:11 -> 37:19 len 4  "Comp"
+12:15 -> 47:17 len 5  " {..."
+12:20 -> 38:24 len 40  "{ get k() { log.push(\"k\"); return 1; } }"
+12:60 -> 47:28 len 5  "} z={"
+12:72 -> 40:19 len 3  "o()"
+12:84 -> 47:49 len 1  "1"
+12:92 -> 47:53 len 1  "2"
+12:95 -> 47:55 len 45  "} />;\n}\nmain();\nconsole.log(log.join(\", \"));\n"
+

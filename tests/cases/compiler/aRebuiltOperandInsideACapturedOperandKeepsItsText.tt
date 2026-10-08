@@ -1,0 +1,15 @@
+// @run: aRebuiltOperandInsideACapturedOperandKeepsItsText.tt
+import * as Result from "@tt/std/result";
+import type { TResult } from "@tt/std";
+variant S { A, B }
+function R<T>(x: T): TResult<T, string> { return Result.Ok(x); }
+function p(): S { return S.A; }
+function f(x: unknown) { return x; }
+const g = { mm: (x: unknown) => x };
+const c = true as boolean;
+function t(): TResult<unknown, string> {
+  const call = typeof g.mm?.(f(match (p()) { A => 1, B => 2 })) + typeof (try R(3));
+  const branch = typeof (c ? (try R(5)) + "x" : 1) + typeof (try R(1));
+  return Result.Ok([call, branch]);
+}
+console.log(JSON.stringify(t()));

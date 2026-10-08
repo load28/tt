@@ -128,6 +128,7 @@ pub(crate) struct EvaluationFile {
     /// capture must not overlap one: the capture copies raw source bytes,
     /// and a tt node inside them is lowered elsewhere.
     tt_spans: TtSpans,
+    lowered_spans: TtSpans,
     script: bool,
     commonjs: bool,
     globals: HashMap<SourceSpan, GlobalStatement>,
@@ -416,6 +417,9 @@ pub(crate) enum PlannedOperand {
         span: SourceSpan,
         spread: bool,
         values: Vec<ExprId>,
+        /// The capture slot, when a later argument holds a tt value: the
+        /// argument is then evaluated whole before that value runs.
+        capture: Option<ValueSlotId>,
     },
     /// Original argument source. Arguments before the last tt value are
     /// captured (in order) before the values run; arguments after it are

@@ -790,6 +790,9 @@ pub(super) fn protocol_step(
                         match position {
                             super::collector::JsxPosition::Tag => EvaluationInputMode::JsxTagName,
                             super::collector::JsxPosition::Value => EvaluationInputMode::Value,
+                            super::collector::JsxPosition::Spread => {
+                                EvaluationInputMode::ObjectSpread
+                            }
                             super::collector::JsxPosition::ChildElement => {
                                 EvaluationInputMode::JsxChildValue
                             }

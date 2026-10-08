@@ -516,6 +516,14 @@ pub(super) fn match_keyword_at(src: &str, tokens: &[Token], k: usize) -> bool {
     matches!(token.kind, TokenKind::Ident)
         && &src[token.span.start..token.span.end] == "match"
         && (!cursor::dotted_at(tokens, 0, k) || follows_spread_operator(tokens, k))
+        && !continues_an_expression(tokens, k)
+}
+
+fn continues_an_expression(tokens: &[Token], k: usize) -> bool {
+    k > 0
+        && !tokens[k].facts.line_break_before()
+        && !matches!(tokens[k - 1].kind, TokenKind::JsxRaw)
+        && tokens[k - 1].facts.ends_expression()
 }
 
 fn follows_spread_operator(tokens: &[Token], idx: usize) -> bool {
@@ -596,7 +604,7 @@ impl Parser<'_> {
 
         while i < tokens.len() {
             let tok = &tokens[i];
-            if tok.facts.boundary_before() {
+            if tok.facts.boundary_before() && !continues_an_expression(tokens, i) {
                 expr = (i, false);
             }
             let word = match tok.kind {

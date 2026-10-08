@@ -462,6 +462,25 @@ fn object_literal_effects(node: &ObjectLit) -> Effects {
     Effects::NONE
 }
 
+pub(super) fn object_spread_effects(expression: &swc_ecma_ast::Expr) -> Effects {
+    use swc_ecma_ast::Expr as SwcExpr;
+    match expression {
+        SwcExpr::Paren(inner) => object_spread_effects(&inner.expr),
+        SwcExpr::TsAs(inner) => object_spread_effects(&inner.expr),
+        SwcExpr::TsSatisfies(inner) => object_spread_effects(&inner.expr),
+        SwcExpr::TsNonNull(inner) => object_spread_effects(&inner.expr),
+        SwcExpr::TsTypeAssertion(inner) => object_spread_effects(&inner.expr),
+        SwcExpr::Object(object)
+            if object.props.iter().any(|property| {
+                matches!(property, PropOrSpread::Prop(property) if matches!(&**property, Prop::Getter(_)))
+            }) =>
+        {
+            Effects::ANY
+        }
+        _ => expression_effects(expression),
+    }
+}
+
 fn array_literal_effects(node: &ArrayLit) -> Effects {
     for element in node.elems.iter().flatten() {
         // A spread iterates its operand, which runs user code.

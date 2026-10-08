@@ -1,0 +1,144 @@
+=== aSkippedBranchOrLaterArgumentMayHoldAnInlinePipeline.tt ===
+variant S { A, B }
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const s: S = S.A as S;
+>s : const s: S
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>S : const S: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+function p(): S { return S.A; }
+>p : function p(): S
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>S : const S: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+function F(x: number) { return x + 1; }
+>F : function F(x: number): number
+>x : (parameter) x: number
+>x : (parameter) x: number
+function f(...x: unknown[]) { return x; }
+>f : function f(...x: unknown[]): unknown[]
+>x : (parameter) x: unknown[]
+>x : (parameter) x: unknown[]
+const g = { mm: (...x: unknown[]) => x };
+>g : const g: {
+>       mm: (...x: unknown[]) => unknown[];
+>   }
+>mm : (property) mm: (...x: unknown[]) => unknown[]
+>x : (parameter) x: unknown[]
+>x : (parameter) x: unknown[]
+const h: ((...x: unknown[]) => unknown[]) | undefined = (...x) => x;
+>h : const h: ((...x: unknown[]) => unknown[]) | undefined
+>x : (parameter) x: unknown[]
+>x : (parameter) x: unknown[]
+>x : (parameter) x: unknown[]
+function ternary(c: boolean) {
+>ternary : function ternary(c: boolean): number[]
+>c : (parameter) c: boolean
+  const a = c ? (1 |> F) : match (p()) { A => 3, B => 0 };
+>a : const a: number
+>c : (parameter) c: boolean
+>F : function F(x: number): number
+>p : function p(): S
+  const b = c ? (1 |> F) : (match (p()) { A => 3, B => 0 } |> F);
+>b : const b: number
+>c : (parameter) c: boolean
+>F : function F(x: number): number
+>p : function p(): S
+>F : function F(x: number): number
+  const d = c ? (1 |> F) : F(match (p()) { A => 3, B => 0 });
+>d : const d: number
+>c : (parameter) c: boolean
+>F : function F(x: number): number
+>F : function F(x: number): number
+>p : function p(): S
+  return [a, b, d];
+>a : const a: number
+>b : const b: number
+>d : const d: number
+function conditionalTest() {
+>conditionalTest : function conditionalTest(): number | unknown[]
+  return g.mm?.(match (p()) { A => 1, B => 2 }) ? (1 |> F) : f(match (p()) { A => 1, B => 2 });
+>g : const g: {
+>       mm: (...x: unknown[]) => unknown[];
+>   }
+>mm : (property) mm: (...x: unknown[]) => unknown[]
+>p : function p(): S
+>F : function F(x: number): number
+>f : function f(...x: unknown[]): unknown[]
+>p : function p(): S
+function laterArguments(a: number | undefined, c: boolean) {
+>laterArguments : function laterArguments(a: number | undefined, c: boolean): (number | false | unknown[] | undefined)[]
+>a : (parameter) a: number | undefined
+>c : (parameter) c: boolean
+    a ?? match (s) { A => 1, B => 2 },
+>a : (parameter) a: number | undefined
+>s : const s: S
+    g.mm?.(match (s) { A => 1, B => 2 }, (c ? 1 : (2 |> F))),
+>g : const g: {
+>       mm: (...x: unknown[]) => unknown[];
+>   }
+>mm : (property) mm: (...x: unknown[]) => unknown[]
+>s : const s: S
+>c : (parameter) c: boolean
+>F : function F(x: number): number
+    h?.(match (s) { A => 1, B => 2 }, 1 |> F),
+>h : const h: ((...x: unknown[]) => unknown[]) | undefined
+>s : const s: S
+>F : function F(x: number): number
+    c && f(match (s) { A => 1, B => 2 }, 1 |> F),
+>c : (parameter) c: boolean
+>f : function f(...x: unknown[]): unknown[]
+>s : const s: S
+>F : function F(x: number): number
+console.log(JSON.stringify([ternary(true), ternary(false), conditionalTest(), laterArguments(undefined, false), laterArguments(7, true)]));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>ternary : function ternary(c: boolean): number[]
+>ternary : function ternary(c: boolean): number[]
+>conditionalTest : function conditionalTest(): number | unknown[]
+>laterArguments : function laterArguments(a: number | undefined, c: boolean): (number | false | unknown[] | undefined)[]
+>laterArguments : function laterArguments(a: number | undefined, c: boolean): (number | false | unknown[] | undefined)[]
+

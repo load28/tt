@@ -473,7 +473,7 @@ pub(super) fn object_evaluation_positions(
             PropOrSpread::Spread(spread) => {
                 positions.push((
                     operand_span(&spread.expr, source_start, placeholders, segments),
-                    expression_effects(&spread.expr),
+                    object_spread_effects(&spread.expr),
                     EvaluationInputMode::ObjectSpread,
                 ));
             }
@@ -565,6 +565,7 @@ pub(super) fn jsx_expression_span(
 pub(crate) enum JsxPosition {
     Tag,
     Value,
+    Spread,
     ChildElement,
 }
 
@@ -591,7 +592,7 @@ pub(super) fn jsx_evaluation_positions(
         .filter_map(|attribute| match attribute {
             JSXAttrOrSpread::SpreadElement(spread) => Some((
                 projected_span(spread.expr.span(), source_start),
-                JsxPosition::Value,
+                JsxPosition::Spread,
             )),
             JSXAttrOrSpread::JSXAttr(attribute) => match attribute.value.as_ref()? {
                 JSXAttrValue::JSXExprContainer(container) => {

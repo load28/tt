@@ -35,6 +35,7 @@ pub(super) struct Emitter<'a> {
     pub(super) loop_test_rewrites: Vec<LoopTestRewrite>,
     pub(super) loop_body_index: crate::span_index::SpanIndex,
     pub(super) active_capture_sources: RefCell<Vec<SourceSpan>>,
+    pub(super) rebuilt_sources: RefCell<Vec<SourceSpan>>,
     /// The values of the conditional operation being written that are
     /// already in their slots: a later capture in the same branch reads a
     /// value there instead of evaluating it again. Outside the operation its
@@ -245,28 +246,65 @@ impl Emitter<'_> {
 #[derive(Default)]
 pub(super) struct ActiveExprStack {
     exprs: RefCell<Vec<ExprId>>,
+    counts: RefCell<HashMap<ExprId, usize>>,
+    anchors: RefCell<std::collections::BTreeMap<(usize, usize), usize>>,
 }
 
 impl ActiveExprStack {
     fn contains(&self, expr: ExprId) -> bool {
-        self.exprs.borrow().contains(&expr)
+        self.counts.borrow().contains_key(&expr)
     }
 
-    fn enter(&self, expr: ExprId) -> ActiveExprGuard<'_> {
+    fn enter_anchored(&self, expr: ExprId, anchor: Option<(usize, usize)>) -> ActiveExprGuard<'_> {
         self.exprs.borrow_mut().push(expr);
-        ActiveExprGuard { stack: self, expr }
+        *self.counts.borrow_mut().entry(expr).or_default() += 1;
+        if let Some(anchor) = anchor {
+            *self.anchors.borrow_mut().entry(anchor).or_default() += 1;
+        }
+        ActiveExprGuard {
+            stack: self,
+            expr,
+            anchor,
+        }
+    }
+
+    pub(super) fn any_anchor_within(&self, start: usize, end: usize) -> bool {
+        start <= end
+            && self
+                .anchors
+                .borrow()
+                .range((start, 0)..=(end, usize::MAX))
+                .rev()
+                .any(|((_, anchor_end), _)| *anchor_end <= end)
     }
 }
 
-struct ActiveExprGuard<'stack> {
+pub(super) struct ActiveExprGuard<'stack> {
     stack: &'stack ActiveExprStack,
     expr: ExprId,
+    anchor: Option<(usize, usize)>,
 }
 
 impl Drop for ActiveExprGuard<'_> {
     fn drop(&mut self) {
         let popped = self.stack.exprs.borrow_mut().pop();
         debug_assert_eq!(popped, Some(self.expr));
+        let mut counts = self.stack.counts.borrow_mut();
+        if let Some(count) = counts.get_mut(&self.expr) {
+            *count -= 1;
+            if *count == 0 {
+                counts.remove(&self.expr);
+            }
+        }
+        if let Some(anchor) = self.anchor {
+            let mut anchors = self.stack.anchors.borrow_mut();
+            if let Some(count) = anchors.get_mut(&anchor) {
+                *count -= 1;
+                if *count == 0 {
+                    anchors.remove(&anchor);
+                }
+            }
+        }
     }
 }
 

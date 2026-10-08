@@ -1059,6 +1059,7 @@ async function main() {
           if (declaredType && checker.getTypeAtLocation(identifier).id !== declaredType.id) continue;
           if (impliedByBindingPattern(identifier, SyntaxKind)) continue;
           if (namesJsxTag(identifier, SyntaxKind)) continue;
+          if (spreadsProperties(identifier, SyntaxKind)) continue;
           const logical = logicalLeftOperand(identifier, SyntaxKind);
           if (logical && readsPending(logical, symbol.id)) { deferred = true; break; }
           if (logical && (checker.getTypeAtLocation(logical).flags & TypeFlags.Never)) continue;
@@ -1480,6 +1481,17 @@ function namesJsxTag(node, SyntaxKind) {
   return !!parent
     && (parent.kind === SyntaxKind.JsxOpeningElement || parent.kind === SyntaxKind.JsxSelfClosingElement)
     && parent.tagName === node;
+}
+
+function spreadsProperties(node, SyntaxKind) {
+  let current = node;
+  while (current.parent && current.parent.kind === SyntaxKind.ParenthesizedExpression) {
+    current = current.parent;
+  }
+  const parent = current.parent;
+  return !!parent
+    && (parent.kind === SyntaxKind.SpreadAssignment || parent.kind === SyntaxKind.JsxSpreadAttribute)
+    && parent.expression === current;
 }
 
 function impliedByBindingPattern(node, SyntaxKind) {

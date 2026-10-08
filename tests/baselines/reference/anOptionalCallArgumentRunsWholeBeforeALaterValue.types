@@ -1,0 +1,132 @@
+=== anOptionalCallArgumentRunsWholeBeforeALaterValue.tt ===
+variant S { A, B }
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const log: string[] = [];
+>log : const log: string[]
+function o(t: string): S { log.push("subject" + t); return S.A; }
+>o : function o(t: string): S
+>t : (parameter) t: string
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>t : (parameter) t: string
+>S : const S: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+function L(s: string) { log.push(s); return s; }
+>L : function L(s: string): string
+>s : (parameter) s: string
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>s : (parameter) s: string
+>s : (parameter) s: string
+function F(s: unknown) { log.push("F"); return s; }
+>F : function F(s: unknown): unknown
+>s : (parameter) s: unknown
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>s : (parameter) s: unknown
+const g = { mm: (...a: unknown[]) => a.length };
+>g : const g: {
+>       mm: (...a: unknown[]) => number;
+>   }
+>mm : (property) mm: (...a: unknown[]) => number
+>a : (parameter) a: unknown[]
+>a : (parameter) a: unknown[]
+>length : (property) Array<unknown>.length: number
+function f(...a: unknown[]) { log.push("f"); return a.length; }
+>f : function f(...a: unknown[]): number
+>a : (parameter) a: unknown[]
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>a : (parameter) a: unknown[]
+>length : (property) Array<unknown>.length: number
+function main() {
+>main : function main(): void
+  g.mm?.(f(match (o("1")) { A => 1, B => 2 } |> F, L("x")), match (o("2")) { A => 1, B => 2 });
+>g : const g: {
+>       mm: (...a: unknown[]) => number;
+>   }
+>mm : (property) mm: (...a: unknown[]) => number
+>f : function f(...a: unknown[]): number
+>o : function o(t: string): S
+>F : function F(s: unknown): unknown
+>L : function L(s: string): string
+>o : function o(t: string): S
+  log.push("|");
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  g.mm(f(match (o("1")) { A => 1, B => 2 } |> F, L("x")), match (o("2")) { A => 1, B => 2 });
+>f : function f(...a: unknown[]): number
+>o : function o(t: string): S
+>F : function F(s: unknown): unknown
+>L : function L(s: string): string
+>o : function o(t: string): S
+  log.push("|");
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  f(f(match (o("1")) { A => 1, B => 2 } |> F, L("x")), match (o("2")) { A => 1, B => 2 });
+>f : function f(...a: unknown[]): number
+>f : function f(...a: unknown[]): number
+>o : function o(t: string): S
+>F : function F(s: unknown): unknown
+>L : function L(s: string): string
+>o : function o(t: string): S
+  log.push("|");
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  f(f(1 |> F, L("x")), match (o("2")) { A => 1, B => 2 });
+>f : function f(...a: unknown[]): number
+>f : function f(...a: unknown[]): number
+>F : function F(s: unknown): unknown
+>L : function L(s: string): string
+>o : function o(t: string): S
+  log.push("|");
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  f([match (o("1")) { A => 1, B => 2 } |> F, L("x")], match (o("2")) { A => 1, B => 2 });
+>f : function f(...a: unknown[]): number
+>o : function o(t: string): S
+>F : function F(s: unknown): unknown
+>L : function L(s: string): string
+>o : function o(t: string): S
+  log.push("|");
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  const r = [f(match (o("1")) { A => 1, B => 2 } |> F, L("x")), match (o("2")) { A => 1, B => 2 }];
+>r : const r: number[]
+>f : function f(...a: unknown[]): number
+>o : function o(t: string): S
+>F : function F(s: unknown): unknown
+>L : function L(s: string): string
+>o : function o(t: string): S
+main();
+>main : function main(): void
+console.log(log.join(", "));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

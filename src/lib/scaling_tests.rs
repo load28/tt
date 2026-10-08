@@ -161,6 +161,35 @@ fn nested_matches(depth: usize) -> String {
     )
 }
 
+fn nested_block_arms(depth: usize) -> String {
+    let mut value = "0".to_owned();
+    for level in 0..depth {
+        value = format!(
+            "match (s) {{ A(n) => {{ const q{level} = {value}; return q{level}; }}, B => {level} }}"
+        );
+    }
+    format!(
+        "variant S {{ A(n: number), B }}\ndeclare const s: S;\nfunction f() {{ return {value}; }}\n"
+    )
+}
+
+#[test]
+fn checking_an_active_value_does_constant_work_per_replacement_in_nested_block_arms() {
+    let compile = |depth| {
+        crate::compile(&nested_block_arms(depth), &crate::Options::default())
+            .expect("the file compiles");
+    };
+    let small = measure(|| compile(40));
+    let large = measure(|| compile(80));
+    let before = small["value anchors"];
+    let after = large["value anchors"];
+    assert!(before > 0);
+    assert!(
+        after <= 2 * before + 64,
+        "value anchors: {before} for n nested arms but {after} for 2n"
+    );
+}
+
 #[test]
 fn every_request_does_linear_work_in_the_nesting_depth_of_matches() {
     let small = measure(|| every_request(&nested_matches(60)));

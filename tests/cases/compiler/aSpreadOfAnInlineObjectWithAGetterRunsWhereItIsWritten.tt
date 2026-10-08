@@ -1,0 +1,20 @@
+// @run: aSpreadOfAnInlineObjectWithAGetterRunsWhereItIsWritten.tt
+variant S { A, B }
+const log: string[] = [];
+function o(): S { log.push("subject"); return S.A; }
+const p = new Proxy({ a: 1 }, { ownKeys(t) { log.push("ownKeys"); return Reflect.ownKeys(t); } });
+const it = { *[Symbol.iterator]() { log.push("iter"); yield 1; } };
+function main() {
+  const a = { ...{ ...p }, x: match (o()) { A => 1, B => 2 } };
+  log.push("|");
+  const b = { ...{ get g() { log.push("getter"); return 1; } }, x: match (o()) { A => 1, B => 2 } };
+  log.push("|");
+  const c = [...[...it], match (o()) { A => 1, B => 2 }];
+  log.push("|");
+  const d = { ...[...it], x: match (o()) { A => 1, B => 2 } };
+  log.push("|");
+  const e: { g: number; x: number } = { ...{ get g() { log.push("typed getter"); return 1; } }, x: match (o()) { A => 1, B => 2 } };
+  return [a, b, c, d, e];
+}
+main();
+console.log(log.join(", "));

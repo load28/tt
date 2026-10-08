@@ -1,0 +1,128 @@
+=== templateSubstitutionsBeforeALoweredValueRunFirst.tt ===
+variant S { A, B }
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const log: string[] = [];
+>log : const log: string[]
+function o(): S { log.push("subject"); return S.A; }
+>o : function o(): S
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>S : const S: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+const g = { get p() { log.push("g.p"); return 1; } };
+>g : const g: {
+>       readonly p: number;
+>   }
+>p : (accessor) p: number
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+class K { constructor() { log.push("new K"); } toString() { return "K"; } }
+>K : class K
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>toString : (method) K.toString(): string
+function tag(s: TemplateStringsArray, ...v: unknown[]) { return v.join(","); }
+>tag : function tag(s: TemplateStringsArray, ...v: unknown[]): string
+>s : (parameter) s: TemplateStringsArray
+>TemplateStringsArray : interface TemplateStringsArray
+>v : (parameter) v: unknown[]
+>v : (parameter) v: unknown[]
+>join : (method) Array<unknown>.join(separator?: string): string
+function f(...a: unknown[]) { return a.join(","); }
+>f : function f(...a: unknown[]): string
+>a : (parameter) a: unknown[]
+>a : (parameter) a: unknown[]
+>join : (method) Array<unknown>.join(separator?: string): string
+function main() {
+>main : function main(): void
+  const a = match (o()) { A => `a${g.p && 2}b${match (o()) { A => 1, B => 2 }}`, B => "" };
+>a : const a: string
+>o : function o(): S
+>g : const g: {
+>       readonly p: number;
+>   }
+>p : (accessor) p: number
+>o : function o(): S
+  log.push("| " + a);
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>a : const a: string
+  const b = match (o()) { A => tag`q${new K()}r${match (o()) { A => 1, B => 2 }}`, B => "" };
+>b : const b: string
+>o : function o(): S
+>tag : function tag(s: TemplateStringsArray, ...v: unknown[]): string
+>K : constructor K(): K
+>o : function o(): S
+  log.push("| " + b);
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>b : const b: string
+  const c = match (o()) { A => f(g.p && 2, match (o()) { A => 1, B => 2 }), B => "" };
+>c : const c: string
+>o : function o(): S
+>f : function f(...a: unknown[]): string
+>g : const g: {
+>       readonly p: number;
+>   }
+>p : (accessor) p: number
+>o : function o(): S
+  log.push("| " + c);
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>c : const c: string
+  const d = match (o()) { A => `a${g.p}b${match (o()) { A => 1, B => 2 }}`, B => "" };
+>d : const d: string
+>o : function o(): S
+>g : const g: {
+>       readonly p: number;
+>   }
+>p : (accessor) p: number
+>o : function o(): S
+  log.push("| " + d);
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>d : const d: string
+  const e = f(`a${g.p && 2}b${match (o()) { A => 1, B => 2 }}`);
+>e : const e: string
+>f : function f(...a: unknown[]): string
+>g : const g: {
+>       readonly p: number;
+>   }
+>p : (accessor) p: number
+>o : function o(): S
+  log.push("| " + e);
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>e : const e: string
+main();
+>main : function main(): void
+console.log(log.join(", "));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

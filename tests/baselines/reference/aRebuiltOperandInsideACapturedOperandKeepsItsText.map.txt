@@ -1,0 +1,27 @@
+//// [aRebuiltOperandInsideACapturedOperandKeepsItsText.tt] 25 mapping(s)
+1:1 -> 19:1 len 82  "import * as Result from \"@tt/std/result\";\nimport"...
+3:19 -> 27:3 len 242  "\nfunction R<T>(x: T): TResult<T, string> { retur"...
+10:3 -> 67:3 len 13  "const call = "
+10:16 -> 61:19 len 7  "typeof "
+10:23 -> 36:19 len 4  "g.mm"
+10:30 -> 39:31 len 1  "f"
+10:31 -> 56:35 len 1  "("
+10:39 -> 41:21 len 3  "p()"
+10:51 -> 44:20 len 1  "1"
+10:59 -> 48:20 len 1  "2"
+10:62 -> 56:42 len 1  ")"
+10:64 -> 67:22 len 11  " + typeof ("
+10:79 -> 62:18 len 4  "R(3)"
+10:83 -> 67:39 len 5  ");\n  "
+11:3 -> 88:3 len 15  "const branch = "
+11:18 -> 82:19 len 8  "typeof ("
+11:26 -> 70:7 len 1  "c"
+11:30 -> 77:15 len 1  "("
+11:35 -> 72:20 len 4  "R(5)"
+11:39 -> 77:22 len 7  ") + \"x\""
+11:49 -> 79:15 len 1  "1"
+11:50 -> 82:34 len 1  ")"
+11:51 -> 88:24 len 11  " + typeof ("
+11:66 -> 83:18 len 4  "R(1)"
+11:70 -> 88:41 len 75  ");\n  return Result.Ok([call, branch]);\n}\nconsole"...
+

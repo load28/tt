@@ -22,9 +22,9 @@ const f = (x: TResult<number, string>) => x.kind.length;
 export function F(c: boolean): TResult<number, string> {
   let $tt_v0: number;
   {
-    let $tt_m; let $tt_v10: (number) | (false);
-    let $tt_v8: boolean;
-    if ($tt_v8 = c) {
+    let $tt_m; let $tt_v8: (number) | (false);
+    let $tt_v3: boolean;
+    if ($tt_v3 = c) {
       let $tt_v4: number;
       let $tt_v1: number;
       const $tt_v2: typeof r = (r);
@@ -44,11 +44,11 @@ export function F(c: boolean): TResult<number, string> {
         return $tt_t0;
       }
       $tt_v4 = $tt_t0.value;
-      $tt_v10 = $tt_v8 && $tt_v4;
+      $tt_v8 = $tt_v3 && $tt_v4;
     } else {
-      $tt_v10 = $tt_v8;
+      $tt_v8 = $tt_v3;
     }
-    $tt_m = $tt_v10;
+    $tt_m = $tt_v8;
     switch ($tt_m) {
       default: {
         $tt_v0 = 0;

@@ -539,6 +539,10 @@ pub(super) fn plan_one_operation(
             // the result slot; any other branch is rebuilt around its values.
             active.retain(|entry| {
                 !entry.steps.is_empty()
+                    || members
+                        .iter()
+                        .map(|member| &values[*member])
+                        .any(|value| value.expr == entry.value && value.source != entry.branch)
                     || [&consequent, &alternate]
                         .into_iter()
                         .flatten()
@@ -650,7 +654,14 @@ pub(super) fn plan_one_operation(
             for (index, operand) in facts.operands.iter().enumerate() {
                 let index = u32::try_from(index).map_err(|_| EvaluationError::IdOverflow)?;
                 match value_indices.get(&index).map(Vec::as_slice) {
-                    Some(&[(expr, 0)]) => arguments.push(PlannedOperand::Value(expr)),
+                    Some(&[(expr, 0)])
+                        if members
+                            .iter()
+                            .map(|member| &values[*member])
+                            .any(|value| value.expr == expr && value.source == operand.span) =>
+                    {
+                        arguments.push(PlannedOperand::Value(expr))
+                    }
                     Some(argument_values) => {
                         for &(expr, member_index) in argument_values {
                             let Some(value) = members
@@ -666,10 +677,14 @@ pub(super) fn plan_one_operation(
                                 steps: value.schedule.steps().take(member_index),
                             });
                         }
+                        let capture = (index < last_value)
+                            .then(|| allocate_value_slot(next_slot, slot_names, occupied_names))
+                            .transpose()?;
                         arguments.push(PlannedOperand::Composed {
                             span: operand.span,
                             spread: operand.spread,
                             values: argument_values.iter().map(|(expr, _)| *expr).collect(),
+                            capture,
                         });
                     }
                     None => {

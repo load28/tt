@@ -1,0 +1,16 @@
+// @run: aValueInsideAnArgumentIsNotTheWholeArgument.tt
+variant S { A, B }
+const s: S = S.A as S;
+const g = { mm: (...a: unknown[]) => a };
+function f(...a: unknown[]) { return a; }
+function main() {
+  const b = g.mm?.(1, (match (s) { A => 0, B => 1 } ? "then" : "else"));
+  const c = g.mm?.(match (s) { A => 0, B => 1 } ? "then" : "else");
+  const d = f?.(match (s) { A => 0, B => 1 } ? "then" : "else");
+  const e = f(match (s) { A => 0, B => 1 } ? "then" : "else");
+  const h = g.mm?.(match (s) { A => 0, B => 1 } || "or");
+  const i = g.mm?.(match (s) { A => 0, B => 1 } + 100);
+  const j = g?.mm(match (s) { A => 0, B => 1 } ? "then" : "else");
+  return JSON.stringify({ b, c, d, e, h, i, j });
+}
+console.log(main());
