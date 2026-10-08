@@ -796,6 +796,11 @@ pub(crate) fn emit_with_map<'a>(
         &boundaries,
         &preservation,
         &governed_statements,
+        comments
+            .iter()
+            .filter(|comment| source[comment.start..].starts_with("//"))
+            .map(|comment| comment.end)
+            .collect(),
     );
     for result_return in &mut flat.result_return_temps {
         result_return.src_end = result_return_args

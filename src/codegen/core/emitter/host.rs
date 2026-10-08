@@ -190,8 +190,8 @@ impl<'a> Emitter<'a> {
         let mut out = Rope::new();
         if let Some(binding) = propagate.binding {
             out.push_lit(format!("{} ", binding_keyword(binding.mode)));
-            out.append(self.source_rope(binding.node));
-            out.push_lit(format!(" = {temp}.{};", propagate.layout.payload_field));
+            self.push_propagate_binding(binding.node, &mut out);
+            out.push_lit(format!("{temp}.{};", propagate.layout.payload_field));
         }
         Rope::scoped(out)
     }
@@ -1486,6 +1486,7 @@ impl<'a> Emitter<'a> {
                 Part::Statement(statement) => {
                     out.append(self.emit_statements(std::slice::from_ref(statement)))
                 }
+                Part::Value(expr) if self.discarded_values.contains(&expr) => {}
                 Part::Value(expr) => {
                     let (kind, start, head_end, extent) = self.value_anchor(expr);
                     let delivered = self.delivered_conditional_values.borrow().contains(&expr);
@@ -1758,6 +1759,9 @@ impl<'a> Emitter<'a> {
                 .any(|operand| operand.start <= source.start && source.end <= operand.end)
             {
                 return None;
+            }
+            if self.discarded_values.contains(expr) {
+                return Some((source, Rope::new()));
             }
             let covered = self
                 .replacements_covering(source.start, source.end)

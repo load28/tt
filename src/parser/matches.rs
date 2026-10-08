@@ -386,10 +386,7 @@ fn parse_match_complete<'t>(
         start: cur.tokens[open].span.start + 1,
         end: cur.tokens[close].span.start,
     };
-    if cur.parser.src[scrutinee_span.start..scrutinee_span.end]
-        .trim()
-        .is_empty()
-    {
+    if close == open + 1 {
         return None;
     }
     cur.idx = close + 1;

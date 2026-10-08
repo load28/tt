@@ -1422,6 +1422,15 @@ impl TargetRewritePlan {
                 discarded_value_comma(source, value.steps.iter().next(), value.source)
                     .map(|comma| (value.expr, value.source, comma))
             })
+            .chain(
+                all_operations()
+                    .flat_map(|operation| &operation.active)
+                    .filter_map(|active| {
+                        let value = structured_expr_span(semantic, core, active.value)?;
+                        discarded_value_comma(source, active.steps.iter().next(), value)
+                            .map(|comma| (active.value, value, comma))
+                    }),
+            )
             .collect();
         let mut read_tags = HashSet::new();
         let closing_tags: Vec<(SourceSpan, crate::evaluation_ir::ValueSlotId)> = planned_steps()

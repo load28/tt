@@ -1,0 +1,17 @@
+//// [aLineCommentAtTheEndOfAMatchKeepsTheStatementEnd.tt] 15 mapping(s)
+1:18 -> 20:21 len 6  "number"
+1:18 -> 23:10 len 6  "number"
+1:30 -> 25:3 len 60  "\nconst s: S = S.A(3) as S;\nfunction f() {\n  // @"...
+5:3 -> 30:102 len 10  "const m = "
+5:20 -> 29:31 len 1  "s"
+5:27 -> 29:76 len 1  "n"
+5:33 -> 29:98 len 1  "n"
+5:41 -> 29:131 len 6  "4 // c"
+6:4 -> 30:118 len 49  ";\n  return m;\n}\nfunction g() {\n  // @ts-ignore\n "...
+11:3 -> 37:176 len 10  "const k = "
+11:20 -> 35:31 len 6  "s // c"
+12:9 -> 37:23 len 1  "n"
+12:15 -> 37:45 len 5  "n + 1"
+12:27 -> 37:82 len 1  "4"
+12:30 -> 37:192 len 39  ";\n  return k;\n}\nconsole.log(f(), g());\n"
+

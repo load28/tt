@@ -3278,13 +3278,13 @@ fn an_invalid_file_reports_the_same_diagnostic_with_typescript_installed() {
     let sources = [
         (
             "type R<T> = { kind: \"Ok\"; value: T } | { kind: \"Err\"; error: string };\nfunction res(b: boolean): R<number> {\n  const q = (try result { if (b) { return 10; } return 1; }) * 2;\n  return { kind: \"Ok\", value: q };\n}\n",
-            "error[verify-failed]",
+            "error[source-not-typescript]",
             "main.tt:3:25",
         ),
         (
             "declare const b: boolean;\nconst q = (try result { if (b) { return 10; } return 1; }) * 2;\nexport { q };\n",
-            "error[try-placement]",
-            "main.tt:2:12",
+            "error[source-not-typescript]",
+            "main.tt:2:23",
         ),
     ];
     for (source, code, location) in sources {

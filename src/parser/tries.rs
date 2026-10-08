@@ -296,18 +296,20 @@ pub(super) fn parse_try_decl<'t>(
 ) -> Option<(Cursor<'t>, usize, TryStmt)> {
     let scan_start = cur.stop_byte_at(cur.idx);
     let (eq_idx, eq_byte) = binding_end(&cur)?;
-    let raw = &cur.parser.src[scan_start..eq_byte];
-    // The span of the binding itself, whitespace on either side dropped:
+    // The span of the binding itself, trivia on either side dropped:
     // codegen copies these bytes so the emitted declaration maps back to
-    // the name the user wrote.
-    let binding_start = scan_start + (raw.len() - raw.trim_start().len());
-    let binding = raw.trim();
-    if binding.is_empty() {
+    // the name the user wrote, and writes the trivia before `=` itself.
+    let binding_start = scan_start;
+    let binding_end = cur.tokens[..eq_idx]
+        .last()
+        .map_or(binding_start, |token| token.span.end)
+        .max(binding_start);
+    if binding_end <= binding_start || binding_end > eq_byte {
         return None;
     }
     let binding_span = Span {
         start: binding_start,
-        end: binding_start + binding.len(),
+        end: binding_end,
     };
     // A real binding starts with the variable name or a destructuring
     // pattern. A leading reserved word means the scan ran across some other

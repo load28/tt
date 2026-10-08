@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+error[source-not-typescript]: the TypeScript here does not parse: Expected ',', got 'numeric literal'. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> ./invalidTypeScriptInATryOperandIsReportedAsSource.tt:2:41
+  |
+2 | export function f() { const v = try r(1 2); return { kind: "Ok" as const, value: v }; }
+  |                                         ^
+
+
+==== ttc --check-types (exit 1) ====
+error[source-not-typescript]: the TypeScript here does not parse: Expected ',', got 'numeric literal'. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> invalidTypeScriptInATryOperandIsReportedAsSource.tt:2:41
+  |
+2 | export function f() { const v = try r(1 2); return { kind: "Ok" as const, value: v }; }
+  |                                         ^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

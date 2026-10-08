@@ -65,10 +65,29 @@ impl<'a> Emitter<'a> {
                 out.append(documentation);
             }
             out.push_lit(format!("{} ", binding_keyword(binding.mode)));
-            out.append(self.source_rope(binding.node));
-            out.push_lit(format!(" = {temp}.{};", propagate.layout.payload_field));
+            self.push_propagate_binding(binding.node, &mut out);
+            out.push_lit(format!("{temp}.{};", propagate.layout.payload_field));
         }
         Rope::scoped(out)
+    }
+
+    /// A propagation's binding as written, with what the source has between
+    /// it and `=` (a comment and the line break that ends it), then `= `.
+    pub(super) fn push_propagate_binding(&self, binding: NodeId, out: &mut Rope<'a>) {
+        out.append(self.source_rope(binding));
+        let end = self.span(binding).end;
+        let (equals, _) =
+            crate::scanner::skip_trivia(self.source.as_bytes(), end, self.source.len());
+        push_gap(
+            self.source,
+            out,
+            " ",
+            Some(SourceSpan {
+                start: end,
+                end: equals,
+            }),
+            "= ",
+        );
     }
 
     pub(super) fn emit_propagate_input(&self, value: ExprId, temp: &str) -> Rope<'a> {
@@ -679,8 +698,8 @@ impl<'a> Emitter<'a> {
                 out.append(documentation);
             }
             out.push_lit(format!("{} ", binding_keyword(binding.mode)));
-            out.append(self.source_rope(binding.node));
-            out.push_lit(format!(" = {temp}.{};", propagate.layout.payload_field));
+            self.push_propagate_binding(binding.node, &mut out);
+            out.push_lit(format!("{temp}.{};", propagate.layout.payload_field));
         }
         Rope::scoped(out)
     }

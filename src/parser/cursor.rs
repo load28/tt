@@ -133,14 +133,26 @@ pub(super) fn brace_begins_expression(tokens: &[Token], from: usize, k: usize) -
 /// is a property name, not a keyword or a binding: the token before it is a
 /// member-access dot (`.` or the `?.` of optional chaining), or the `#` of a
 /// private name (`#name`, ECMA-262 `PrivateIdentifier`), which the lexer
-/// splits into `#` and the identifier with no gap between them.
+/// splits into `#` and the identifier with no gap between them. The last
+/// dot of a spread's `...` is punctuation, not member access.
 pub(crate) fn dotted_at(tokens: &[Token], from: usize, k: usize) -> bool {
     k > from
         && match tokens[k - 1].kind {
-            TokenKind::Punct(b'.') | TokenKind::OptChain => true,
+            TokenKind::Punct(b'.') => !spread_ends_at(tokens, k - 1),
+            TokenKind::OptChain => true,
             TokenKind::Punct(b'#') => tokens[k - 1].span.end == tokens[k].span.start,
             _ => false,
         }
+}
+
+pub(super) fn spread_ends_at(tokens: &[Token], last: usize) -> bool {
+    last >= 2
+        && tokens[last - 2..=last]
+            .windows(2)
+            .all(|pair| pair[0].span.end == pair[1].span.start)
+        && tokens[last - 2..=last]
+            .iter()
+            .all(|token| matches!(token.kind, TokenKind::Punct(b'.')))
 }
 
 /// The index just past a construct that carries its own top-level braces

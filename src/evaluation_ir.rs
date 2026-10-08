@@ -137,6 +137,7 @@ pub(crate) struct EvaluationFile {
 #[derive(Debug)]
 pub(crate) struct TtSpans {
     spans: Vec<SourceSpan>,
+    owners: Vec<SourceSpan>,
     index: crate::span_index::SpanIndex,
     starts: Vec<usize>,
     by_start: Vec<usize>,
@@ -144,7 +145,8 @@ pub(crate) struct TtSpans {
 }
 
 impl TtSpans {
-    fn new(spans: Vec<SourceSpan>) -> Self {
+    fn new(entries: Vec<(SourceSpan, SourceSpan)>) -> Self {
+        let (spans, owners): (Vec<SourceSpan>, Vec<SourceSpan>) = entries.into_iter().unzip();
         let index =
             crate::span_index::SpanIndex::new(spans.iter().map(|span| (span.start, span.end)));
         let mut by_start: Vec<usize> = (0..spans.len()).collect();
@@ -162,11 +164,17 @@ impl TtSpans {
         }
         Self {
             spans,
+            owners,
             index,
             starts,
             by_start,
             least_end,
         }
+    }
+
+    /// The span of the host owner the tt value at `at` evaluates in.
+    pub(crate) fn owner(&self, at: usize) -> SourceSpan {
+        self.owners[at]
     }
 
     pub(crate) fn iter(&self) -> std::slice::Iter<'_, SourceSpan> {

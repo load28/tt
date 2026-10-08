@@ -67,7 +67,7 @@ impl EvaluationFile {
             tt_spans: TtSpans::new(
                 syntax
                     .core_contexts()
-                    .map(|(_, _, _, _, source, _, _)| source)
+                    .map(|(_, _, _, _, source, owner, _)| (source, owner.span))
                     .collect(),
             ),
             lowered_spans: TtSpans::new(
@@ -77,7 +77,7 @@ impl EvaluationFile {
                         CoreRoot::Expr(expr) => core.has_statement_form(*expr),
                         CoreRoot::Decision(_) | CoreRoot::Adt(_) | CoreRoot::Propagate(_) => true,
                     })
-                    .map(|(_, _, _, _, source, _, _)| source)
+                    .map(|(_, _, _, _, source, owner, _)| (source, owner.span))
                     .collect(),
             ),
             script: syntax.is_script(),

@@ -1,0 +1,13 @@
+// @run: aCommentBeforeTheEqualsOfATryDeclarationKeepsItsInitializer.tt
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+const ok = (n: number): R => ({ kind: "Ok", value: n });
+function f(): R {
+  const v //C
+    = try ok(3);
+  return ok(v + 1);
+}
+function g(): R {
+  const w /* block */ = try ok(5);
+  return ok(w * 2);
+}
+console.log(JSON.stringify(f()), JSON.stringify(g()));

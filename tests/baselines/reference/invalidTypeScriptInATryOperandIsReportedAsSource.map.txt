@@ -1,0 +1,6 @@
+//// [invalidTypeScriptInATryOperandIsReportedAsSource.tt] 4 mapping(s)
+1:1 -> 1:1 len 84  "declare function r(n: number): { kind: \"Ok\"; val"...
+2:29 -> 6:7 len 1  "v"
+2:37 -> 2:38 len 6  "r(1 2)"
+2:44 -> 6:24 len 45  " return { kind: \"Ok\" as const, value: v }; }\n"
+

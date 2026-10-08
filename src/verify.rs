@@ -355,12 +355,12 @@ pub(crate) fn at_source(
         FailureKind::Parse => format!(
             "generated TypeScript failed to parse: {}. This is either invalid TypeScript passed \
              through from the source or a ttc bug; use --no-verify to bypass.",
-            failure.message,
+            failure.message.trim_end_matches('.'),
         ),
         FailureKind::StatementBoundary => format!(
             "generated TypeScript changed the meaning of this code: {}. This is a ttc bug; use \
              --no-verify to bypass.",
-            failure.message,
+            failure.message.trim_end_matches('.'),
         ),
     };
     let (message, span) = match crate::typescript::mapper::to_source(mappings, out) {
@@ -431,8 +431,9 @@ pub(crate) fn in_source(
         } => {
             let at = (*at).min(source.len());
             let message = format!(
-                "the TypeScript here does not parse: {message}. tt lowering models this file's TypeScript, \
+                "the TypeScript here does not parse: {}. tt lowering models this file's TypeScript, \
                  so no output is emitted (`--no-verify` does not apply).",
+                message.trim_end_matches('.'),
             );
             crate::error::TtError::at(at, message).code(crate::DiagnosticCode::SourceNotTypeScript)
         }

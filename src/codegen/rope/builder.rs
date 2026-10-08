@@ -645,9 +645,11 @@ impl<'a> Rope<'a> {
         boundaries: &[usize],
         preservation: &SourcePreservation,
         governed: &[super::GovernedStatement],
+        line_comment_ends: Vec<usize>,
     ) -> Flat {
         let mut target = TargetFile::from_rope(self, source.len());
         target.source = Some(source);
+        target.line_comment_ends = line_comment_ends;
         target.separate_statements(boundaries, source_kind);
         target.separate_tokens();
         if let Err(error) = target.validate() {

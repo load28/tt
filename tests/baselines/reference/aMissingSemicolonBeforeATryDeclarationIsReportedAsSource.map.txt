@@ -1,0 +1,6 @@
+//// [aMissingSemicolonBeforeATryDeclarationIsReportedAsSource.tt] 4 mapping(s)
+1:1 -> 1:1 len 110  "declare function r(): { kind: \"Ok\"; value: numbe"...
+3:14 -> 7:9 len 1  "a"
+3:22 -> 3:23 len 3  "r()"
+3:26 -> 7:26 len 47  "\n  return { kind: \"Ok\" as const, value: a };\n}\n"
+

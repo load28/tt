@@ -135,6 +135,26 @@ fn compiling_does_linear_work_in_a_left_deep_chain_of_tt_values() {
 }
 
 #[test]
+fn parsing_does_linear_work_in_nested_pipeline_heads() {
+    let source = |depth: usize| {
+        format!(
+            "declare const n: number;\nexport const a = {}n{};\n",
+            "(".repeat(depth),
+            " |> String)".repeat(depth),
+        )
+    };
+    let compile = |depth| {
+        crate::compile(&source(depth), &crate::Options::default()).expect("the file compiles")
+    };
+    let (small, large) = (measure(|| compile(8)), measure(|| compile(16)));
+    let (before, after) = (small["token range parses"], large["token range parses"]);
+    assert!(
+        after <= 2 * before + 64,
+        "token range parses: {before} at depth 8 but {after} at depth 16"
+    );
+}
+
+#[test]
 fn compiling_does_linear_work_in_the_steps_of_a_pipeline() {
     let source = |count: usize| {
         format!(

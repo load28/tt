@@ -201,6 +201,9 @@ struct TargetFile<'a> {
     /// The original source, when the caller can supply it — required for
     /// the preservation check's whitespace classification.
     source: Option<&'a str>,
+    /// Where each line comment of the source ends, in order: copied text
+    /// ending there ends its line, whatever is written after it.
+    line_comment_ends: Vec<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -364,6 +367,7 @@ impl<'a> TargetFile<'a> {
             len: rope.len,
             source_len,
             source: None,
+            line_comment_ends: Vec::new(),
         }
     }
 
@@ -768,6 +772,7 @@ impl<'a> TargetFile<'a> {
         let mut anchors: Vec<EmitAnchor> = Vec::new();
         let mut inserted: Vec<crate::InsertedGlue> = Vec::new();
         let mut open: Vec<OpenAnchor> = Vec::new();
+        let mut comment_open = false;
         for (index, piece) in self.pieces.iter().enumerate() {
             let (next_source, next_governed) = following.get(index).copied().unwrap_or_default();
             let single_line = match (previous_source_end, next_source, next_governed) {
@@ -1050,6 +1055,30 @@ impl<'a> TargetFile<'a> {
                 TargetPiece::ScopeClose => {
                     scopes.pop();
                 }
+                TargetPiece::Break { depth } if comment_open => {
+                    comment_open = false;
+                    out.push_str(newline);
+                    if let Some(base) = scopes.last() {
+                        out.push_str(base);
+                    }
+                    for _ in 0..*depth {
+                        out.push_str(INDENT);
+                    }
+                }
+                TargetPiece::Generated { text, .. }
+                    if comment_open && !text.is_empty() && !text.starts_with(['\n', '\r']) =>
+                {
+                    comment_open = false;
+                    let indent = line_indent(&out).to_owned();
+                    out.push_str(newline);
+                    out.push_str(&indent);
+                    if single_line && text.contains('\n') {
+                        single_line_breaks.push(out.len());
+                        out.push_str(&single_line_text(text));
+                    } else {
+                        push_generated(&mut out, text, newline);
+                    }
+                }
                 TargetPiece::Break { .. } if single_line => {
                     let gap = previous_source_end.zip(line_breaks[index]);
                     let source_lines = match (self.source, gap) {
@@ -1098,6 +1127,16 @@ impl<'a> TargetFile<'a> {
                     origin: ExactOrigin { start, .. },
                 } => {
                     previous_source_end = Some(start + text.len());
+                    if comment_open && !text.is_empty() && !text.starts_with(['\n', '\r']) {
+                        let indent = line_indent(&out).to_owned();
+                        out.push_str(newline);
+                        out.push_str(&indent);
+                    }
+                    comment_open = !text.is_empty()
+                        && self
+                            .line_comment_ends
+                            .binary_search(&(start + text.len()))
+                            .is_ok();
                     let at = out.len();
                     if let Some(last) = mappings.last_mut()
                         && last.src + last.len == *start

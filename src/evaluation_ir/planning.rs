@@ -482,10 +482,12 @@ pub(super) fn plan_one_operation(
             .iter()
             .any(|(_, tt)| !encloses(tt))
             || (tt_spans.any_within(span)
-                && tt_spans
-                    .within(span)
-                    .iter()
-                    .any(|(_, tt)| overlaps(span, *tt) && !encloses(tt)))
+                && tt_spans.within(span).iter().any(|(at, tt)| {
+                    let owner = tt_spans.owner(*at);
+                    overlaps(span, *tt)
+                        && !encloses(tt)
+                        && !(span.start <= owner.start && owner.end <= span.end)
+                }))
     };
     let mut active = Vec::new();
     let kind = match step.operation {

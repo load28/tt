@@ -1,0 +1,50 @@
+=== aResultBlockAsASpreadOperandIsLowered.tt ===
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Ok"
+>value : (property) value: T
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Err"
+>error : (property) error: string
+function r(): R<number[]> { return { kind: "Ok", value: [1, 2] }; }
+>r : function r(): R<number[]>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number[]
+function f() { return { ...result { const q = try r(); return q; } }; }
+>f : function f(): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number[];
+>   }
+>q : const q: number[]
+>r : function r(): R<number[]>
+>q : const q: number[]
+console.log(JSON.stringify(f()));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>f : function f(): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number[];
+>   }
+

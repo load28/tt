@@ -400,7 +400,37 @@ enum ExprFrame {
     ForHeader(bool),
 }
 
-fn flush_verbatim(segments: &mut Vec<Segment>, start: usize, end: usize) {
+/// The token loop's claims so far. A pipeline holds an empty slot at its
+/// head until the loop ends: a later pipeline whose head contains it
+/// rewinds it, and only a claim that survives is parsed.
+#[derive(Default)]
+struct Lifted {
+    segments: Vec<Segment>,
+    pipes: Vec<(usize, pipes::PipeScan)>,
+}
+
+impl Lifted {
+    fn push(&mut self, segment: Segment) {
+        self.segments.push(segment);
+    }
+
+    fn push_pipe(&mut self, scan: pipes::PipeScan) {
+        let at = scan.head_span.start;
+        self.pipes.push((self.segments.len(), scan));
+        self.segments
+            .push(Segment::Verbatim(Span { start: at, end: at }));
+    }
+
+    fn finish(self, parser: &Parser, tokens: &[Token]) -> Vec<Segment> {
+        let mut segments = self.segments;
+        for (slot, scan) in self.pipes {
+            segments[slot] = Segment::Pipe(scan.parse(parser, tokens));
+        }
+        segments
+    }
+}
+
+fn flush_verbatim(segments: &mut Lifted, start: usize, end: usize) {
     if start < end {
         segments.push(Segment::Verbatim(Span { start, end }));
     }
@@ -435,8 +465,9 @@ fn segment_start(seg: &Segment) -> usize {
 /// head). Segments are contiguous, so the returned byte — the new "flushed
 /// up to here" position — is the start of the last popped segment, or
 /// `boundary` when a verbatim segment crossing it was truncated.
-fn rewind_segments(segments: &mut Vec<Segment>, boundary: usize, seg_start: usize) -> usize {
+fn rewind_segments(lifted: &mut Lifted, boundary: usize, seg_start: usize) -> usize {
     let mut cover = seg_start;
+    let segments = &mut lifted.segments;
     while let Some(last) = segments.last_mut() {
         match last {
             Segment::Verbatim(span) => {
@@ -461,6 +492,10 @@ fn rewind_segments(segments: &mut Vec<Segment>, boundary: usize, seg_start: usiz
                 }
             }
         }
+    }
+    let kept = segments.len();
+    while lifted.pipes.last().is_some_and(|(slot, _)| *slot >= kept) {
+        lifted.pipes.pop();
     }
     cover
 }
@@ -506,16 +541,13 @@ fn recovery_expression_span(
     }
 }
 
-/// A spread operand begins with three adjacent dot tokens. The last dot is
-/// not member access, even though the generic property-name test sees it
-/// immediately before the operand keyword.
 /// Whether the token at `k` is a `match` keyword that may start a tt match:
-/// undotted, or the operand of a spread, whose third dot is punctuation.
+/// undotted, which includes the operand of a spread.
 pub(super) fn match_keyword_at(src: &str, tokens: &[Token], k: usize) -> bool {
     let token = &tokens[k];
     matches!(token.kind, TokenKind::Ident)
         && &src[token.span.start..token.span.end] == "match"
-        && (!cursor::dotted_at(tokens, 0, k) || follows_spread_operator(tokens, k))
+        && !cursor::dotted_at(tokens, 0, k)
         && !continues_an_expression(tokens, k)
 }
 
@@ -524,13 +556,6 @@ fn continues_an_expression(tokens: &[Token], k: usize) -> bool {
         && !tokens[k].facts.line_break_before()
         && !matches!(tokens[k - 1].kind, TokenKind::JsxRaw)
         && tokens[k - 1].facts.ends_expression()
-}
-
-fn follows_spread_operator(tokens: &[Token], idx: usize) -> bool {
-    idx >= 3
-        && tokens[idx - 3..idx]
-            .iter()
-            .all(|token| matches!(token.kind, TokenKind::Punct(b'.')))
 }
 
 /// Whether a parsed `match (...) { ... }` still overlaps a possible host
@@ -573,6 +598,7 @@ impl Parser<'_> {
         end: usize,
         expression_root: bool,
     ) -> Program {
+        crate::work::tick("token range parses");
         crate::stack::grow(|| self.parse_token_range(tokens, start, end, expression_root))
     }
 
@@ -583,7 +609,7 @@ impl Parser<'_> {
         end: usize,
         expression_root: bool,
     ) -> Program {
-        let mut segments: Vec<Segment> = Vec::new();
+        let mut segments = Lifted::default();
         let mut unclaimed: Vec<UnclaimedTtCandidate> = Vec::new();
         let mut recoveries: Vec<RecoveryNode> = Vec::new();
         let mut malformed = Vec::new();
@@ -659,10 +685,10 @@ impl Parser<'_> {
                         // segments (a template, a match) — rewind them and
                         // let the head's sub-program own those bytes.
                         let head_start = pipe.head_span.start;
-                        let pipe_end = pipe.steps.last().map(|s| s.span.end).unwrap_or(end);
+                        let pipe_end = pipe.end().unwrap_or(end);
                         seg_start = rewind_segments(&mut segments, head_start, seg_start);
                         flush_verbatim(&mut segments, seg_start, head_start);
-                        segments.push(Segment::Pipe(pipe));
+                        segments.push_pipe(pipe);
                         seg_start = pipe_end;
                         i = next_i;
                         if !pipes::asserted(self.src, tokens, expr.0, i) {
@@ -818,7 +844,7 @@ impl Parser<'_> {
             // `try <expr>;` — never valid TypeScript in expression
             // position (`try { ... }` blocks and member names are
             // structurally excluded by the sub-parser).
-            if (!dotted || follows_spread_operator(tokens, i)) && word == "try" {
+            if !dotted && word == "try" {
                 let misplaced = !tok.facts.member() && !tok.facts.statement_start();
                 if misplaced
                     && let Some((next_i, parsed)) =
@@ -995,7 +1021,7 @@ impl Parser<'_> {
         Program {
             span: Span { start, end },
             expression_root,
-            segments,
+            segments: segments.finish(self, tokens),
             host_candidates: (!host_candidates.matches.is_empty()
                 || !host_candidates.malformed_matches.is_empty()
                 || !host_candidates.vals.is_empty())
@@ -1059,7 +1085,7 @@ impl Parser<'_> {
                 *expr = (i + 1, false);
             }
             TokenKind::Punct(b',') => *expr = (i + 1, false),
-            TokenKind::Punct(b'.') if follows_spread_operator(tokens, i + 1) => {
+            TokenKind::Punct(b'.') if cursor::spread_ends_at(tokens, i) => {
                 *expr = (i + 1, false);
             }
             TokenKind::Punct(b'=') if pipes::is_assignment_eq(self.bytes, tok.span) => {

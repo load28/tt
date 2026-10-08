@@ -1,4 +1,16 @@
 === aTryExitingAResultFromAParameterInitializer.tt ===
+declare function read(): { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+>read : function read(): {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
 export function g() {
 >g : function g(): any
 

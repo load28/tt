@@ -1,0 +1,12 @@
+//// [anOrPatternAlternativeIsNotSuggestedForItsSibling.tt] 10 mapping(s)
+1:24 -> 20:26 len 6  "number"
+1:24 -> 24:15 len 6  "number"
+1:44 -> 21:27 len 6  "number"
+1:44 -> 25:16 len 6  "number"
+1:59 -> 27:3 len 22  "\ndeclare const s: Sh;\n"
+3:1 -> 47:1 len 17  "export const b = "
+3:25 -> 31:17 len 1  "s"
+3:55 -> 35:16 len 1  "r"
+3:66 -> 39:16 len 1  "0"
+3:69 -> 47:24 len 2  ";\n"
+

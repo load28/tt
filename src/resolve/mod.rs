@@ -1001,20 +1001,25 @@ fn builtin_variants() -> Vec<(String, &'static str, Vec<VariantDecl>)> {
 /// ```
 fn cases_covered_beside(hir: &HirFile, site: PatternSiteId, node: hir::NodeId) -> Vec<&str> {
     let arms = &hir.sites[site].arms;
-    let top = |arm: &hir::SiteArm| match &hir.patterns[arm.pattern] {
+    let constructor = |pattern: hir::PatternId| match &hir.patterns[pattern] {
         hir::Pat::Constructor { path, fields, .. } => Some((path, fields)),
         _ => None,
     };
-    if !arms
-        .iter()
-        .any(|arm| top(arm).is_some_and(|(path, _)| path.node == node))
-    {
+    let alternatives = |arm: &hir::SiteArm| match &hir.patterns[arm.pattern] {
+        hir::Pat::Or(members) => members
+            .iter()
+            .filter_map(|&member| constructor(member))
+            .collect(),
+        _ => constructor(arm.pattern).into_iter().collect::<Vec<_>>(),
+    };
+    let holds = |arm: &hir::SiteArm| alternatives(arm).iter().any(|(path, _)| path.node == node);
+    if !arms.iter().any(holds) {
         return Vec::new();
     }
     arms.iter()
-        .filter(|arm| arm.guard.is_none())
-        .filter_map(|arm| {
-            let (path, fields) = top(arm)?;
+        .filter(|arm| arm.guard.is_none() || holds(arm))
+        .flat_map(alternatives)
+        .filter_map(|(path, fields)| {
             (path.node != node
                 && fields.as_ref().is_none_or(|fields| {
                     fields

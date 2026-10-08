@@ -1,0 +1,36 @@
+=== anOrPatternAlternativeIsNotSuggestedForItsSibling.tt ===
+variant Sh { Circle(r: number), Circles(r: number), Rect }
+>Sh : type Sh = {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Circles";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>   }
+>Circle : (property) Circle: (r: number) => Sh
+>r : (property) r: number
+>Circles : (property) Circles: (r: number) => Sh
+>r : (property) r: number
+>Rect : (property) Rect: {
+>       readonly kind: "Rect";
+>   }
+declare const s: Sh;
+>s : const s: Sh
+>Sh : type Sh = {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Circles";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>   }
+export const b = match (s) { Circle(r) | Circel(r) => r, Rect => 0 };
+>b : const b: number
+>s : const s: Sh
+>r : const r: number
+>r : const r: never
+>r : const r: number
+

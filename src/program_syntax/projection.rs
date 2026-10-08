@@ -182,7 +182,7 @@ impl ProgramSyntax {
                 {
                     ("", ".$tt_syntax")
                 }
-                HiddenRole::Head { .. } | HiddenRole::Step { .. } => ("", ""),
+                HiddenRole::Head { .. } | HiddenRole::Step { .. } | HiddenRole::Operand => ("", ""),
             };
             let open = "class $tt_syntax extends Object { async *$tt_syntax() { (";
             let start = open.len() + receiver.len();
@@ -644,8 +644,14 @@ pub(super) struct HiddenPart {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum HiddenRole {
-    Head { receiver: bool },
-    Step { postfix: bool },
+    Head {
+        receiver: bool,
+    },
+    Step {
+        postfix: bool,
+    },
+    /// A propagation's operand, which its placeholder hides.
+    Operand,
 }
 
 impl<'a> ProjectionBuilder<'a> {
@@ -722,7 +728,8 @@ impl<'a> ProjectionBuilder<'a> {
     ) -> Result<(), ProgramSyntaxError> {
         let owner_start = ProjectedByte(self.code.len());
         match category {
-            SyntaxCategory::Expression | SyntaxCategory::Propagation => self.code.push('('),
+            SyntaxCategory::Expression => self.code.push('('),
+            SyntaxCategory::Propagation => {}
             SyntaxCategory::Item => self.code.push_str("const "),
             SyntaxCategory::Statement => {
                 crate::ice::bug!("a statement placeholder is framed by its decision")
@@ -731,7 +738,7 @@ impl<'a> ProjectionBuilder<'a> {
         self.push_placeholder_name(category, source, core_root)?;
         match category {
             SyntaxCategory::Expression => self.code.push(')'),
-            SyntaxCategory::Propagation => self.code.push_str(");"),
+            SyntaxCategory::Propagation => self.code.push(';'),
             SyntaxCategory::Item => self.code.push_str(" = 0;"),
             SyntaxCategory::Statement => {
                 crate::ice::bug!("a statement placeholder is framed by its decision")
@@ -911,11 +918,24 @@ impl<'a> ProjectionBuilder<'a> {
                 propagate.value,
             );
         }
+        self.hide_operand(propagate.value)?;
         self.push_placeholder(
             SyntaxCategory::Propagation,
             self.source_span(propagate.owner)?,
             CoreRoot::Propagate(propagate.node),
         )
+    }
+
+    /// Keeps an opaque propagation operand's TypeScript checked although
+    /// the propagation's placeholder stands in for it.
+    fn hide_operand(&mut self, value: ExprId) -> Result<(), ProgramSyntaxError> {
+        if let Expr::Opaque(node) = &self.core.exprs[value.index()] {
+            self.hidden_parts.push(HiddenPart {
+                source: self.source_span(*node)?,
+                role: HiddenRole::Operand,
+            });
+        }
+        Ok(())
     }
 
     fn statement_source_start(
@@ -1116,6 +1136,7 @@ impl<'a> ProjectionBuilder<'a> {
                 propagate.value,
             );
         }
+        self.hide_operand(propagate.value)?;
         self.push_placeholder(SyntaxCategory::Expression, source, CoreRoot::Expr(expr))
     }
 

@@ -1,0 +1,28 @@
+//// [aDiscardedCommaOperandInAConditionalBranchIsNotAValue.tt] 26 mapping(s)
+1:1 -> 19:1 len 142  "type R = { kind: \"Ok\"; value: number } | { kind:"...
+4:18 -> 23:21 len 6  "number"
+4:18 -> 26:10 len 6  "number"
+4:30 -> 28:3 len 47  "\nconst s: S = S.A(3) as S;\nfunction f(): R {\n  "
+7:3 -> 44:3 len 10  "const a = "
+7:13 -> 32:7 len 1  "c"
+7:22 -> 34:20 len 3  "r()"
+7:26 -> 39:14 len 2  " 1"
+7:32 -> 41:14 len 1  "2"
+7:33 -> 44:19 len 4  ";\n  "
+8:3 -> 71:3 len 10  "const b = "
+8:13 -> 47:16 len 1  "c"
+8:26 -> 50:21 len 1  "s"
+8:33 -> 53:19 len 1  "n"
+8:39 -> 54:20 len 1  "n"
+8:47 -> 58:20 len 1  "0"
+8:51 -> 66:24 len 2  " 1"
+8:54 -> 71:19 len 4  ";\n  "
+9:3 -> 86:3 len 10  "const i = "
+9:13 -> 74:16 len 2  "!c"
+9:24 -> 78:20 len 3  "r()"
+9:28 -> 83:24 len 2  " 4"
+9:31 -> 86:19 len 4  ";\n  "
+10:3 -> 93:3 len 11  "const z = ("
+10:18 -> 88:18 len 3  "r()"
+10:22 -> 93:14 len 90  " 5);\n  return { kind: \"Ok\", value: a + +b + +i +"...
+

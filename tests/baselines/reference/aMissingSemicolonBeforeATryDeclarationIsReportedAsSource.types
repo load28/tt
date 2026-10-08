@@ -1,0 +1,27 @@
+=== aMissingSemicolonBeforeATryDeclarationIsReportedAsSource.tt ===
+declare function r(): { kind: "Ok"; value: number }; declare function g(): void;
+>r : function r(): {
+>       kind: "Ok";
+>       value: number;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>g : function g(): void
+export function f() {
+>f : function f(): {
+>       kind: "Ok";
+>       value: number;
+>   }
+  g()  const a = try r();
+>g : function g(): void
+>a : const a: number
+>r : function r(): {
+>       kind: "Ok";
+>       value: number;
+>   }
+  return { kind: "Ok" as const, value: a };
+>kind : (property) kind: "Ok"
+>const : type const = "Ok"
+>value : (property) value: number
+>a : const a: number
+
