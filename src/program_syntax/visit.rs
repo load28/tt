@@ -30,7 +30,7 @@ impl ParentCollector {
     pub(super) fn new(
         source_start: HostOrigin,
         pending: &[PendingOverlay],
-        source_segments: &[ProjectionSourceSegment],
+        source_segments: ProjectionSegments,
         projection_only_protocol_parents: &[ProjectedSpan],
         arm_blocks: &HashMap<ProjectedSpan, BodyId>,
         tt_bindings: &projection::TtBindings,
@@ -72,9 +72,12 @@ impl ParentCollector {
         let placeholders = pending.iter().map(|entry| entry.projected).collect();
         Self {
             placeholders,
-            arm_blocks: arm_blocks.clone(),
+            arm_blocks: arm_blocks
+                .iter()
+                .map(|(span, body)| (*span, *body))
+                .collect(),
             tt_bindings: tt_bindings.clone(),
-            single_return_bodies: HashMap::new(),
+            single_return_bodies: Default::default(),
             source_start,
             expected_identifiers,
             expected_calls,
@@ -82,7 +85,7 @@ impl ParentCollector {
             synthetic_returns,
             found: HashMap::new(),
             duplicates: Vec::new(),
-            source_segments: ProjectionSegments::new(source_segments.to_vec()),
+            source_segments,
             projection_only_protocol_parents: projection_only_protocol_parents
                 .iter()
                 .copied()
@@ -90,11 +93,12 @@ impl ParentCollector {
             host_owners: Stack::default(),
             protocol_frames: Stack::default(),
             parent_marks: Vec::new(),
+            parent_edges: super::parents::ParentEdges::default(),
             occupied_names: HashSet::new(),
             function_depth: 0,
             function_targets: Vec::new(),
             decision_calls,
-            decision_functions: HashSet::new(),
+            decision_functions: Default::default(),
             contextual_types: Vec::new(),
             assertions: Vec::new(),
             function_return_types: Vec::new(),
@@ -102,7 +106,7 @@ impl ParentCollector {
             break_capture_depth: 0,
             exit_regions: Vec::new(),
             arm_block_scopes: Vec::new(),
-            global_statements: HashMap::new(),
+            global_statements: Default::default(),
         }
     }
 
@@ -174,13 +178,14 @@ impl ParentCollector {
     }
 
     fn extend_parents(
-        &self,
+        &mut self,
         mut parents: ParentPath,
         path: &AstNodePath<'_>,
         depth: usize,
     ) -> ParentPath {
         for index in parents.len()..depth {
-            parents = parents.push(path.kinds()[index], self.edge_node(&path[index]));
+            let node = self.edge_node(&path[index]);
+            parents = parents.push(&mut self.parent_edges, path.kinds()[index], node);
         }
         parents
     }
@@ -193,11 +198,11 @@ impl ParentCollector {
             .map_or(0, |index| index + 1);
         let mut parents = first
             .checked_sub(1)
-            .and_then(|index| marks[index].1.clone())
+            .and_then(|index| marks[index].1)
             .unwrap_or_default();
         for (depth, mark) in &mut marks[first..] {
             parents = self.extend_parents(parents, path, *depth);
-            *mark = Some(parents.clone());
+            *mark = Some(parents);
         }
         self.parent_marks = marks;
         self.extend_parents(parents, path, path.len())
@@ -437,6 +442,8 @@ impl ParentCollector {
             owners,
             occupied_names: self.occupied_names,
             globals,
+            #[cfg(test)]
+            parent_edges: self.parent_edges,
         })
     }
 }

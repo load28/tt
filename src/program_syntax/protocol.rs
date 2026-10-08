@@ -33,7 +33,7 @@ pub(super) fn evaluation_protocol(
     source_value: SourceSpan,
     frames: &crate::chain::Chain<std::rc::Rc<ProjectedProtocolFrame>>,
     scope: ProtocolScope,
-    projection_only: &HashSet<ProjectedSpan>,
+    projection_only: &crate::position_hash::PositionSet<ProjectedSpan>,
     links: &mut StepLinks,
 ) -> Result<HostEvaluationProtocol, ProgramSyntaxError> {
     let scope_key = (scope.owner, scope.overlay, scope.decision);
@@ -1158,7 +1158,7 @@ fn super_reference(member: &swc_ecma_ast::SuperPropExpr) -> [Option<&swc_ecma_as
 pub(super) fn operand_span(
     expression: &swc_ecma_ast::Expr,
     source_start: HostOrigin,
-    placeholders: &HashSet<ProjectedSpan>,
+    placeholders: &crate::position_hash::PositionSet<ProjectedSpan>,
     segments: &ProjectionSegments,
 ) -> ProjectedSpan {
     let mut inner = expression;
@@ -1296,22 +1296,10 @@ fn look_up_source_span(
     projected: ProjectedSpan,
 ) -> Option<SourceSpan> {
     crate::work::tick("projection span lookups");
-    if let Some(segment) = segments
-        .starting_at(projected.start)
-        .into_iter()
-        .map(|index| &segments[index])
-        .find(|segment| {
-            segment.kind != ProjectionSegmentKind::SourceBoundary && segment.projected == projected
-        })
-    {
-        return Some(segment.source);
+    if let Some(source) = segments.exactly(projected) {
+        return Some(source);
     }
-    let start = in_segment_order(
-        segments.starting_at(projected.start),
-        segments.containing(projected.start),
-    )
-    .map(|index| &segments[index])
-    .find_map(|segment| {
+    let start = segments.first_at_start(projected.start, |segment| {
         if segment.kind != ProjectionSegmentKind::SourceBoundary
             && projected.start == segment.projected.start
         {
@@ -1325,12 +1313,7 @@ fn look_up_source_span(
             None
         }
     })?;
-    let end = in_segment_order(
-        segments.ending_at(projected.end),
-        segments.containing(projected.end),
-    )
-    .map(|index| &segments[index])
-    .find_map(|segment| {
+    let end = segments.first_at_end(projected.end, |segment| {
         if segment.kind != ProjectionSegmentKind::SourceBoundary
             && projected.end == segment.projected.end
         {
@@ -1345,13 +1328,6 @@ fn look_up_source_span(
         }
     })?;
     Some(SourceSpan { start, end })
-}
-
-fn in_segment_order(mut first: Vec<usize>, second: Vec<usize>) -> impl Iterator<Item = usize> {
-    first.extend(second);
-    first.sort_unstable();
-    first.dedup();
-    first.into_iter()
 }
 
 fn position_holding<T>(

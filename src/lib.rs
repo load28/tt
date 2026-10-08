@@ -77,6 +77,7 @@ pub mod lines;
 mod mapped;
 pub mod ownership;
 mod parser;
+mod position_hash;
 mod probe;
 mod program_syntax;
 #[path = "lib/recovery.rs"]

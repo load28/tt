@@ -1,54 +1,83 @@
 use swc_ecma_visit::{AstParentKind, fields};
 
 use super::{EvaluationFrequency, EvaluationOwner, HostContinuation, OwnerReach, ValueRole};
-use crate::chain::Chain;
 
-#[derive(Clone, Default)]
-pub(super) struct ParentPath(Chain<ParentEdge>);
+/// A node's ancestors, as the facts folded over every edge from the root:
+/// what evaluation context reads of them. Extending a path costs one fold,
+/// whatever its depth.
+#[derive(Clone, Copy, Default)]
+pub(super) struct ParentPath {
+    #[cfg(test)]
+    edge: Option<usize>,
+    len: usize,
+    facts: PathFacts,
+}
+
+/// The edges of the paths one walk builds, each pointing at the one before
+/// it, kept so tests can read a path's kinds back.
+#[derive(Debug, Default)]
+pub(super) struct ParentEdges(#[cfg(test)] Vec<ParentEdge>);
 
 impl ParentPath {
     pub(super) fn len(&self) -> usize {
-        self.0.len()
+        self.len
     }
 
     pub(super) fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.len == 0
     }
 
-    pub(super) fn kinds(&self) -> impl Iterator<Item = AstParentKind> + '_ {
-        self.0.iter().map(|edge| edge.kind)
+    /// The path's edge kinds, the nearest first.
+    #[cfg(test)]
+    pub(super) fn kinds<'e>(
+        &self,
+        edges: &'e ParentEdges,
+    ) -> impl Iterator<Item = AstParentKind> + 'e {
+        std::iter::successors(self.edge.map(|at| &edges.0[at]), |edge| {
+            edge.previous.map(|at| &edges.0[at])
+        })
+        .map(|edge| edge.kind)
     }
 
-    pub(super) fn push(&self, kind: AstParentKind, node: EdgeNode) -> ParentPath {
+    pub(super) fn push(
+        &self,
+        _edges: &mut ParentEdges,
+        kind: AstParentKind,
+        node: EdgeNode,
+    ) -> ParentPath {
         crate::work::tick("parent path edges");
-        let index = self.len();
-        let facts = self
-            .0
-            .first()
-            .map_or_else(PathFacts::default, |edge| edge.facts)
-            .then(index, kind, node);
-        ParentPath(Chain::cons(ParentEdge { kind, facts }, self.0.clone()))
+        #[cfg(test)]
+        _edges.0.push(ParentEdge {
+            kind,
+            previous: self.edge,
+        });
+        ParentPath {
+            #[cfg(test)]
+            edge: Some(_edges.0.len() - 1),
+            len: self.len + 1,
+            facts: self.facts.then(self.len, kind, node),
+        }
     }
 
     pub(super) fn facts(&self) -> PathFacts {
-        self.0
-            .first()
-            .map_or_else(PathFacts::default, |edge| edge.facts)
+        self.facts
     }
 }
 
 impl std::fmt::Debug for ParentPath {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut kinds: Vec<_> = self.kinds().collect();
-        kinds.reverse();
-        formatter.debug_list().entries(kinds).finish()
+        formatter
+            .debug_struct("ParentPath")
+            .field("len", &self.len)
+            .finish()
     }
 }
 
-#[derive(Clone, Copy)]
+#[cfg(test)]
+#[derive(Debug)]
 struct ParentEdge {
     kind: AstParentKind,
-    facts: PathFacts,
+    previous: Option<usize>,
 }
 
 #[derive(Clone, Copy, Default)]

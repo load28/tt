@@ -41,6 +41,51 @@ impl SpanIndex {
         found
     }
 
+    /// Calls `visit` with every span that contains `at`, in no particular
+    /// order.
+    pub(crate) fn each_containing(&self, at: usize, mut visit: impl FnMut(usize)) {
+        let Some(after) = at.checked_add(1) else {
+            return;
+        };
+        let started = self.starts.partition_point(|&start| start <= at);
+        self.visit(1, 0, self.leaves, started, after, &mut visit);
+    }
+
+    fn visit(
+        &self,
+        node: usize,
+        low: usize,
+        high: usize,
+        limit: usize,
+        end: usize,
+        visit: &mut impl FnMut(usize),
+    ) {
+        if low >= limit || self.max_end[node] < end {
+            return;
+        }
+        if high - low == 1 {
+            visit(self.by_start[low]);
+            return;
+        }
+        let middle = low + (high - low) / 2;
+        self.visit(2 * node, low, middle, limit, end, visit);
+        self.visit(2 * node + 1, middle, high, limit, end, visit);
+    }
+
+    /// The spans that start at `at`, in no particular order.
+    pub(crate) fn each_starting_at(&self, at: usize) -> impl Iterator<Item = usize> + '_ {
+        let first = self.starts.partition_point(|&start| start < at);
+        let last = self.starts.partition_point(|&start| start <= at);
+        self.by_start[first..last].iter().copied()
+    }
+
+    /// The spans that end at `at`, in no particular order.
+    pub(crate) fn each_ending_at(&self, at: usize) -> impl Iterator<Item = usize> + '_ {
+        let first = self.ends.partition_point(|&end| end < at);
+        let last = self.ends.partition_point(|&end| end <= at);
+        self.by_end[first..last].iter().copied()
+    }
+
     pub(crate) fn containing(&self, at: usize) -> Vec<usize> {
         match at.checked_add(1) {
             Some(after) => self.covering(at, after),

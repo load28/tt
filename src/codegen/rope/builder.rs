@@ -407,11 +407,7 @@ impl<'a> Rope<'a> {
             })
             .collect();
         match split {
-            None => {
-                let tail = self.pieces.split_off(index);
-                self.pieces.extend(inserted);
-                self.pieces.extend(tail);
-            }
+            None => insert_run(&mut self.pieces, index, inserted),
             Some(cut) => {
                 let Piece::Src { text: whole, src } = self.pieces[index] else {
                     unreachable!("the piece was matched as a source piece")
@@ -427,9 +423,7 @@ impl<'a> Rope<'a> {
                         src: src + cut,
                     },
                 );
-                let tail = self.pieces.split_off(index + 1);
-                self.pieces.extend(inserted);
-                self.pieces.extend(tail);
+                insert_run(&mut self.pieces, index + 1, inserted);
             }
         }
     }
@@ -691,4 +685,23 @@ pub(crate) struct Flat {
     pub support_imports: Vec<crate::StdModule>,
     pub commonjs: bool,
     pub single_line_breaks: Vec<usize>,
+}
+
+/// Inserts `run` before position `at`, moving whichever side of `at` is
+/// shorter.
+fn insert_run<'a>(
+    pieces: &mut std::collections::VecDeque<Piece<'a>>,
+    at: usize,
+    run: Vec<Piece<'a>>,
+) {
+    if at <= pieces.len() / 2 {
+        let head: Vec<Piece<'a>> = pieces.drain(..at).collect();
+        for piece in run.into_iter().rev().chain(head.into_iter().rev()) {
+            pieces.push_front(piece);
+        }
+    } else {
+        let tail = pieces.split_off(at);
+        pieces.extend(run);
+        pieces.extend(tail);
+    }
 }

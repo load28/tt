@@ -198,31 +198,32 @@ fn outermost_placeholder_at(
 }
 
 pub(super) struct ParentCollector {
-    pub(super) placeholders: HashSet<ProjectedSpan>,
-    pub(super) arm_blocks: HashMap<ProjectedSpan, BodyId>,
+    pub(super) placeholders: crate::position_hash::PositionSet<ProjectedSpan>,
+    pub(super) arm_blocks: crate::position_hash::PositionMap<ProjectedSpan, BodyId>,
     pub(super) tt_bindings: projection::TtBindings,
-    pub(super) single_return_bodies: HashMap<ProjectedSpan, BodyId>,
+    pub(super) single_return_bodies: crate::position_hash::PositionMap<ProjectedSpan, BodyId>,
     pub(super) source_start: HostOrigin,
-    pub(super) expected_identifiers: HashMap<ProjectedSpan, TtNodeId>,
-    pub(super) expected_calls: HashMap<ProjectedSpan, TtNodeId>,
+    pub(super) expected_identifiers: crate::position_hash::PositionMap<ProjectedSpan, TtNodeId>,
+    pub(super) expected_calls: crate::position_hash::PositionMap<ProjectedSpan, TtNodeId>,
     pub(super) expected_exit_calls: HashSet<TtNodeId>,
-    pub(super) synthetic_returns: HashSet<ProjectedSpan>,
+    pub(super) synthetic_returns: crate::position_hash::PositionSet<ProjectedSpan>,
     pub(super) found: HashMap<TtNodeId, FoundOverlay>,
     pub(super) duplicates: Vec<TtNodeId>,
     pub(super) source_segments: ProjectionSegments,
-    pub(super) projection_only_protocol_parents: HashSet<ProjectedSpan>,
+    pub(super) projection_only_protocol_parents: crate::position_hash::PositionSet<ProjectedSpan>,
     pub(super) host_owners: Stack<ProjectedHostOwner>,
     pub(super) protocol_frames: Stack<std::rc::Rc<ProjectedProtocolFrame>>,
     pub(super) parent_marks: Vec<(usize, Option<super::parents::ParentPath>)>,
+    pub(super) parent_edges: super::parents::ParentEdges,
     pub(super) occupied_names: HashSet<String>,
     pub(super) function_depth: usize,
     pub(super) function_targets: Vec<EvaluationOwner>,
     /// The projected spans of the `DecisionCallExpression` placeholders.
-    pub(super) decision_calls: HashSet<ProjectedSpan>,
+    pub(super) decision_calls: crate::position_hash::PositionSet<ProjectedSpan>,
     /// The function each decision placeholder calls: the projection's
     /// stand-in for a match's arms, which the lowering writes as statements
     /// in the match's own owner, so it is no evaluation owner of its own.
-    pub(super) decision_functions: HashSet<ProjectedSpan>,
+    pub(super) decision_functions: crate::position_hash::PositionSet<ProjectedSpan>,
     pub(super) contextual_types: Vec<Option<ProjectedSpan>>,
     pub(super) assertions: Vec<Option<ProjectedSpan>>,
     pub(super) function_return_types: Vec<Option<ProjectedSpan>>,
@@ -237,7 +238,7 @@ pub(super) struct ParentCollector {
     /// body, whether the block is free of cleanup boundaries, and the
     /// function depth the block sits at.
     pub(super) arm_block_scopes: Vec<(BodyId, bool, usize)>,
-    pub(super) global_statements: HashMap<ProjectedSpan, GlobalStatement>,
+    pub(super) global_statements: crate::position_hash::PositionMap<ProjectedSpan, GlobalStatement>,
 }
 
 pub(super) struct CollectedProgramSyntax {
@@ -245,6 +246,8 @@ pub(super) struct CollectedProgramSyntax {
     pub(super) owners: Vec<HostOwnerSyntax>,
     pub(super) occupied_names: HashSet<String>,
     pub(super) globals: HashMap<SourceSpan, GlobalStatement>,
+    #[cfg(test)]
+    pub(super) parent_edges: super::parents::ParentEdges,
 }
 
 pub(super) struct FoundOverlay {
@@ -464,7 +467,7 @@ pub(super) struct ProjectedDeclaratorSplit {
 pub(super) fn object_evaluation_positions(
     node: &ObjectLit,
     source_start: HostOrigin,
-    placeholders: &HashSet<ProjectedSpan>,
+    placeholders: &crate::position_hash::PositionSet<ProjectedSpan>,
     segments: &ProjectionSegments,
 ) -> Vec<(ProjectedSpan, Effects, EvaluationInputMode)> {
     let mut positions = Vec::new();
@@ -536,7 +539,7 @@ pub(super) fn push_computed_property(
 pub(super) fn argument_positions(
     arguments: &[swc_ecma_ast::ExprOrSpread],
     source_start: HostOrigin,
-    placeholders: &HashSet<ProjectedSpan>,
+    placeholders: &crate::position_hash::PositionSet<ProjectedSpan>,
     segments: &ProjectionSegments,
 ) -> Vec<(ProjectedSpan, bool, Effects)> {
     arguments

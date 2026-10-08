@@ -952,7 +952,7 @@ fn is_script(module: &Module) -> bool {
 fn global_statements(
     module: &Module,
     source_start: HostOrigin,
-) -> HashMap<ProjectedSpan, GlobalStatement> {
+) -> crate::position_hash::PositionMap<ProjectedSpan, GlobalStatement> {
     module
         .body
         .iter()

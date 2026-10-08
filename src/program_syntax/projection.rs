@@ -15,6 +15,8 @@ pub(crate) struct ProgramSyntax {
     pub(super) projection: String,
     pub(super) module: Module,
     pub(super) overlay: Vec<OverlayEntry>,
+    #[cfg(test)]
+    pub(super) parent_edges: super::parents::ParentEdges,
     pub(super) owners: Vec<HostOwnerSyntax>,
     pub(super) occupied_names: HashSet<String>,
     pub(super) directive_prologue_end: Option<usize>,
@@ -217,7 +219,7 @@ impl ProgramSyntax {
         let mut collector = ParentCollector::new(
             parsed.start,
             &projection.pending,
-            &projection.source_segments,
+            indexed_segments,
             &projection.projection_only_protocol_parents,
             &projection.arm_blocks,
             &projection.tt_bindings,
@@ -253,6 +255,8 @@ impl ProgramSyntax {
             projection: projection.code,
             module: parsed.module,
             overlay: collected.overlay,
+            #[cfg(test)]
+            parent_edges: collected.parent_edges,
             owners: collected.owners,
             occupied_names: collected.occupied_names,
             script,
