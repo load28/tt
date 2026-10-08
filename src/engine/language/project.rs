@@ -230,7 +230,9 @@ impl Project {
 
     /// Go to definition, every target already in its own file's coordinates.
     pub fn definition(&mut self, path: &Path, position: Position) -> Result<Vec<Location>, String> {
-        if let Some(declared) = self.tt_name_declaration(path, position) {
+        if let Some(declared) = self.tt_name_declaration(path, position)
+            && !self.arm_tag_unowned(path, position)?
+        {
             return Ok(vec![declared]);
         }
         let found = self.locations(

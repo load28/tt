@@ -1,5 +1,7 @@
 # TASK-795: Fix the round-nine editor findings
 
+> **Superseded in part by TASK-796**: Decisions 9 (E6) and 10 (E8) were decided there: boolean literal members come from the checker, and payload fields and tag definitions follow the scrutinee's type. Decision 11 (E9) moved to its own task.
+
 - **Status**: Complete
 - **Started**: 2026-10-08
 - **Completed**: 2026-10-08

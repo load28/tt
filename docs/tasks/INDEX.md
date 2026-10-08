@@ -836,7 +836,8 @@
 | TASK-793 | Fix the round-nine CLI findings | Complete | 2026-10-08 | 2026-10-08 | [TASK-793](./TASK-793-round-nine-cli-findings.md) |
 | TASK-794 | Fix the round-nine compiler findings | Complete | 2026-10-08 | 2026-10-08 | [TASK-794](./TASK-794-round-nine-compiler-findings.md) |
 | TASK-795 | Fix the round-nine editor findings | Complete | 2026-10-08 | 2026-10-08 | [TASK-795](./TASK-795-round-nine-editor-findings.md) |
+| TASK-796 | Carry out the round-nine design decisions | Complete | 2026-10-08 | 2026-10-08 | [TASK-796](./TASK-796-round-nine-decisions.md) |
 
 ## Next task number
 
-**TASK-796**
+**TASK-797**

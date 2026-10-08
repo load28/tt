@@ -4787,3 +4787,43 @@ fn a_server_typed_check_of_a_typescript_buffer_counts_it_once() {
         "{answer}"
     );
 }
+
+#[test]
+fn a_directory_input_names_the_files_the_configuration_leaves_out() {
+    require_types_toolchain!();
+    let dir = typed_workspace();
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::create_dir_all(dir.join("other")).unwrap();
+    fs::write(
+        dir.join("tsconfig.json"),
+        r#"{"compilerOptions":{"strict":true,"noEmit":true},"include":["src"]}"#,
+    )
+    .unwrap();
+    fs::write(dir.join("src/a.tt"), "export const a = 1;\n").unwrap();
+    fs::write(
+        dir.join("other/x.tt"),
+        "const k: string = 1;\nexport { k };\n",
+    )
+    .unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["--check-types", "other"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run ttc");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(0), "{stderr}");
+    assert!(
+        stderr.contains(
+            "ttc: other/x.tt: not type-checked: the project's configuration leaves it out"
+        ),
+        "{stderr}"
+    );
+    let named = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["--check-types", "other/x.tt"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run ttc");
+    let stderr = String::from_utf8_lossy(&named.stderr);
+    assert_eq!(named.status.code(), Some(1), "{stderr}");
+    assert!(stderr.contains("other/x.tt:1:7"), "{stderr}");
+}

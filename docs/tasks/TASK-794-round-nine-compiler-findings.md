@@ -1,5 +1,7 @@
 # TASK-794: Fix the round-nine compiler findings
 
+> **Superseded in part by TASK-796**: Decisions 8 (K4) and 9 (K8) were decided there. Template substitutions now convert at the capture when their conversion can run code; computed keys keep the documented exception. The typed paths drop a near-miss `unknown-case` that the checker lists as a tag of the scrutinee. Decision 10 (K9) moved to its own task.
+
 - **Status**: Complete
 - **Started**: 2026-10-08
 - **Completed**: 2026-10-08

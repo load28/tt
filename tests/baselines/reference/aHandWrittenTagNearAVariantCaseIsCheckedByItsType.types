@@ -1,0 +1,42 @@
+=== aHandWrittenTagNearAVariantCaseIsCheckedByItsType.tt ===
+variant O { Alpha, Beta }
+>O : type O = {
+>       kind: "Alpha";
+>   } | {
+>       kind: "Beta";
+>   }
+>Alpha : (property) Alpha: {
+>       readonly kind: "Alpha";
+>   }
+>Beta : (property) Beta: {
+>       readonly kind: "Beta";
+>   }
+type H = { kind: "Alpha" } | { kind: "Betta" };
+>H : type H = {
+>       kind: "Alpha";
+>   } | {
+>       kind: "Betta";
+>   }
+>kind : (property) kind: "Alpha"
+>kind : (property) kind: "Betta"
+declare const h: H;
+>h : const h: H
+>H : type H = {
+>       kind: "Alpha";
+>   } | {
+>       kind: "Betta";
+>   }
+declare const o: O;
+>o : const o: O
+>O : type O = {
+>       kind: "Alpha";
+>   } | {
+>       kind: "Beta";
+>   }
+export const r = match (h) { Alpha => 1, Betta => 2 };
+>r : const r: number
+>h : const h: H
+export const t = match (o) { Alpha => 1, Betta => 2 };
+>t : const t: number
+>o : const o: O
+

@@ -1,0 +1,29 @@
+==== ttc --out-dir (exit 1) ====
+error[unknown-case]: variant O has no case `Betta`
+ --> ./aHandWrittenTagNearAVariantCaseIsCheckedByItsType.tt:5:42
+  |
+5 | export const r = match (h) { Alpha => 1, Betta => 2 };
+  |                                          ^^^^^
+  |
+  = help: a case with a similar name exists: `Beta`
+
+error[unknown-case]: variant O has no case `Betta`
+ --> ./aHandWrittenTagNearAVariantCaseIsCheckedByItsType.tt:6:42
+  |
+6 | export const t = match (o) { Alpha => 1, Betta => 2 };
+  |                                          ^^^^^
+  |
+  = help: a case with a similar name exists: `Beta`
+
+
+==== ttc --check-types (exit 1) ====
+error[unknown-case]: variant O has no case `Betta`
+ --> aHandWrittenTagNearAVariantCaseIsCheckedByItsType.tt:6:42
+  |
+6 | export const t = match (o) { Alpha => 1, Betta => 2 };
+  |                                          ^^^^^
+  |
+  = help: a case with a similar name exists: `Beta`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

@@ -1,0 +1,4 @@
+scrutinee, key->string {"kk":1}
+part->string, scrutinee x1
+inline->string, scrutinee y1
+scrutinee [object Object]1,21

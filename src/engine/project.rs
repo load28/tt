@@ -1003,6 +1003,26 @@ impl Project {
             .is_none_or(|members| members.contains(path))
     }
 
+    /// The inputs' `.tt` files the last check's configured program left out,
+    /// sorted: projected, yet in none of its TypeScript programs. A file
+    /// that failed to project reports its own errors and is not among them.
+    pub fn left_out(&self, snapshot: &Snapshot) -> Vec<PathBuf> {
+        let mut out: Vec<PathBuf> = self
+            .requested
+            .iter()
+            .filter(|file| !self.checked(file))
+            .filter(|file| {
+                !snapshot
+                    .blocked()
+                    .iter()
+                    .any(|blocked| &blocked.source_path == *file)
+            })
+            .cloned()
+            .collect();
+        out.sort();
+        out
+    }
+
     /// Checks a snapshot: asks the running compiler about it and returns
     /// diagnostics at `.tt` positions — and the emitted declarations, when
     /// the request wants them. The session persists across calls; only what
@@ -1022,6 +1042,65 @@ impl Project {
         file: &Path,
     ) -> Result<Checked, String> {
         self.check_requested(snapshot, request, &[], Some(file))
+    }
+
+    /// The literals the checker says a match's scrutinee can still be,
+    /// beside `covered`: asked in `code`, the projection of `path` with the
+    /// match being written repaired, at the scrutinee's UTF-16 offset
+    /// `position` — the question the typed check asks of every literal
+    /// match. `None` when there is no checker or no certain answer.
+    pub(crate) fn literal_members(
+        &mut self,
+        path: &Path,
+        code: String,
+        position: usize,
+        covered: Vec<crate::Literal>,
+    ) -> Result<Option<Vec<crate::Literal>>, String> {
+        let mut files = self.initial_files();
+        files.push(path.to_path_buf());
+        files.sort();
+        files.dedup();
+        let snapshot = self
+            .update(&files)
+            .map_err(|blocked| blocked.error.to_string())?;
+        let Ok(backend) = &self.backend else {
+            return Ok(None);
+        };
+        let (assembled, _) = projection::assemble(
+            snapshot.files(),
+            snapshot.blocked(),
+            &self.root,
+            &self.sources,
+        );
+        let module = projection::module_path_of(path);
+        let mut modules = assembled.modules;
+        match modules.iter_mut().find(|served| served.path == module) {
+            Some(served) => served.text = code,
+            None => modules.push(crate::typescript::backend::Module {
+                path: module.clone(),
+                text: code,
+            }),
+        }
+        let query = crate::typescript::backend::Query {
+            sources: assembled.sources,
+            roots: self.roots(snapshot.files(), &[path.to_path_buf()]),
+            modules,
+            literals: vec![crate::typescript::backend::LiteralQuery {
+                module: module.clone(),
+                position,
+                covered,
+            }],
+            diagnostics_scope: Some(module),
+            ..crate::typescript::backend::Query::default()
+        };
+        let answers = backend
+            .ask(self.tsconfig.as_deref(), &self.root, &query)
+            .map_err(|failure| failure.message)?;
+        Ok(answers
+            .literal_missing
+            .into_iter()
+            .find(|answer| answer.index == 0)
+            .map(|answer| answer.missing))
     }
 
     /// Ask for editor diagnostics on the exact graph already served by the

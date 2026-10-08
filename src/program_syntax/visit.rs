@@ -1322,7 +1322,7 @@ impl VisitAstPath for ParentCollector {
                                 &self.placeholders,
                                 &self.source_segments,
                             ),
-                            expression_effects(expression),
+                            template_substitution_effects(expression),
                         )
                     })
                     .collect(),

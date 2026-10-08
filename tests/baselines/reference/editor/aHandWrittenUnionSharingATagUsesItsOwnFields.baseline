@@ -1,0 +1,23 @@
+=== completions /*fields*/ aHandWrittenUnionSharingATagUsesItsOwnFields.tt:6:37 ===
+  | export const b = match (h) { Circle() => 1, _ => 0 };
+  |                                     ^ /*fields*/
+completion: 1 item(s), member false, probe yes
+  r (Field, 11)
+ttCompletions: pattern true, member null
+  radius (field) "radius: number"
+patternCompletions:
+  r (field) "r"
+editor completion: 1 item(s)
+  r (Field, 0r)
+
+=== definition /*tag*/ aHandWrittenUnionSharingATagUsesItsOwnFields.tt:5:30 ===
+  | export const a = match (h) { Circle(r) => r, Square(side) => side };
+  |                              ^ /*tag*/
+definition: 0 location(s)
+
+=== definition /*own*/ aHandWrittenUnionSharingATagUsesItsOwnFields.tt:7:30 ===
+  | export const c = match (s) { Circle(radius) => radius, Point => 0 };
+  |                              ^ /*own*/
+definition: 1 location(s)
+  aHandWrittenUnionSharingATagUsesItsOwnFields.tt 1:24-1:30 "Circle"
+

@@ -1898,6 +1898,16 @@ pub(super) struct Discriminant {
 }
 
 impl Discriminant {
+    /// The literal `true` or `false`, which TypeScript completes only as a
+    /// keyword whatever the type.
+    pub(super) fn boolean(value: bool) -> Discriminant {
+        Discriminant {
+            label: value.to_string(),
+            written: value.to_string(),
+            value: crate::ast::LiteralValue::Bool(value),
+        }
+    }
+
     pub(super) fn label(&self) -> &str {
         &self.label
     }
@@ -2002,12 +2012,23 @@ pub(super) fn is_payload_field(label: &str, written: &[String]) -> bool {
         )
 }
 
+/// The payload fields to offer: the parse-only ones, and, when TypeScript
+/// answered for the scrutinee's own type, exactly the fields it lists — a
+/// declaration the pattern's tag resembles is not the scrutinee's type.
 pub(super) fn field_candidates(
     parsed: Vec<crate::engine::TtCompletion>,
-    typed: Vec<String>,
+    typed: Option<Vec<String>>,
     written: &[String],
 ) -> Vec<crate::engine::TtCompletion> {
-    let mut out = parsed;
+    let Some(typed) = typed else {
+        return parsed;
+    };
+    let mut out: Vec<crate::engine::TtCompletion> = parsed
+        .into_iter()
+        .filter(|item| {
+            item.kind != crate::engine::TtCompletionKind::Field || typed.contains(&item.label)
+        })
+        .collect();
     for name in typed {
         if !is_payload_field(&name, written) || out.iter().any(|item| item.label == name) {
             continue;

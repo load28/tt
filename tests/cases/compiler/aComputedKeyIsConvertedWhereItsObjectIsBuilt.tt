@@ -1,0 +1,18 @@
+// @run: aComputedKeyIsConvertedWhereItsObjectIsBuilt.tt
+export {};
+variant O { A, B }
+const log: string[] = [];
+const scr = () => { log.push("scrutinee"); return O.A as O; };
+const key = { toString() { log.push("key->string"); return "kk"; } };
+const obj = { [key as any]: match (scr()) { A => 1, B => 2 } };
+console.log(log.join(", "), JSON.stringify(obj));
+log.length = 0;
+const part = { toString() { log.push("part->string"); return "x"; } };
+const s = `${part}${match (scr()) { A => 1, B => 2 }}`;
+console.log(log.join(", "), s);
+log.length = 0;
+const inline = `${{ toString() { log.push("inline->string"); return "y"; } }}${match (scr()) { A => 1, B => 2 }}`;
+console.log(log.join(", "), inline);
+log.length = 0;
+const plain = `${{ a: 1 }}${[1, 2]}${match (scr()) { A => 1, B => 2 }}`;
+console.log(log.join(", "), plain);

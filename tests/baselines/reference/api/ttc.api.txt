@@ -929,6 +929,7 @@ impl Project
     ) -> Result<Dependencies, String>
     pub fn dependencies_for(&self, inputs: &Inputs) -> Result<Dependencies>
     pub fn checked(&self, path: &Path) -> bool
+    pub fn left_out(&self, snapshot: &Snapshot) -> Vec<PathBuf>
     pub fn check(
         &self,
         snapshot: &Snapshot,

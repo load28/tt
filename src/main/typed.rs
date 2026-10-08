@@ -312,6 +312,15 @@ pub(super) fn typed_pass(
     for (path, error) in &writes.failed {
         eprintln!("ttc: cannot write {}: {error}", shown(path));
     }
+    if checked.backend_error.is_none() {
+        let outside = project.left_out(&snapshot);
+        for file in &outside {
+            eprintln!(
+                "ttc: {}: not type-checked: the project's configuration leaves it out (name the file to check it as a root)",
+                shown(file)
+            );
+        }
+    }
 
     // The snapshot, not the file on disk: an `--overlay` was checked
     // against text that was never saved, and quoting the disk would draw a

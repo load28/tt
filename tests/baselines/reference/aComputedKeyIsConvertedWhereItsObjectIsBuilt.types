@@ -1,0 +1,111 @@
+=== aComputedKeyIsConvertedWhereItsObjectIsBuilt.tt ===
+variant O { A, B }
+>O : type O = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const log: string[] = [];
+>log : const log: string[]
+const scr = () => { log.push("scrutinee"); return O.A as O; };
+>scr : const scr: () => O
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>O : const O: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>O : type O = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+const key = { toString() { log.push("key->string"); return "kk"; } };
+>key : const key: {
+>       toString(): string;
+>   }
+>toString : (method) toString(): string
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+const obj = { [key as any]: match (scr()) { A => 1, B => 2 } };
+>obj : const obj: {
+>       [$tt_v1]: number;
+>   }
+>key : const key: {
+>       toString(): string;
+>   }
+>scr : const scr: () => O
+console.log(log.join(", "), JSON.stringify(obj));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>obj : const obj: {
+>       [$tt_v1]: number;
+>   }
+log.length = 0;
+>log : const log: string[]
+>length : (property) Array<string>.length: number
+const part = { toString() { log.push("part->string"); return "x"; } };
+>part : const part: {
+>       toString(): string;
+>   }
+>toString : (method) toString(): string
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+const s = `${part}${match (scr()) { A => 1, B => 2 }}`;
+>s : const s: string
+>part : const part: {
+>       toString(): string;
+>   }
+>scr : const scr: () => O
+console.log(log.join(", "), s);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+>s : const s: string
+log.length = 0;
+>log : const log: string[]
+>length : (property) Array<string>.length: number
+const inline = `${{ toString() { log.push("inline->string"); return "y"; } }}${match (scr()) { A => 1, B => 2 }}`;
+>inline : const inline: string
+>toString : (method) toString(): string
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>scr : const scr: () => O
+console.log(log.join(", "), inline);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+>inline : const inline: string
+log.length = 0;
+>log : const log: string[]
+>length : (property) Array<string>.length: number
+const plain = `${{ a: 1 }}${[1, 2]}${match (scr()) { A => 1, B => 2 }}`;
+>plain : const plain: string
+>a : (property) a: number
+>scr : const scr: () => O
+console.log(log.join(", "), plain);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+>plain : const plain: string
+

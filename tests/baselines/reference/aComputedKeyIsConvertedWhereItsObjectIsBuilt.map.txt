@@ -1,0 +1,30 @@
+//// [aComputedKeyIsConvertedWhereItsObjectIsBuilt.tt] 28 mapping(s)
+1:1 -> 19:1 len 11  "export {};\n"
+2:19 -> 26:3 len 160  "\nconst log: string[] = [];\nconst scr = () => { l"...
+6:1 -> 40:1 len 15  "const obj = { ["
+6:16 -> 31:17 len 10  "key as any"
+6:26 -> 40:22 len 3  "]: "
+6:36 -> 33:17 len 5  "scr()"
+6:50 -> 40:41 len 1  "1"
+6:58 -> 40:45 len 1  "2"
+6:61 -> 40:47 len 141  " };\nconsole.log(log.join(\", \"), JSON.stringify(o"...
+10:1 -> 54:1 len 13  "const s = `${"
+10:14 -> 45:20 len 4  "part"
+10:18 -> 54:20 len 3  "}${"
+10:28 -> 47:17 len 5  "scr()"
+10:42 -> 54:39 len 1  "1"
+10:50 -> 54:43 len 1  "2"
+10:53 -> 54:45 len 52  "}`;\nconsole.log(log.join(\", \"), s);\nlog.length ="...
+13:1 -> 67:1 len 18  "const inline = `${"
+13:19 -> 58:20 len 58  "{ toString() { log.push(\"inline->string\"); retur"...
+13:77 -> 67:25 len 3  "}${"
+13:87 -> 60:17 len 5  "scr()"
+13:101 -> 67:44 len 1  "1"
+13:109 -> 67:48 len 1  "2"
+13:112 -> 67:50 len 57  "}`;\nconsole.log(log.join(\", \"), inline);\nlog.len"...
+16:1 -> 79:1 len 37  "const plain = `${{ a: 1 }}${[1, 2]}${"
+16:45 -> 72:17 len 5  "scr()"
+16:59 -> 79:54 len 1  "1"
+16:67 -> 79:58 len 1  "2"
+16:70 -> 79:60 len 40  "}`;\nconsole.log(log.join(\", \"), plain);\n"
+

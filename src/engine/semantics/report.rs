@@ -54,8 +54,48 @@ pub(crate) fn report(
     // are tt's answers about tt's constructs, so they are reported on the
     // tt-only path too — and they no longer gate the rest of this report
     // (TASK-117 symptom 3): the typed answers below follow either way.
+    // The checker names the tags a match's scrutinee can be. A pattern name
+    // that the declaration table cannot resolve but the checker lists for
+    // that scrutinee is a case of the scrutinee's own (hand-written) union:
+    // the declaration the evidence picked is not the scrutinee's.
+    let mut alphabets: HashMap<(&std::path::Path, usize), Vec<&[String]>> = HashMap::new();
+    for members in &answers.tag_members {
+        if let Some(anchor) = probes.tags.get(members.index) {
+            alphabets
+                .entry((anchor.anchor.source_path.as_path(), anchor.anchor.offset))
+                .or_default()
+                .push(&members.tags);
+        }
+    }
+    let admitted: HashSet<(PathBuf, usize)> = files
+        .iter()
+        .filter_map(|file| Some((file, semantics.get(&file.source_path)?)))
+        .flat_map(|(file, semantics)| {
+            semantics
+                .analyses
+                .unresolved
+                .iter()
+                .filter(|name| name.kind == crate::analysis::NameKind::Case)
+                .filter(|name| {
+                    name.match_owner.is_some_and(|owner| {
+                        alphabets
+                            .get(&(file.source_path.as_path(), owner))
+                            .is_some_and(|positions| {
+                                matches!(positions.as_slice(), [tags] if tags.contains(&name.name))
+                            })
+                    })
+                })
+                .map(|name| (file.source_path.clone(), name.start))
+        })
+        .collect();
     for file in files {
         for d in &file.tt_diagnostics {
+            if d.code == crate::DiagnosticCode::UnknownCase
+                && d.start
+                    .is_some_and(|at| admitted.contains(&(file.source_path.clone(), at)))
+            {
+                continue;
+            }
             out.push(Diagnostic {
                 path: file.source_path.clone(),
                 position: d.start.map(|at| file.line_col(at)),
@@ -115,6 +155,13 @@ pub(crate) fn report(
             continue;
         };
         for error in crate::sema::resolution_errors(&semantics.analyses) {
+            if error.code == crate::DiagnosticCode::UnknownCase
+                && error
+                    .offset
+                    .is_some_and(|at| admitted.contains(&(file.source_path.clone(), at)))
+            {
+                continue;
+            }
             if let (Some(start), Some(end)) = (error.offset, error.end) {
                 resolution_spans
                     .entry(file.source_path.clone())
@@ -638,10 +685,12 @@ pub(crate) fn report(
             asked,
             asked_payloads,
         ) {
-            if semantics
-                .get(&file.source_path)
-                .is_some_and(|semantics| semantics.analyses.match_has_resolution_error(offset))
-                || declared_holes.contains(&(file.source_path.clone(), offset))
+            if semantics.get(&file.source_path).is_some_and(|semantics| {
+                semantics.analyses.unresolved.iter().any(|name| {
+                    name.match_owner == Some(offset)
+                        && !admitted.contains(&(file.source_path.clone(), name.start))
+                })
+            }) || declared_holes.contains(&(file.source_path.clone(), offset))
             {
                 continue;
             }

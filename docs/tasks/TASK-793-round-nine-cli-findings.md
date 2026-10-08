@@ -1,5 +1,7 @@
 # TASK-793: Fix the round-nine CLI findings
 
+> **Superseded in part by TASK-796**: Decision 7 (L4) was decided there: the configuration keeps deciding, and the typed modes name each input file it leaves out.
+
 - **Status**: Complete
 - **Started**: 2026-10-08
 - **Completed**: 2026-10-08

@@ -211,6 +211,19 @@ literal entries. A candidate an unguarded arm already covers stays in the
 list and sorts after the rest, as a covered tag always has; `_` is always
 offered.
 
+**Update (TASK-796)**: TypeScript completes `true` and `false` after
+`(scrutinee) === ` only as keywords, whatever the scrutinee's type, so a
+boolean member never came back as a literal entry. The engine now asks the
+checker the question the typed check asks of every literal match
+(`LiteralQuery`: which literals the scrutinee can still be), in the same
+repaired projection, and adds the boolean members it names to the literal
+candidates. Payload fields follow TypeScript's answer whenever it gives
+one: a declaration the tag resembles is not the scrutinee's type when the
+scrutinee is a hand-written union sharing the tag, so only the fields
+TypeScript lists are offered, and go-to-definition on such a tag is not
+answered with the variant's case when the checker's tags for the scrutinee
+name no declaration owning it.
+
 **Update (TASK-608)**: a payload field list is completed through the
 completion probe, whose destructuring TypeScript completes with the
 selected case's properties; the discriminant `kind` and the fields already

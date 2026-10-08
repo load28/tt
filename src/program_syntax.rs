@@ -462,6 +462,55 @@ fn object_literal_effects(node: &ObjectLit) -> Effects {
     Effects::NONE
 }
 
+/// The effects of a template substitution, its `ToString` included: an
+/// object literal that names `toString` or `valueOf`, sets its prototype,
+/// or has a computed key (`Symbol.toPrimitive`) runs its own code when the
+/// template converts it, and an array literal converts its elements.
+pub(super) fn template_substitution_effects(expression: &swc_ecma_ast::Expr) -> Effects {
+    use swc_ecma_ast::Expr as SwcExpr;
+    let converts_itself = |name: &PropName| match name {
+        PropName::Ident(ident) => matches!(&*ident.sym, "toString" | "valueOf" | "__proto__"),
+        PropName::Str(text) => matches!(
+            text.value.as_str(),
+            Some("toString" | "valueOf" | "__proto__")
+        ),
+        PropName::Computed(_) => true,
+        PropName::Num(_) | PropName::BigInt(_) => false,
+    };
+    match expression {
+        SwcExpr::Paren(inner) => template_substitution_effects(&inner.expr),
+        SwcExpr::TsAs(inner) => template_substitution_effects(&inner.expr),
+        SwcExpr::TsSatisfies(inner) => template_substitution_effects(&inner.expr),
+        SwcExpr::TsNonNull(inner) => template_substitution_effects(&inner.expr),
+        SwcExpr::TsTypeAssertion(inner) => template_substitution_effects(&inner.expr),
+        SwcExpr::Object(object)
+            if object.props.iter().any(|property| match property {
+                PropOrSpread::Spread(_) => true,
+                PropOrSpread::Prop(property) => match &**property {
+                    Prop::Shorthand(ident) => {
+                        matches!(&*ident.sym, "toString" | "valueOf" | "__proto__")
+                    }
+                    Prop::KeyValue(property) => converts_itself(&property.key),
+                    Prop::Assign(_) => true,
+                    Prop::Getter(property) => converts_itself(&property.key),
+                    Prop::Setter(property) => converts_itself(&property.key),
+                    Prop::Method(property) => converts_itself(&property.key),
+                },
+            }) =>
+        {
+            Effects::ANY
+        }
+        SwcExpr::Array(array)
+            if array.elems.iter().flatten().any(|element| {
+                element.spread.is_some() || !template_substitution_effects(&element.expr).is_inert()
+            }) =>
+        {
+            Effects::ANY
+        }
+        _ => expression_effects(expression),
+    }
+}
+
 pub(super) fn object_spread_effects(expression: &swc_ecma_ast::Expr) -> Effects {
     use swc_ecma_ast::Expr as SwcExpr;
     match expression {

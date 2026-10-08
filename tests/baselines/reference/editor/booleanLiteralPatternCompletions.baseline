@@ -1,0 +1,107 @@
+=== completions /*bool*/ booleanLiteralPatternCompletions.tt:5:30 ===
+  | export const a = match (b) {  };
+  |                              ^ /*bool*/
+completion: 1066 item(s), member false, probe yes
+  Ev (Variable, 11)
+  a (Variable, 11)
+  b (Variable, 11)
+  c (Variable, 11)
+  d (Variable, 11)
+  e (Variable, 11)
+  n (Variable, 11)
+  t (Variable, 11)
+  ... 1058 global or keyword item(s) (sortText 15, no source)
+ttCompletions: pattern true, member null
+  A (case) "Ev.A"
+  B (case) "Ev.B"
+  Some (case) "Option.Some(value: T)"
+  None (case) "Option.None"
+  Ok (case) "Result.Ok(value: T)"
+  Err (case) "Result.Err(error: E)"
+  _ (wildcard) "wildcard arm — every remaining case (must be last)"
+patternCompletions:
+  false (literal) "literal false"
+  true (literal) "literal true"
+  _ (wildcard) "wildcard arm — every remaining case (must be last)"
+editor completion: 3 item(s)
+  _ (Keyword, 0_)
+  false (Constant, 0false)
+  true (Constant, 0true)
+
+=== completions /*afterTrue*/ booleanLiteralPatternCompletions.tt:6:41 ===
+  | export const c = match (b) { true => 1,  };
+  |                                         ^ /*afterTrue*/
+completion: 0 item(s), member false, probe no
+ttCompletions: pattern true, member null
+  _ (wildcard) "wildcard arm — every remaining case (must be last)"
+patternCompletions:
+  false (literal) "literal false"
+  true (literal) "literal true" covered
+  _ (wildcard) "wildcard arm — every remaining case (must be last)"
+editor completion: 3 item(s)
+  _ (Keyword, 0_)
+  false (Constant, 0false)
+  true (Constant, 1true)
+
+=== completions /*mixed*/ booleanLiteralPatternCompletions.tt:7:30 ===
+  | export const d = match (t) {  };
+  |                              ^ /*mixed*/
+completion: 1066 item(s), member false, probe yes
+  Ev (Variable, 11)
+  a (Variable, 11)
+  b (Variable, 11)
+  c (Variable, 11)
+  d (Variable, 11)
+  e (Variable, 11)
+  n (Variable, 11)
+  t (Variable, 11)
+  ... 1058 global or keyword item(s) (sortText 15, no source)
+ttCompletions: pattern true, member null
+  A (case) "Ev.A"
+  B (case) "Ev.B"
+  Some (case) "Option.Some(value: T)"
+  None (case) "Option.None"
+  Ok (case) "Result.Ok(value: T)"
+  Err (case) "Result.Err(error: E)"
+  _ (wildcard) "wildcard arm — every remaining case (must be last)"
+patternCompletions:
+  "x" (literal) "literal \"x\""
+  true (literal) "literal true"
+  _ (wildcard) "wildcard arm — every remaining case (must be last)"
+editor completion: 3 item(s)
+  "x" (Constant, 0"x")
+  _ (Keyword, 0_)
+  true (Constant, 0true)
+
+=== completions /*numbers*/ booleanLiteralPatternCompletions.tt:8:30 ===
+  | export const e = match (n) {  };
+  |                              ^ /*numbers*/
+completion: 1066 item(s), member false, probe yes
+  Ev (Variable, 11)
+  a (Variable, 11)
+  b (Variable, 11)
+  c (Variable, 11)
+  d (Variable, 11)
+  e (Variable, 11)
+  n (Variable, 11)
+  t (Variable, 11)
+  ... 1058 global or keyword item(s) (sortText 15, no source)
+ttCompletions: pattern true, member null
+  A (case) "Ev.A"
+  B (case) "Ev.B"
+  Some (case) "Option.Some(value: T)"
+  None (case) "Option.None"
+  Ok (case) "Result.Ok(value: T)"
+  Err (case) "Result.Err(error: E)"
+  _ (wildcard) "wildcard arm — every remaining case (must be last)"
+patternCompletions:
+  0 (literal) "literal 0"
+  1 (literal) "literal 1"
+  false (literal) "literal false"
+  _ (wildcard) "wildcard arm — every remaining case (must be last)"
+editor completion: 4 item(s)
+  0 (Constant, 00)
+  1 (Constant, 01)
+  _ (Keyword, 0_)
+  false (Constant, 0false)
+
