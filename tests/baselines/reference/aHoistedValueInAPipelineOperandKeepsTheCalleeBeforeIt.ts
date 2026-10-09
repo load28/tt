@@ -19,7 +19,7 @@ let $tt_v0: string;
 do {
   let $tt_v3;
   let $tt_v1: number;
-  const $tt_v2 = (f);
+  const $tt_v2: typeof f = (f);
   {
     const $tt_m = n;
     switch ($tt_m) {

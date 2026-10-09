@@ -1,0 +1,108 @@
+=== aLogicalRightOperandIsTypedByItsResult.tt ===
+variant O { S(v: number), N }
+>O : type O = {
+>       kind: "S";
+>       v: number;
+>   } | {
+>       kind: "N";
+>   }
+>S : (property) S: (v: number) => O
+>v : (property) v: number
+>N : (property) N: {
+>       readonly kind: "N";
+>   }
+declare const o: O;
+>o : const o: O
+>O : type O = {
+>       kind: "S";
+>       v: number;
+>   } | {
+>       kind: "N";
+>   }
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Ok"
+>value : (property) value: T
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Err"
+>error : (property) error: string
+declare function r(): R<number>;
+>r : function r(): R<number>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+declare function rs(): R<string>;
+>rs : function rs(): R<string>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+export function f(flag: true, no: false, n: number, cond: boolean, s: "a" | undefined): R<number> {
+>f : function f(flag: true, no: false, n: number, cond: boolean, s: "a" | undefined): R<number>
+>flag : (parameter) flag: true
+>no : (parameter) no: false
+>n : (parameter) n: number
+>cond : (parameter) cond: boolean
+>s : (parameter) s: "a" | undefined
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+  const b0: true = true || try r();
+>b0 : const b0: true
+>r : function r(): R<number>
+  const b1: true = flag || try r();
+>b1 : const b1: true
+>flag : (parameter) flag: true
+>r : function r(): R<number>
+  const b2: true = flag || match (o) { S(v) => v, N => 0 };
+>b2 : const b2: true
+>flag : (parameter) flag: true
+>o : const o: O
+>v : const v: number
+>v : const v: number
+  const b3: false = no && try rs();
+>b3 : const b3: false
+>no : (parameter) no: false
+>rs : function rs(): R<string>
+  const b4: number = n ?? try rs();
+>b4 : const b4: number
+>n : (parameter) n: number
+>rs : function rs(): R<string>
+  const y: "a" | "b" | false = cond && match (o) { S => "a", N => "b" };
+>y : const y: "a" | "b" | false
+>cond : (parameter) cond: boolean
+>o : const o: O
+  const z: "a" | "b" = s ?? match (o) { S => "a", N => "b" };
+>z : const z: "a" | "b"
+>s : (parameter) s: "a" | undefined
+>o : const o: O
+  return { kind: "Ok", value: [b0, b1, b2, b3, b4, y, z].length };
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>b0 : const b0: true
+>b1 : const b1: true
+>b2 : const b2: true
+>b3 : const b3: false
+>b4 : const b4: number
+>y : const y: "a" | "b" | false
+>z : const z: "a" | "b"
+>length : (property) Array<number | "a" | "b" | boolean>.length: number
+

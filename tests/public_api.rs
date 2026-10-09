@@ -286,6 +286,10 @@ fn examples(path: &str) -> Vec<(&'static str, Value)> {
             "patternCompletions",
             json!({ "path": path, "position": at("Circle(radius) =>", 0) }),
         ),
+        (
+            "patternSymbol",
+            json!({ "path": path, "position": at("Circle(radius) =>", 0) }),
+        ),
         ("documentSemanticTokens", json!({ "path": path })),
         ("tsDiagnostics", json!({ "path": path })),
         ("declarations", json!({ "path": path, "text": MAIN })),

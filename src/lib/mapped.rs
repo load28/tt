@@ -79,6 +79,17 @@ pub(crate) struct InsertedGlue {
     pub out_end: usize,
 }
 
+/// Where the value of an operand moved out of its place is read back: the
+/// operand `src..src_end` was evaluated earlier into a slot, and
+/// `out..out_end` is the slot's name standing in the operand's place.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct RelocatedOperand {
+    pub src: usize,
+    pub src_end: usize,
+    pub out: usize,
+    pub out_end: usize,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct DestructuredList {
     pub src: usize,
@@ -99,6 +110,7 @@ pub(crate) struct BindingOccurrence {
     pub src: usize,
     pub src_end: usize,
     pub shorthand: bool,
+    pub declared: bool,
 }
 
 /// Which tt construct a stretch of compiler-written glue belongs to.
@@ -112,6 +124,10 @@ pub enum AnchorKind {
     Match,
     /// A `try` statement's test, early return and binding.
     Try,
+    /// A `try`'s test of whether its operand failed.
+    TryTest,
+    /// A `try`'s early exit with the failed `Result`.
+    TryExit,
     /// A let-else statement's test and destructuring.
     LetElse,
     /// An `if let` statement's test and destructuring.
@@ -195,6 +211,10 @@ pub struct PayloadTemp {
     pub src: usize,
     /// Byte offset of the receiver expression in the emitted output.
     pub out: usize,
+    /// Byte range of the tag literal the receiver's discriminant is
+    /// compared with (`"Some"` in `$tt_m.value.kind === "Some"`) — where a
+    /// checker can be asked which tags the payload admits.
+    pub tag: (usize, usize),
 }
 
 /// The result of [`emit_mapped`]: the emitted TypeScript and the
@@ -222,10 +242,12 @@ pub struct MappedEmit {
     pub(crate) selector_slots: Vec<usize>,
     pub(crate) operand_slots: Vec<usize>,
     pub(crate) asserted_slots: Vec<(usize, usize)>,
+    pub(crate) restatements: Vec<(usize, usize)>,
     pub(crate) generated_names: std::collections::HashSet<String>,
     pub(crate) declared_names: Vec<DeclaredName>,
     pub(crate) shared_bindings: Vec<SharedBinding>,
     pub(crate) destructured_lists: Vec<DestructuredList>,
+    pub(crate) relocated_operands: Vec<RelocatedOperand>,
     /// Glue written at a source point, ordered by output offset.
     pub(crate) inserted: Vec<InsertedGlue>,
     pub(crate) single_line_breaks: Vec<usize>,
@@ -349,6 +371,7 @@ pub(crate) fn emit_mapped_parsed(
             kind: source_kind,
             automatic_semicolons: &automatic_semicolons,
             comments: &comments,
+            tokens,
         },
         &plan,
         options.rewrite_imports.extensions(options.jsx_preserve),
@@ -365,10 +388,12 @@ pub(crate) fn emit_mapped_parsed(
         selector_slots: flat.selector_slots,
         operand_slots: flat.operand_slots,
         asserted_slots: flat.asserted_slots,
+        restatements: flat.restatements,
         generated_names: flat.generated_names,
         declared_names: flat.declared_names,
         shared_bindings: flat.shared_bindings,
         destructured_lists: flat.destructured_lists,
+        relocated_operands: flat.relocated_operands,
         inserted: flat.inserted,
         single_line_breaks: flat.single_line_breaks,
         completion_scopes: std::mem::take(&mut plan.completion_scopes),
@@ -453,6 +478,7 @@ pub(crate) fn val_probes_with_emit(
             tokens,
             &parser::val_modifiers(program),
             &parser::pipeline_shapes(program),
+            &parser::arm_scopes(program),
         ),
         emit,
         source_kind,
@@ -467,6 +493,7 @@ fn val_syntax_probes(source: &str, source_kind: SourceKind) -> ValProbes {
         &tokens,
         &parser::val_modifiers(&program),
         &parser::pipeline_shapes(&program),
+        &parser::arm_scopes(&program),
     )
 }
 

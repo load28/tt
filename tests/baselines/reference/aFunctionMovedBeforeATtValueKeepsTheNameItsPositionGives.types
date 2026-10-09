@@ -1,0 +1,106 @@
+=== aFunctionMovedBeforeATtValueKeepsTheNameItsPositionGives.tt ===
+variant O { A(n: number), B }
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => O
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+function g(cb: Function, n: number) { return cb.name + ":" + n; }
+>g : function g(cb: Function, n: number): string
+>cb : (parameter) cb: Function
+>Function : interface Function
+>n : (parameter) n: number
+>cb : (parameter) cb: Function
+>name : (property) Function.name: string
+>n : (parameter) n: number
+const obj = { m(cb: Function, n: number) { return cb.name + ":" + n; } };
+>obj : const obj: {
+>       m(cb: Function, n: number): string;
+>   }
+>m : (method) m(cb: Function, n: number): string
+>cb : (parameter) cb: Function
+>Function : interface Function
+>n : (parameter) n: number
+>cb : (parameter) cb: Function
+>name : (property) Function.name: string
+>n : (parameter) n: number
+function run(o: O, c: boolean) {
+>run : function run(o: O, c: boolean): string[]
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>c : (parameter) c: boolean
+  const a = g(() => 1, match (o) { A(n) => n, B => 0 });
+>a : const a: string
+>g : function g(cb: Function, n: number): string
+>o : (parameter) o: O
+>n : const n: number
+>n : const n: number
+  const b = obj.m(function () {}, match (o) { A(n) => n, B => 0 });
+>b : const b: string
+>o : (parameter) o: O
+>n : const n: number
+>n : const n: number
+  const d = { k: class {}, "a-b": () => 2, v: match (o) { A(n) => n, B => 0 } };
+>d : const d: {
+>       k: typeof "k";
+>       "a-b": () => number;
+>       v: number;
+>   }
+>k : (property) k: typeof "k"
+>v : (property) v: number
+>o : (parameter) o: O
+>n : const n: number
+>n : const n: number
+  const t = c ? (() => 1) : match (o) { A => 1, B => 2 };
+>t : const t: number | (() => number)
+>c : (parameter) c: boolean
+>o : (parameter) o: O
+  const l = (function () {}) || match (o) { A => 1, B => 2 };
+>l : const l: () => void
+>o : (parameter) o: O
+  return [a, b, d.k.name, d["a-b"].name, (t as Function).name, l.name];
+>a : const a: string
+>b : const b: string
+>d : const d: {
+>       k: typeof "k";
+>       "a-b": () => number;
+>       v: number;
+>   }
+>k : (property) k: typeof "k"
+>name : (property) Function.name: string
+>d : const d: {
+>       k: typeof "k";
+>       "a-b": () => number;
+>       v: number;
+>   }
+>name : (property) Function.name: string
+>t : const t: number | (() => number)
+>Function : interface Function
+>name : (property) Function.name: string
+>l : const l: () => void
+>name : (property) Function.name: string
+console.log(JSON.stringify(run(O.A(1), true)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>run : function run(o: O, c: boolean): string[]
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => O
+

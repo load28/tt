@@ -3,7 +3,7 @@
 2:30 -> 21:29 len 6  "number"
 2:30 -> 24:18 len 6  "number"
 2:46 -> 26:3 len 195  "\ntype Item = {kind: \"item\"; run: (x: number) => "...
-7:1 -> 31:17 len 7  "consume"
+7:1 -> 31:33 len 7  "consume"
 7:8 -> 32:22 len 6  "<Item>"
 7:22 -> 34:17 len 14  "State.Ready(4)"
 8:9 -> 37:15 len 5  "value"

@@ -1,0 +1,51 @@
+==== ttc --out-dir (exit 1) ====
+error[malformed-match]: tt `match` could not be parsed
+ --> ./anArmListWithoutArrowsIsAMalformedMatch.tt:3:18
+  |
+3 | export const a = match (e) { is MyErr };
+  |                  ^^^^^
+  |
+  = help: write `match (<scrutinee>) { <pattern> => <body> }`
+
+error[malformed-match]: tt `match` could not be parsed
+ --> ./anArmListWithoutArrowsIsAMalformedMatch.tt:4:18
+  |
+4 | export const b = match (e) { A, B };
+  |                  ^^^^^
+  |
+  = help: write `match (<scrutinee>) { <pattern> => <body> }`
+
+error[malformed-match]: tt `match` could not be parsed
+ --> ./anArmListWithoutArrowsIsAMalformedMatch.tt:5:18
+  |
+5 | export const c = match (e) {};
+  |                  ^^^^^
+  |
+  = help: write `match (<scrutinee>) { <pattern> => <body> }`
+
+
+==== ttc --check-types (exit 1) ====
+error[malformed-match]: tt `match` could not be parsed
+ --> anArmListWithoutArrowsIsAMalformedMatch.tt:3:18
+  |
+3 | export const a = match (e) { is MyErr };
+  |                  ^^^^^
+  |
+  = help: write `match (<scrutinee>) { <pattern> => <body> }`
+error[malformed-match]: tt `match` could not be parsed
+ --> anArmListWithoutArrowsIsAMalformedMatch.tt:4:18
+  |
+4 | export const b = match (e) { A, B };
+  |                  ^^^^^
+  |
+  = help: write `match (<scrutinee>) { <pattern> => <body> }`
+error[malformed-match]: tt `match` could not be parsed
+ --> anArmListWithoutArrowsIsAMalformedMatch.tt:5:18
+  |
+5 | export const c = match (e) {};
+  |                  ^^^^^
+  |
+  = help: write `match (<scrutinee>) { <pattern> => <body> }`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

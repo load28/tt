@@ -12,11 +12,8 @@ error[ts2678]: this pattern's case is not one the value can be (ts2678: Type '"C
   |
 5 |   Circle(radius) => radius,
   |   ^^^^^^
-error[ts2339]: Property 'radius' does not exist on type '{ readonly kind: "Point"; }'.
- --> rewriteComposesWithTtConstructsInTheSameFile.tt:5:10
   |
-5 |   Circle(radius) => radius,
-  |          ^^^^^^
+  = help: the value is narrowed before the match, so this case cannot occur here; cover the cases it can no longer be with a final `_` arm instead of naming them
 
 ==== tsc on the emitted TypeScript (exit 2) ====
 rewriteComposesWithTtConstructsInTheSameFile.ts(20,27): error TS2307: Cannot find module './error.js' or its corresponding type declarations.

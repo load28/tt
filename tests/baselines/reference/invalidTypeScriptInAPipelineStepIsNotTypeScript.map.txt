@@ -1,0 +1,9 @@
+//// [invalidTypeScriptInAPipelineStepIsNotTypeScript.tt] 7 mapping(s)
+1:1 -> 2:1 len 41  "export function f(r: number) { const x = "
+1:42 -> 2:49 len 1  "r"
+1:47 -> 2:52 len 11  "((q) => q.)"
+1:58 -> 2:64 len 55  "; return x; }\nexport function g(r: number) { con"...
+2:42 -> 3:49 len 1  "r"
+2:47 -> 3:52 len 5  "h(r.)"
+2:52 -> 3:58 len 68  "; return y; }\ndeclare function h(n: number): (m:"...
+

@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::work::measure;
 
@@ -70,6 +70,112 @@ fn every_request_does_linear_work_in_the_number_of_expression_matches() {
     assert!(large["concise arrow scans"] > 0);
 }
 
+fn joined_matches(count: usize, separator: &str) -> String {
+    format!(
+        "variant V {{ A, B }}\ndeclare const v: V;\ndeclare const c: boolean;\nexport const x = [{}];\nexport function g() {{ {}0{} }}\n",
+        vec!["match (v) { A => 1, B => 2 }"; count].join(separator),
+        "if (c) { const y = match (v) { A => 1, B => 2 }; ".repeat(count),
+        " }".repeat(count),
+    )
+}
+
+fn nested_call_matches(count: usize) -> String {
+    format!(
+        "variant V {{ A, B }}\ndeclare const v: V;\ndeclare function f(...a: number[]): number;\nexport const x = {}0{};\n",
+        "f(match (v) { A => 1, B => 2 }, ".repeat(count),
+        ")".repeat(count),
+    )
+}
+
+#[test]
+fn compiling_does_linear_work_in_the_tt_values_of_one_expression() {
+    let shapes: [fn(usize) -> String; 3] = [
+        |count| joined_matches(count, ", "),
+        |count| joined_matches(count, " + "),
+        nested_call_matches,
+    ];
+    for shape in shapes {
+        let compile = |count| {
+            crate::compile(&shape(count), &crate::Options::default()).expect("the file compiles")
+        };
+        let small = measure(|| compile(100));
+        let large = measure(|| compile(200));
+        assert_linear(&small, &large);
+        assert!(large["protocol step links"] > 0);
+        assert!(large["parent path edges"] > 0);
+        assert!(large["planned evaluation steps"] > 0);
+    }
+}
+
+fn left_deep_sum(count: usize) -> String {
+    format!(
+        "declare function r(): {{ kind: \"Ok\"; value: string }} | {{ kind: \"Err\"; error: string }};\nexport function f() {{ const x = \"\"{}; return {{ kind: \"Ok\" as const, value: x }}; }}\n",
+        " + (try r())".repeat(count),
+    )
+}
+
+#[test]
+fn compiling_does_linear_work_in_a_left_deep_chain_of_tt_values() {
+    let compile = |count| {
+        crate::compile(&left_deep_sum(count), &crate::Options::default())
+            .expect("the file compiles")
+    };
+    let (small, large) = (measure(|| compile(100)), measure(|| compile(200)));
+    assert!(small["claimed frame queries"] > 0);
+    for name in ["claimed frame queries", "claimed frame checks"] {
+        let (before, after) = (
+            small.get(name).copied().unwrap_or(0),
+            large.get(name).copied().unwrap_or(0),
+        );
+        assert!(
+            after <= 2 * before + 64,
+            "{name}: {before} for n values but {after} for 2n"
+        );
+    }
+}
+
+#[test]
+fn compiling_does_linear_work_in_nested_pipeline_heads() {
+    let source = |depth: usize| {
+        format!(
+            "declare const n: number;\nexport const a = {}n{};\n",
+            "(".repeat(depth),
+            " |> String)".repeat(depth),
+        )
+    };
+    let compile = |depth| {
+        crate::compile(&source(depth), &crate::Options::default()).expect("the file compiles")
+    };
+    let (small, large) = (measure(|| compile(8)), measure(|| compile(16)));
+    for name in ["token range parses", "top-level query bytes"] {
+        let (before, after) = (
+            small.get(name).copied().unwrap_or(0),
+            large.get(name).copied().unwrap_or(0),
+        );
+        assert!(
+            after <= 2 * before + 64,
+            "{name}: {before} at depth 8 but {after} at depth 16"
+        );
+    }
+}
+
+#[test]
+fn compiling_does_linear_work_in_the_steps_of_a_pipeline() {
+    let source = |count: usize| {
+        format!(
+            "declare function f(x: number): number;\ndeclare const o: {{ m(x: number): number }};\nexport const x = 1{};\n",
+            " |> f |> .toFixed(1).length |> o.m".repeat(count),
+        )
+    };
+    let compile = |count| {
+        crate::compile(&source(count), &crate::Options::default()).expect("the file compiles")
+    };
+    let small = measure(|| compile(100));
+    let large = measure(|| compile(200));
+    assert!(small["top-level query bytes"] > 0);
+    assert_linear(&small, &large);
+}
+
 fn nested_matches(depth: usize) -> String {
     format!(
         "export variant V {{ A(v: V), B }}\ndeclare const a: V;\nexport const x = {}1{};\nexport function f() {{ {}g();{} }}\n",
@@ -78,6 +184,35 @@ fn nested_matches(depth: usize) -> String {
         "if let A(v) = a { ".repeat(depth),
         " }".repeat(depth),
     )
+}
+
+fn nested_block_arms(depth: usize) -> String {
+    let mut value = "0".to_owned();
+    for level in 0..depth {
+        value = format!(
+            "match (s) {{ A(n) => {{ const q{level} = {value}; return q{level}; }}, B => {level} }}"
+        );
+    }
+    format!(
+        "variant S {{ A(n: number), B }}\ndeclare const s: S;\nfunction f() {{ return {value}; }}\n"
+    )
+}
+
+#[test]
+fn checking_an_active_value_does_constant_work_per_replacement_in_nested_block_arms() {
+    let compile = |depth| {
+        crate::compile(&nested_block_arms(depth), &crate::Options::default())
+            .expect("the file compiles");
+    };
+    let small = measure(|| compile(40));
+    let large = measure(|| compile(80));
+    let before = small["value anchors"];
+    let after = large["value anchors"];
+    assert!(before > 0);
+    assert!(
+        after <= 2 * before + 64,
+        "value anchors: {before} for n nested arms but {after} for 2n"
+    );
 }
 
 #[test]
@@ -211,6 +346,49 @@ fn contextual_compile(root: &Path, file: usize) -> String {
         },
     )
     .expect("the file compiles")
+}
+
+#[test]
+fn contextual_storage_costs_a_bounded_number_of_checker_requests_per_slot() {
+    if crate::typescript::toolchain::client(Path::new(env!("CARGO_MANIFEST_DIR"))).is_err() {
+        assert!(
+            std::env::var_os("TTC_REQUIRE_TSGO")
+                .is_none_or(|value| value.is_empty() || value == "0"),
+            "TTC_REQUIRE_TSGO is set but no TypeScript toolchain was found"
+        );
+        return;
+    }
+    let trips = |functions: usize| {
+        let root = crate::test_workspace::Workspace::with_subdir("contextual-round-trips", "src");
+        std::fs::write(
+            root.join("tsconfig.json"),
+            r#"{ "compilerOptions": { "strict": true, "noEmit": true }, "include": ["src"] }"#,
+        )
+        .unwrap();
+        let mut source =
+            "export variant Ev { Click(x: number, y: number), Key(code: string), Idle }\n"
+                .to_owned();
+        for i in 0..functions {
+            source.push_str(&format!(
+                "export function f{i}(e: Ev) {{ return match (e) {{ Click(x) => x, Key(code) => code.length, Idle => 0 }}; }}\n"
+            ));
+        }
+        let path = root.join("src/a.tt");
+        std::fs::write(&path, &source).unwrap();
+        let name = path.to_str().unwrap().to_owned();
+        measure(|| {
+            crate::compile(
+                &source,
+                &crate::Options {
+                    filename: Some(&name),
+                    ..crate::Options::default()
+                },
+            )
+            .expect("the file compiles")
+        })["contextual round trips"]
+    };
+    let (small, large) = (trips(20), trips(40));
+    assert!(large - small <= 20 * 16, "{small} -> {large}");
 }
 
 #[test]
@@ -470,5 +648,191 @@ fn every_request_does_linear_work_in_unclosed_type_shaped_openers() {
                 assert!(four["operand probe frames"] > 0);
             }
         }
+    }
+}
+
+fn nested_templates(depth: usize) -> String {
+    format!(
+        "declare const x: string;\nexport const y = {}x{};\n",
+        "`${".repeat(depth),
+        "}`".repeat(depth),
+    )
+}
+
+#[test]
+fn every_request_does_linear_work_in_the_nesting_depth_of_templates() {
+    let small = measure(|| every_request(&nested_templates(100)));
+    let large = measure(|| every_request(&nested_templates(200)));
+    assert_linear(&small, &large);
+    assert!(large["statement form decisions"] > 0);
+}
+
+#[test]
+fn every_request_does_linear_work_in_the_nesting_depth_of_templates_around_a_match() {
+    let source = |depth: usize| {
+        format!(
+            "declare const v: number;\nexport const y = {}match (v) {{ 1 => 1, _ => 2 }}{};\n",
+            "`a${".repeat(depth),
+            "}b`".repeat(depth),
+        )
+    };
+    let small = measure(|| every_request(&source(200)));
+    let large = measure(|| every_request(&source(400)));
+    assert_linear(&small, &large);
+    assert!(large["match-owned offsets"] > 0);
+}
+
+#[test]
+fn a_nested_template_with_a_host_candidate_collects_its_facts_once_per_level() {
+    let source = |depth: usize| {
+        format!(
+            "declare const match: any;\nexport const y = match as {{ f: () => void }};\nexport const z = {}match{};\n",
+            "`${".repeat(depth),
+            "}`".repeat(depth),
+        )
+    };
+    let small = measure(|| crate::parser::parse(&source(100)));
+    let large = measure(|| crate::parser::parse(&source(200)));
+    assert_linear(&small, &large);
+}
+
+fn statement_decisions(count: usize) -> String {
+    let declarations = "variant Opt<T> { Has(item: T), Nope }\n\
+                        import type { TResult } from \"@tt/std\";\n";
+    let bodies: String = (0..count)
+        .map(|i| {
+            format!(
+                "export function e{i}(o: Opt<number>): number {{ const Has(item: g{i}) = o else {{ return 0; }}; return g{i}; }}\n\
+                 export function i{i}(o: Opt<number>): number {{ if let Has(item) = o {{ return item; }} return 0; }}\n\
+                 export function t{i}(r: TResult<number, string>): TResult<number, string> {{ const v = try r; return {{ kind: \"Ok\", value: v }}; }}\n"
+            )
+        })
+        .collect();
+    format!("{declarations}{bodies}")
+}
+
+#[test]
+fn every_request_does_linear_work_in_the_number_of_statement_decisions() {
+    let small = measure(|| every_request(&statement_decisions(100)));
+    let large = measure(|| every_request(&statement_decisions(200)));
+    for name in [
+        "function body table entries",
+        "statements beside an edit",
+        "completion scope candidates",
+    ] {
+        assert!(
+            small.get(name).is_some_and(|&work| work > 0),
+            "{name}: {small:?}"
+        );
+    }
+    assert_linear(&small, &large);
+}
+
+fn erroring_project(name: &str, count: usize) -> (crate::test_workspace::Workspace, PathBuf) {
+    let root = crate::test_workspace::Workspace::in_repo_with_subdir(name, "src");
+    std::fs::write(
+        root.join("tsconfig.json"),
+        r#"{ "compilerOptions": { "strict": true, "target": "esnext", "module": "preserve", "moduleResolution": "bundler", "noEmit": true, "skipLibCheck": true }, "include": ["src"] }"#,
+    )
+    .unwrap();
+    let functions = |prefix: &str| -> String {
+        (0..count)
+            .map(|i| {
+                format!(
+                    "export function {prefix}{i}(r: number): number {{ const v: string = r; return v; }}\n"
+                )
+            })
+            .collect()
+    };
+    std::fs::write(
+        root.join("src/main.tt"),
+        format!(
+            "{}export const m = (s: number) => match (s) {{ 1 => \"é\", _ => s }};\n",
+            functions("t")
+        ),
+    )
+    .unwrap();
+    std::fs::write(root.join("src/side.ts"), functions("s")).unwrap();
+    let canonical = root.canonicalize().unwrap();
+    (root, canonical)
+}
+
+#[test]
+fn a_check_measures_each_file_once_however_many_diagnostics_it_reports() {
+    if !toolchain_present() {
+        return;
+    }
+    let check = |name: &str, count: usize| {
+        let (_workspace, root) = erroring_project(name, count);
+        let engine = crate::engine::Engine::new(None);
+        let mut project = engine
+            .open_project(
+                &[root.join("src").to_string_lossy().into_owned()],
+                &crate::engine::ProjectOptions::default(),
+            )
+            .unwrap();
+        let files = project.initial_files();
+        let snapshot = project.update(&files).unwrap();
+        let mut reported = 0;
+        let work = measure(|| {
+            reported = project
+                .check(&snapshot, &crate::engine::CheckRequest::default())
+                .unwrap()
+                .diagnostics
+                .len();
+        });
+        (reported, work)
+    };
+    let (small_reported, small) = check("measured-once-small", 20);
+    let (large_reported, large) = check("measured-once-large", 40);
+    assert_eq!(small_reported, 80);
+    assert_eq!(large_reported, 160);
+    for name in ["line measurements", "utf-16 measurements", "utf-16 scans"] {
+        let before = small.get(name).copied().unwrap_or(0);
+        let after = large.get(name).copied().unwrap_or(0);
+        assert_eq!(
+            before, after,
+            "{name}: {before} for {small_reported} diagnostics but {after} for {large_reported}"
+        );
+    }
+}
+
+#[test]
+fn compiling_maps_each_projected_span_once_for_nested_tt_values() {
+    let chain = |count| {
+        format!(
+            "export variant V {{ A, B }}\ndeclare const v: V;\nexport const x = {};\n",
+            vec!["match (v) { A => 1, B => 2 }"; count].join(" + "),
+        )
+    };
+    let small = measure(|| every_request(&chain(100)));
+    let large = measure(|| every_request(&chain(200)));
+    assert_linear(&small, &large);
+    assert!(large["projection span lookups"] > 0);
+}
+
+fn try_operands(count: usize, joined: impl Fn(Vec<&str>) -> String) -> String {
+    format!(
+        "type R = {{ kind: \"Ok\"; value: number }} | {{ kind: \"Err\"; error: string }};\n\
+         declare function g(): R;\ndeclare function h(...values: number[]): number;\n\
+         export function f(): R {{\n  const v = {};\n  return {{ kind: \"Ok\", value: v }};\n}}\n",
+        joined(vec!["try g()"; count]),
+    )
+}
+
+#[test]
+fn compiling_does_linear_work_in_the_number_of_try_operands_of_one_expression() {
+    let compile = |source: String| {
+        crate::compile(&source, &crate::Options::default()).expect("the file compiles");
+    };
+    for joined in [
+        (|operands: Vec<&str>| operands.join(" + ")) as fn(Vec<&str>) -> String,
+        |operands| format!("h({})", operands.join(", ")),
+    ] {
+        let small = measure(|| compile(try_operands(100, joined)));
+        let large = measure(|| compile(try_operands(200, joined)));
+        assert_linear(&small, &large);
+        assert!(large["scheduled input visits"] > 0);
+        assert!(large["planned input visits"] > 0);
     }
 }

@@ -1,0 +1,51 @@
+=== aCompletedCallCalleeKeepsItsOwnTtValues.tt ===
+const h = (x: number) => x + 1;
+>h : const h: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+function f2(...a: unknown[]) { return a; }
+>f2 : function f2(...a: unknown[]): unknown[]
+>a : (parameter) a: unknown[]
+>a : (parameter) a: unknown[]
+variant V { A(n: number), B }
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => V
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+export function F(v: V) {
+>F : function F(v: V): unknown[]
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  return f2(((w: number) => w |> h)(match (v) { A(n) => n, B => -1 }), match (v) { A => 1, B => 2 });
+>f2 : function f2(...a: unknown[]): unknown[]
+>w : (parameter) w: number
+>w : (parameter) w: number
+>h : const h: (x: number) => number
+>v : (parameter) v: V
+>n : const n: number
+>n : const n: number
+>v : (parameter) v: V
+console.log(F(V.A(1)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>F : function F(v: V): unknown[]
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => V
+

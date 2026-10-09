@@ -501,7 +501,7 @@ fn an_imported_field_error_is_identical_on_typed_cli_and_server_paths() {
     let out = check(&dir);
     assert!(
         out.contains("case `Card` has no field `brnad`")
-            && out.contains("a field with a similar name exists: `brand`")
+            && out.contains("a field with a similar name exists: `brand: brnad`")
             && !out.contains("type mismatch:"),
         "the typed CLI reports the source cause only: {out}"
     );
@@ -513,7 +513,7 @@ fn an_imported_field_error_is_identical_on_typed_cli_and_server_paths() {
         .find(|diagnostic| diagnostic["code"] == "unknown-field")
         .unwrap_or_else(|| panic!("missing imported field diagnostic: {answer}"));
     assert_eq!(source_slice(source, field), "brnad");
-    assert_eq!(field["suggestions"][0]["edit"]["replacement"], "brand");
+    assert_eq!(field["suggestions"][0]["edit"]["replacement"], "brand: brnad");
     assert!(
         diagnostics
             .iter()

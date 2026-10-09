@@ -1,0 +1,68 @@
+=== aValPassJudgesTheDeclarationTheCalleeResolvesTo.tt ===
+type Cfg = { a: number };
+>Cfg : type Cfg = {
+>       a: number;
+>   }
+>a : (property) a: number
+function h(y: Cfg) { y.a = 1; }
+>h : function h(y: Cfg): void
+>y : (parameter) y: Cfg
+>Cfg : type Cfg = {
+>       a: number;
+>   }
+>y : (parameter) y: Cfg
+>a : (property) a: number
+export function outer(val cfg: Cfg) { h(cfg); }
+>outer : function outer(cfg: Cfg): void
+>cfg : (parameter) cfg: Cfg
+>Cfg : type Cfg = {
+>       a: number;
+>   }
+>h : function h(y: Cfg): void
+>cfg : (parameter) cfg: Cfg
+export function inner(val cfg: Cfg) {
+>inner : function inner(cfg: Cfg): Cfg
+>cfg : (parameter) cfg: Cfg
+>Cfg : type Cfg = {
+>       a: number;
+>   }
+  function h(val y: Cfg) { return y; }
+>h : function h(y: Cfg): Cfg
+>y : (parameter) y: Cfg
+>Cfg : type Cfg = {
+>       a: number;
+>   }
+>y : (parameter) y: Cfg
+  return h(cfg);
+>h : function h(y: Cfg): Cfg
+>cfg : (parameter) cfg: Cfg
+export function shadowed(val cfg: Cfg, h: (y: Cfg) => void) { h(cfg); }
+>shadowed : function shadowed(cfg: Cfg, h: (y: Cfg) => void): void
+>cfg : (parameter) cfg: Cfg
+>Cfg : type Cfg = {
+>       a: number;
+>   }
+>h : (parameter) h: (y: Cfg) => void
+>y : (parameter) y: Cfg
+>Cfg : type Cfg = {
+>       a: number;
+>   }
+>h : (parameter) h: (y: Cfg) => void
+>cfg : (parameter) cfg: Cfg
+export function later(val cfg: Cfg) { return set(cfg); }
+>later : function later(cfg: Cfg): void
+>cfg : (parameter) cfg: Cfg
+>Cfg : type Cfg = {
+>       a: number;
+>   }
+>set : const set: (y: Cfg) => void
+>cfg : (parameter) cfg: Cfg
+const set = (y: Cfg) => { y.a = 2; };
+>set : const set: (y: Cfg) => void
+>y : (parameter) y: Cfg
+>Cfg : type Cfg = {
+>       a: number;
+>   }
+>y : (parameter) y: Cfg
+>a : (property) a: number
+

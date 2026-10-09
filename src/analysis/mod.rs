@@ -107,7 +107,10 @@ pub(crate) struct SemanticFile {
 /// This is the one thing the declaration table cannot work out — a field's
 /// declared type text may be a type parameter, or name a union no tt
 /// declaration describes (`docs/design/rust-parity-analysis.md` §10.3).
-pub(crate) type PayloadAlphabet = ((String, String), Vec<String>);
+/// The alphabet the checker gave one nested pattern's position: the
+/// `(constructor, field)` column, the byte offset of the nested pattern's
+/// tag it was asked at, and the tags the position admits there.
+pub(crate) type PayloadAlphabet = ((String, String), usize, Vec<String>);
 
 /// One variant of the analysis' declaration table.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -115,6 +118,10 @@ pub struct DeclaredVariant {
     /// The variant's name in the analyzed file's scope (an import alias, or
     /// `ns.Name` for a namespace import).
     pub name: String,
+    /// The other names a declared type writes this variant with in the
+    /// file's scope: a standard-library type such as `TOption` for the
+    /// built-in `Option`, as its import binds it.
+    pub type_names: Vec<String>,
     /// Where the declaration came from.
     pub origin: Origin,
     /// The constructors, in declaration order.
@@ -201,6 +208,7 @@ pub struct UnresolvedName {
     /// a match pattern. `None` for `if let` and let-else sites, which have no
     /// exhaustiveness or match-glue consequences to suppress.
     pub match_owner: Option<usize>,
+    pub(crate) replacement: Option<String>,
 }
 
 /// What kind of name an [`UnresolvedName`] is.
@@ -303,6 +311,9 @@ pub struct AnalyzedArm {
     pub body_start: usize,
     /// End of the body span.
     pub body_end: usize,
+    /// Byte offset just past the arm's final token — a block body's closing
+    /// brace included, any separator or trailing comment excluded.
+    pub end: usize,
     /// Every binding occurrence in the arm's pattern, alternatives kept
     /// apart — the span-keyed map.
     pub pattern_bindings: Vec<PatternBinding>,
@@ -719,6 +730,7 @@ fn attach_resolution(
             origin: variant_origin(miss.against),
             tag: miss.tag.clone(),
             suggestion: miss.suggestion.clone(),
+            replacement: miss.replacement.clone(),
             match_owner,
         });
     }

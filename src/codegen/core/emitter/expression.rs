@@ -12,13 +12,47 @@ impl<'a> Emitter<'a> {
         );
         let inner = match apply.head {
             Some(head) => {
-                let mut acc = guard_line_comment(self.emit_expr(head).trim(), 0, self.source_kind);
+                let head_rope = self.emit_expr(head).trim();
+                let head_group = self.source_group(&head_rope);
+                let mut acc = if head_group {
+                    head_rope
+                } else {
+                    guard_line_comment(head_rope, 0, self.source_kind)
+                };
                 let mut accumulator_is_inert = self.expression_is_inert(head);
                 // Where the value flowing into the current step was
                 // produced: the head, then each step in turn — the place a
                 // label on a rejected value points back at.
                 let mut produced = self.span(apply.node);
+                let mut shape: Option<String> = None;
+                let mut previous_end = super::structured_expr_span(self.semantic, self.core, head)
+                    .map(|span| span.end);
                 for step in &apply.steps {
+                    let value_span =
+                        super::structured_expr_span(self.semantic, self.core, step.value);
+                    let gap = previous_end
+                        .zip(value_span)
+                        .filter(|(end, value)| *end <= value.start)
+                        .map(|(end, value)| SourceSpan {
+                            start: end,
+                            end: value.start,
+                        });
+                    previous_end = value_span.map(|span| span.end);
+                    let kind = self.source_kind;
+                    let acc_grouped = match &shape {
+                        Some(shape) => grouping_required(shape, kind),
+                        None if head_group => false,
+                        None => needs_grouping(&acc, kind),
+                    };
+                    let acc_closed = || match &shape {
+                        Some(shape) => {
+                            crate::lexer::is_member_receiver(shape, 0, shape.len(), kind)
+                        }
+                        None if head_group => true,
+                        None => acc.resolved_text().is_some_and(|text| {
+                            crate::lexer::is_member_receiver(&text, 0, text.len(), kind)
+                        }),
+                    };
                     let step_span = self.span(step.node);
                     let context = Some((produced.start, produced.end));
                     let body =
@@ -31,9 +65,14 @@ impl<'a> Emitter<'a> {
                     // step consuming it. Verbatim spans still resolve
                     // exactly; only glue-crossing spans re-home here.
                     let mut input = Rope::new();
+                    let next_shape: Option<String>;
                     match step.mode {
                         ApplyMode::Postfix { .. } => {
-                            push_receiver(&mut input, acc, self.source_kind);
+                            let closed = acc_closed();
+                            next_shape = body
+                                .resolved_text()
+                                .map(|text| format!("{}{text}", if closed { "x" } else { "(x)" }));
+                            push_parenthesized_unless(&mut input, acc, closed);
                             next.anchored_with_context(
                                 AnchorKind::Pipe,
                                 step_span.start,
@@ -42,13 +81,27 @@ impl<'a> Emitter<'a> {
                                 context,
                                 input,
                             );
+                            push_gap(self.source, &mut next, "", gap, "");
                             next.append(body);
                         }
                         ApplyMode::Call => {
                             if accumulator_is_inert {
+                                next_shape = body.resolved_text().map(|text| {
+                                    if crate::lexer::is_primary_expression(
+                                        &text,
+                                        0,
+                                        text.len(),
+                                        kind,
+                                    ) {
+                                        format!("{text}(x)")
+                                    } else {
+                                        "(x)(x)".to_owned()
+                                    }
+                                });
                                 push_callee(&mut next, body, self.source_kind);
                                 next.push_lit("(");
-                                push_grouped(&mut input, acc, self.source_kind);
+                                push_gap(self.source, &mut input, "", gap, "");
+                                push_grouped_as(&mut input, acc, acc_grouped);
                                 next.anchored_with_context(
                                     AnchorKind::Pipe,
                                     step_span.start,
@@ -61,7 +114,9 @@ impl<'a> Emitter<'a> {
                             } else if let Some(member) =
                                 self.member_apply_steps.get(&step.value).copied()
                             {
-                                push_grouped(&mut input, acc, self.source_kind);
+                                next_shape = Some("(x)(x)".to_owned());
+                                push_gap(self.source, &mut input, "", gap, "");
+                                push_grouped_as(&mut input, acc, acc_grouped);
                                 let mut call = Rope::new();
                                 call.anchored_with_context(
                                     AnchorKind::Pipe,
@@ -94,7 +149,8 @@ impl<'a> Emitter<'a> {
                                     piped,
                                 );
                                 next.push_lit("))(");
-                                push_grouped(&mut input, acc, self.source_kind);
+                                next_shape = Some("(x)(x)".to_owned());
+                                push_grouped_as(&mut input, acc, acc_grouped);
                                 next.anchored_with_context(
                                     AnchorKind::Pipe,
                                     step_span.start,
@@ -103,13 +159,14 @@ impl<'a> Emitter<'a> {
                                     context,
                                     input,
                                 );
-                                next.push_lit(", ");
+                                push_gap(self.source, &mut next, ", ", gap, "");
                                 push_grouped(&mut next, body, self.source_kind);
                                 next.push_lit(")");
                             } else {
                                 self.used_pipe.set(true);
                                 next.push_lit(format!("{}(", self.generated_name("$tt_ap")));
-                                push_grouped(&mut input, acc, self.source_kind);
+                                next_shape = Some("x(x)".to_owned());
+                                push_grouped_as(&mut input, acc, acc_grouped);
                                 next.anchored_with_context(
                                     AnchorKind::Pipe,
                                     step_span.start,
@@ -118,14 +175,15 @@ impl<'a> Emitter<'a> {
                                     context,
                                     input,
                                 );
-                                next.push_lit(", ");
+                                push_gap(self.source, &mut next, ", ", gap, "");
                                 push_grouped(&mut next, body, self.source_kind);
                                 next.push_lit(")");
                             }
                         }
                         ApplyMode::Missing => {
                             next.push_lit(format!("{RECOVERED_VALUE}("));
-                            push_grouped(&mut input, acc, self.source_kind);
+                            next_shape = Some("x(x)".to_owned());
+                            push_grouped_as(&mut input, acc, acc_grouped);
                             next.anchored_with_context(
                                 AnchorKind::Pipe,
                                 step_span.start,
@@ -138,6 +196,7 @@ impl<'a> Emitter<'a> {
                         }
                     }
                     acc = next;
+                    shape = next_shape;
                     // A call or member operation can return any value and
                     // can have arbitrary effects. Only the original head's
                     // syntax proof can authorize inline reordering.
@@ -151,6 +210,19 @@ impl<'a> Emitter<'a> {
         let mut out = Rope::new();
         out.anchored(AnchorKind::Pipe, start, end, end, inner);
         out
+    }
+
+    fn source_group(&self, emitted: &Rope<'_>) -> bool {
+        let Some((start, end)) = emitted.source_edges() else {
+            return false;
+        };
+        let open = self
+            .tokens
+            .partition_point(|token| token.span.start < start);
+        self.tokens.get(open).is_some_and(|token| {
+            token.span.start == start && matches!(token.kind, crate::lexer::TokenKind::Punct(b'('))
+        }) && crate::lexer::Token::matching_close(self.tokens, open)
+            .is_some_and(|close| self.tokens[close].span.end == end)
     }
 
     fn emit_member_step(
@@ -315,18 +387,38 @@ impl<'a> Emitter<'a> {
         let first = steps
             .next()
             .unwrap_or_else(|| crate::ice::bug!("flow has no step"));
+        let step_gap = |previous_end: Option<usize>, step: &ApplyStep| {
+            let value = super::structured_expr_span(self.semantic, self.core, step.value)?;
+            let end = previous_end?;
+            (end <= value.start).then_some(SourceSpan {
+                start: end,
+                end: value.start,
+            })
+        };
+        let head = self.span(apply.node);
+        let mut previous_end = self.source[head.start..]
+            .starts_with("flow")
+            .then_some(head.start + "flow".len());
         let mut acc = Rope::new();
         match first.mode {
             ApplyMode::Missing => acc.push_lit(RECOVERED_VALUE),
-            _ => push_grouped(
-                &mut acc,
-                self.emit_flow_function(first.value),
-                self.source_kind,
-            ),
+            _ => {
+                push_gap(self.source, &mut acc, "", step_gap(previous_end, first), "");
+                push_grouped(
+                    &mut acc,
+                    self.emit_flow_function(first.value),
+                    self.source_kind,
+                );
+            }
         }
+        previous_end =
+            super::structured_expr_span(self.semantic, self.core, first.value).map(|span| span.end);
         let mut produced = self.span(first.node);
         for step in steps {
             self.used_flow.set(true);
+            let gap = step_gap(previous_end, step);
+            previous_end = super::structured_expr_span(self.semantic, self.core, step.value)
+                .map(|span| span.end);
             let step_span = self.span(step.node);
             // The composition built so far is what this step composes onto;
             // a mismatch on it means this step rejected it (see
@@ -346,6 +438,7 @@ impl<'a> Emitter<'a> {
                 .copied()
                 .filter(|member| member.optional && matches!(step.mode, ApplyMode::Call));
             if let Some(member) = optional_member {
+                push_gap(self.source, &mut composed, "", gap, "");
                 acc = self.emit_optional_flow_step(step.value, member, composed);
                 produced = step_span;
                 continue;
@@ -374,7 +467,7 @@ impl<'a> Emitter<'a> {
                 );
                 next.push_lit(")))(");
                 next.append(composed);
-                next.push_lit(", ");
+                push_gap(self.source, &mut next, ", ", gap, "");
                 push_grouped(&mut next, body, self.source_kind);
                 next.push_lit(")");
                 acc = next;
@@ -386,12 +479,13 @@ impl<'a> Emitter<'a> {
             match step.mode {
                 ApplyMode::Postfix { .. } => {
                     let input_name = self.generated_name("$tt_v");
-                    next.push_lit(format!(", (({input_name}) => ({input_name})"));
+                    push_gap(self.source, &mut next, ", ", gap, "");
+                    next.push_lit(format!("(({input_name}) => ({input_name})"));
                     next.append(body);
                     next.push_lit("))");
                 }
                 ApplyMode::Call => {
-                    next.push_lit(", ");
+                    push_gap(self.source, &mut next, ", ", gap, "");
                     push_grouped(&mut next, body, self.source_kind);
                     next.push_lit(")");
                 }
@@ -443,8 +537,33 @@ impl<'a> Emitter<'a> {
         } else {
             (extensions.tt, 4)
         };
-        out.push_src(&specifier[..specifier.len() - suffix_len], at);
-        out.push_lit(format!(".{extension}{}", &specifier[specifier.len() - 1..]));
+        let quote = &specifier[specifier.len() - 1..];
+        let written_suffix = if kind.is_tsx() { ".ttx" } else { ".tt" };
+        if specifier[..specifier.len() - 1].ends_with(written_suffix) {
+            out.push_src(&specifier[..specifier.len() - suffix_len], at);
+            out.push_lit(format!(".{extension}{quote}"));
+            return;
+        }
+        let value = crate::parser::decode_string(specifier)
+            .unwrap_or_else(|| crate::ice::bug!("a lifted import specifier is a complete string"));
+        let mut written = String::from(quote);
+        for c in value[..value.len() - suffix_len + 1].chars() {
+            match c {
+                '\\' => written.push_str("\\\\"),
+                '\n' => written.push_str("\\n"),
+                '\r' => written.push_str("\\r"),
+                '\u{2028}' => written.push_str("\\u2028"),
+                '\u{2029}' => written.push_str("\\u2029"),
+                '$' if quote == "`" => written.push_str("\\$"),
+                c if c.to_string() == quote => {
+                    written.push('\\');
+                    written.push(c);
+                }
+                c => written.push(c),
+            }
+        }
+        written.push_str(&format!(".{extension}{quote}"));
+        out.push_lit(written);
     }
 
     pub(super) fn emit_statement_decision(
@@ -483,11 +602,19 @@ impl<'a> Emitter<'a> {
         out.anchored(kind, span.start, span.end, span.end, inner);
     }
 
+    pub(super) fn match_leading(&self, decision: &Decision, index: usize) -> Option<SourceSpan> {
+        if index > 0 {
+            return None;
+        }
+        self.keyword_gap(decision.head, "match", decision.subjects[0].value)
+    }
+
     pub(super) fn emit_subject_initialization(
         &self,
         subject: &crate::core_ir::Subject,
         temp: &str,
         mark: NodeId,
+        leading: Option<SourceSpan>,
     ) -> Rope<'a> {
         let mut out = Rope::new();
         let continued = self
@@ -498,13 +625,12 @@ impl<'a> Emitter<'a> {
         if let Some(continued) = continued {
             out.push_lit("let ");
             out.push_mark(self.span(mark).start);
-            out.push_lit(format!("{temp};"));
-            out.push_lit(" ");
+            push_gap(self.source, &mut out, &format!("{temp};"), leading, " ");
             out.append(continued);
         } else {
             out.push_lit("const ");
             out.push_mark(self.span(mark).start);
-            out.push_lit(format!("{temp} = "));
+            push_gap(self.source, &mut out, &format!("{temp} ="), leading, " ");
             push_grouped(
                 &mut out,
                 self.emit_expr(subject.value).trim(),
@@ -525,7 +651,7 @@ impl<'a> Emitter<'a> {
         let subject = &decision.subjects[0];
         let temp = self.temp_name(subject.temporary);
         let arm = &decision.arms[0];
-        let mut out = self.emit_subject_initialization(subject, &temp, decision.head);
+        let mut out = self.emit_subject_initialization(subject, &temp, decision.head, None);
         out.push_break(0);
         out.push_lit("if (");
         let DecisionKind::LetElse {
@@ -559,8 +685,13 @@ impl<'a> Emitter<'a> {
         out.push_lit("}");
         let mut recovery = BindingRecovery::new(self, &arm.pattern);
         out.push_break(0);
-        if let Some(documentation) = self.relocated_documentation(self.span(decision.extent).start)
-        {
+        let extent = self
+            .semantic
+            .hir
+            .source_map
+            .node_extent(decision.extent)
+            .unwrap_or_else(|| self.span(decision.extent));
+        if let Some(documentation) = self.relocated_documentation(extent.start) {
             out.append(documentation);
         }
         out.append(
@@ -574,6 +705,7 @@ impl<'a> Emitter<'a> {
             .trim(),
         );
         self.push_head_comments(arm, 0, &mut out);
+        self.push_gap_comments(decision.trailing, 0, &mut out);
         Rope::scoped(out)
     }
 
@@ -596,7 +728,7 @@ impl<'a> Emitter<'a> {
         let mut out = Rope::new();
         out.push_lit("{");
         out.push_break(1);
-        out.append(self.emit_subject_initialization(subject, &temp, decision.head));
+        out.append(self.emit_subject_initialization(subject, &temp, decision.head, None));
         out.push_break(1);
         out.push_lit("if (");
         out.append(self.emit_condition(&arm.pattern, decision));
@@ -686,12 +818,13 @@ impl<'a> Emitter<'a> {
             crate::ice::bug!("match reached expression emission without a host rewrite")
         }
         out.push_lit("{");
-        for subject in &decision.subjects {
+        for (index, subject) in decision.subjects.iter().enumerate() {
             out.push_break(1);
             out.append(self.emit_subject_initialization(
                 subject,
                 &self.temp_name(subject.temporary),
                 decision.head,
+                self.match_leading(decision, index),
             ));
         }
         out.append(Rope::indented(
@@ -726,6 +859,7 @@ impl<'a> Emitter<'a> {
         if !self.core.has_statement_form(expr) {
             return None;
         }
+        let _active = self.enter_active(expr);
         // Structural parents may consume a child's owner rewrite directly
         // (for example a Result body's declaration initializer). Mark that
         // plan at the common entry point so a later source-range walk only
@@ -786,21 +920,18 @@ impl<'a> Emitter<'a> {
         continuation: &ValueContinuation<'_>,
     ) -> Rope<'a> {
         let temp = self.temp_name(propagate.temporary);
-        let mut out = self.emit_propagate_input(propagate.value, &temp);
+        let mut out = self.emit_propagate_input(propagate, &temp);
         out.push_break(0);
-        out.push_lit(format!(
-            "if ({}) {{",
-            result_failure_test(&temp, propagate.layout)
-        ));
+        self.push_failure_test(propagate, &temp, &mut out);
         out.push_break(1);
         out.append(self.emit_failure_exit(propagate, &temp));
         out.push_break(0);
         out.push_lit("}");
         out.push_break(0);
         let grouped = false;
-        out.push_lit(continuation.assignment_prefix(grouped));
+        out.push_lit(continuation.assignment_prefix(self.source, grouped));
         out.push_lit(format!("{temp}.{}", propagate.layout.payload_field));
-        out.push_lit(continuation.assignment_suffix(grouped));
+        out.push_lit(continuation.assignment_suffix(self.source, grouped));
         out.push_lit(";");
         let span = self.span(propagate.node);
         let mut anchored = Rope::new();
@@ -829,10 +960,12 @@ impl<'a> Emitter<'a> {
             || self.span(apply.node).end,
             |step| self.span(step.node).end,
         );
-        let accumulator = self
-            .value_slots
-            .get(&expr)
-            .unwrap_or_else(|| crate::ice::bug!("structured apply has no value slot"));
+        let Some(accumulator) = self.value_slots.get(&expr) else {
+            if self.owner_model {
+                crate::ice::bug!("structured apply has no value slot");
+            }
+            return None;
+        };
         let accumulator_is_host_slot = self
             .slot_exprs
             .get(&expr)
@@ -878,7 +1011,16 @@ impl<'a> Emitter<'a> {
             );
             inner.push_lit(";");
         }
+        let mut previous_end =
+            super::structured_expr_span(self.semantic, self.core, head).map(|span| span.end);
         for (index, step) in apply.steps.iter().enumerate() {
+            let value_span = super::structured_expr_span(self.semantic, self.core, step.value);
+            let gap = previous_end
+                .zip(value_span)
+                .filter(|(end, value)| *end <= value.start)
+                .map(|(end, value)| hir::Span::new(end, value.start));
+            previous_end = value_span.map(|span| span.end);
+            self.push_gap_comments(gap, 1, &mut inner);
             if step.mode == ApplyMode::Missing {
                 inner.push_break(1);
                 let input = self.pipe_input(apply, index, &piped[index]);

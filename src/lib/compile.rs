@@ -76,6 +76,9 @@ pub struct Options<'a> {
     /// entries leave bare specifiers such as `@tt/runtime` untouched for a
     /// bundler plugin to resolve.
     pub std_imports: StdImports<'a>,
+    /// The node binary the TypeScript client for contextual type analysis
+    /// runs with. `None` runs `node` from `PATH`.
+    pub node: Option<&'a std::path::Path>,
 }
 
 impl Default for Options<'_> {
@@ -89,6 +92,7 @@ impl Default for Options<'_> {
             extern_variants: &[],
             defer_to_checker: false,
             std_imports: StdImports::default(),
+            node: None,
         }
     }
 }
@@ -163,14 +167,16 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
     let semantics = analysis::coverage_semantics(source, &program, options.extern_variants);
     let core = core_ir::lower_semantic(&semantics, source, &tokens);
     let mut errors = tt_errors(source, &program, &tokens, options, &semantics);
-    if errors
-        .iter()
-        .any(|error| error.code == DiagnosticCode::ResultNoSuccessValue)
-    {
+    if errors.iter().any(|error| {
+        matches!(
+            error.code,
+            DiagnosticCode::ResultNoSuccessValue | DiagnosticCode::MatchNotExhaustive
+        )
+    }) {
         if let Err(failure) =
             codegen::lowering_plan(&semantics, &core, source, options.source_kind, &tokens)
         {
-            errors.push(verify::in_source(source, &failure));
+            push_source_error(&mut errors, source, &failure, &semantics);
         }
         suppress_discarded_result_fallthrough(&mut errors);
     }
@@ -208,6 +214,7 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
             kind: options.source_kind,
             automatic_semicolons: &automatic_semicolons,
             comments: &comments,
+            tokens: &tokens,
         },
         &plan,
         options.rewrite_imports.extensions(options.jsx_preserve),
@@ -249,10 +256,12 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
         selector_slots: flat.selector_slots,
         operand_slots: flat.operand_slots,
         asserted_slots: flat.asserted_slots,
+        restatements: flat.restatements,
         generated_names: flat.generated_names,
         declared_names: flat.declared_names,
         shared_bindings: flat.shared_bindings,
         destructured_lists: flat.destructured_lists,
+        relocated_operands: flat.relocated_operands,
         inserted: flat.inserted,
         single_line_breaks: flat.single_line_breaks,
         completion_scopes: std::mem::take(&mut plan.completion_scopes),
@@ -303,6 +312,7 @@ fn tt_errors(
             tokens,
             &parser::val_modifiers(program),
             &parser::pipeline_shapes(program),
+            &parser::arm_scopes(program),
         ));
     }
     // One order for every producer: where the reader's eye goes, top to
@@ -366,7 +376,7 @@ pub fn analyze(source: &str, options: &Options) -> Vec<Diagnostic> {
         match codegen::lowering_plan(&semantics, &core, source, options.source_kind, &tokens) {
             Ok(plan) => errors.extend(nonredundant_target_errors(&plan, &errors)),
             Err(failure) => {
-                errors.push(verify::in_source(source, &failure));
+                push_source_error(&mut errors, source, &failure, &semantics);
                 errors.extend(recovered_target_errors(
                     &failure, &semantics, &core, source, &tokens, options, &errors,
                 ));
@@ -379,6 +389,33 @@ pub fn analyze(source: &str, options: &Options) -> Vec<Diagnostic> {
         .into_iter()
         .map(diagnostics::Diagnostic::from_tt)
         .collect()
+}
+
+fn push_source_error(
+    errors: &mut Vec<TtError>,
+    source: &str,
+    failure: &codegen::LoweringFailure,
+    semantics: &analysis::SemanticFile,
+) {
+    let error = verify::in_source(source, failure);
+    if error.code == DiagnosticCode::SourceNotTypeScript
+        && let Some(at) = error.offset
+    {
+        let unread: Vec<usize> = semantics
+            .patterns
+            .matches
+            .iter()
+            .filter(|analysis| analysis.body_open <= at && at <= analysis.body_close)
+            .map(|analysis| analysis.keyword_off)
+            .collect();
+        errors.retain(|existing| {
+            existing.code != DiagnosticCode::MatchNotExhaustive
+                || !existing
+                    .offset
+                    .is_some_and(|offset| unread.contains(&offset))
+        });
+    }
+    errors.push(error);
 }
 
 /// A discarded Result makes its value-use error primary. Reporting the
@@ -436,8 +473,10 @@ pub struct ProjectionReport {
     /// Host productions whose missing syntax was materialized. Their
     /// original syntax diagnostic remains authoritative; type checking continues.
     pub syntax_repairs: Vec<(usize, usize)>,
-    /// Those of `recovered` that stood for a declaration (a malformed
-    /// variant), whose name the projection declares with the error type.
+    /// Those of `recovered` that stand for a declaration (a malformed
+    /// variant, whose name the projection declares with the error type) or
+    /// sit in an exported statement, whose declared type the placeholder
+    /// would decide.
     pub recovered_declarations: Vec<(usize, usize)>,
     /// The emission `emit` withholds from the typed program when the only
     /// thing wrong with the (recovered) file is its TypeScript: it does not
@@ -541,6 +580,7 @@ pub(crate) fn compile_projection_report_parsed(
         }
     }
     nodes.extend(recoverable_constructs(&ordinary.diagnostics));
+    let claimed_results = parser::claimed_result_blocks(program);
     // A construct the plan rejects is reported when planning reaches it, so
     // a file with several can show the next one only once the first is
     // recovered. Each round recovers at least one construct more, until the
@@ -562,6 +602,29 @@ pub(crate) fn compile_projection_report_parsed(
         let recovered_source = recover_source(source, &selected);
         let (recovered_program, recovered_tokens) =
             parser::lex_and_parse_with_kind(&recovered_source, options.source_kind);
+        // A `result` block is claimed by the direct `try` it holds; a
+        // recovery that replaced that `try` leaves the block's text as
+        // written, which TypeScript would read as code. The block it
+        // unclaimed is the construct to recover.
+        let still_claimed = parser::claimed_result_blocks(&recovered_program);
+        let unclaimed: Vec<_> = claimed_results
+            .iter()
+            .filter(|span| !still_claimed.contains(span))
+            .filter(|span| {
+                !selected
+                    .iter()
+                    .any(|outer| outer.span.start <= span.start && span.end <= outer.span.end)
+            })
+            .map(|&span| ast::RecoveryNode {
+                span,
+                kind: ast::RecoveryKind::Expression,
+            })
+            .collect();
+        if !unclaimed.is_empty() {
+            nodes = selected;
+            nodes.extend(unclaimed);
+            continue;
+        }
         let mut recovered_report = compile_report_parsed(
             &recovered_source,
             options,
@@ -619,11 +682,18 @@ pub(crate) fn compile_projection_report_parsed(
                     .map(|emit| declare_recovered_variants(emit, &selected)),
                 withheld: withheld.map(|emit| declare_recovered_variants(emit, &selected)),
                 diagnostics: ordinary.diagnostics,
-                recovered_declarations: selected
-                    .iter()
-                    .filter(|node| matches!(node.kind, ast::RecoveryKind::VariantDecl { .. }))
-                    .map(|node| (node.span.start, node.span.end))
-                    .collect(),
+                recovered_declarations: {
+                    let tokens =
+                        crate::lexer::lex_with_kind(source, 0, source.len(), options.source_kind);
+                    selected
+                        .iter()
+                        .filter(|node| {
+                            matches!(node.kind, ast::RecoveryKind::VariantDecl { .. })
+                                || in_exported_statement(source, &tokens, node.span.start)
+                        })
+                        .map(|node| (node.span.start, node.span.end))
+                        .collect()
+                },
                 recovered: selected
                     .into_iter()
                     .map(|node| (node.span.start, node.span.end))
@@ -877,7 +947,7 @@ fn report_parsed(
         // no emittable form, and the cause is reported with everything
         // else already found.
         Err(failure) => {
-            errors.push(verify::in_source(source, &failure));
+            push_source_error(&mut errors, source, &failure, &semantics);
             errors.extend(recovered_target_errors(
                 &failure, &semantics, &core, source, tokens, options, &errors,
             ));
@@ -913,6 +983,7 @@ fn report_parsed(
             kind: options.source_kind,
             automatic_semicolons: &automatic_semicolons,
             comments: &comments,
+            tokens,
         },
         &plan,
         options.rewrite_imports.extensions(options.jsx_preserve),
@@ -929,10 +1000,12 @@ fn report_parsed(
         selector_slots: flat.selector_slots,
         operand_slots: flat.operand_slots,
         asserted_slots: flat.asserted_slots,
+        restatements: flat.restatements,
         generated_names: flat.generated_names,
         declared_names: flat.declared_names,
         shared_bindings: flat.shared_bindings,
         destructured_lists: flat.destructured_lists,
+        relocated_operands: flat.relocated_operands,
         inserted: flat.inserted,
         single_line_breaks: flat.single_line_breaks,
         completion_scopes: std::mem::take(&mut plan.completion_scopes),
@@ -970,4 +1043,20 @@ fn report_parsed(
             .map(diagnostics::Diagnostic::from_tt)
             .collect(),
     }
+}
+
+fn in_exported_statement(source: &str, tokens: &[crate::lexer::Token], at: usize) -> bool {
+    let mut depth = 0usize;
+    let mut statement = None;
+    for token in tokens.iter().take_while(|token| token.span.start < at) {
+        if depth == 0 && token.facts.statement_start() {
+            statement = Some(token);
+        }
+        if token.opens_bracket() {
+            depth += 1;
+        } else if token.closes_bracket() {
+            depth = depth.saturating_sub(1);
+        }
+    }
+    statement.is_some_and(|token| &source[token.span.start..token.span.end] == "export")
 }

@@ -164,7 +164,7 @@ export function guarded(shape: Shape): string {
 
 export function code(n: number): string {
   let $tt_v2: number;
-  const $tt_v3 = (String);
+  const $tt_v3: typeof String = (String);
   {
     const $tt_m = n;
     switch ($tt_m) {

@@ -1,0 +1,37 @@
+=== main.tt ===
+variant V { A, B }
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const v = V.A as V;
+>v : const v: V
+>V : const V: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+export async function load() {
+>load : function load(): Promise<typeof import("./other")>
+  return await import("./other", match (v) { A => ({ with: {} }), B => undefined });
+>v : const v: V
+>with : (property) ImportCallOptions.with?: ImportAttributes | undefined
+

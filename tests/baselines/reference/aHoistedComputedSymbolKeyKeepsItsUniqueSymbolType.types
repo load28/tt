@@ -1,0 +1,44 @@
+=== aHoistedComputedSymbolKeyKeepsItsUniqueSymbolType.tt ===
+variant O { S(v: number), N }
+>O : type O = {
+>       kind: "S";
+>       v: number;
+>   } | {
+>       kind: "N";
+>   }
+>S : (property) S: (v: number) => O
+>v : (property) v: number
+>N : (property) N: {
+>       readonly kind: "N";
+>   }
+export function f(o: O) {
+>f : function f(o: O): number[]
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "S";
+>       v: number;
+>   } | {
+>       kind: "N";
+>   }
+  const it = { *[Symbol.iterator]() { yield 1; }, v: match (o) { S(v) => v, N => 0 } };
+>it : const it: {
+>       [Symbol.iterator](): Generator<number, void, unknown>;
+>       v: number;
+>   }
+>Symbol : var Symbol: SymbolConstructor
+>iterator : (property) SymbolConstructor.iterator: typeof Symbol.iterator
+>v : (property) v: number
+>o : (parameter) o: O
+>v : const v: number
+>v : const v: number
+  return [...it, it.v];
+>it : const it: {
+>       [Symbol.iterator](): Generator<number, void, unknown>;
+>       v: number;
+>   }
+>it : const it: {
+>       [Symbol.iterator](): Generator<number, void, unknown>;
+>       v: number;
+>   }
+>v : (property) v: number
+

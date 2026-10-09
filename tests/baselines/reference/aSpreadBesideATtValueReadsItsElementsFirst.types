@@ -1,0 +1,168 @@
+=== aSpreadBesideATtValueReadsItsElementsFirst.tt ===
+variant V { A, B }
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const o: { a: number } = { a: 1 };
+>o : const o: {
+>       a: number;
+>   }
+>a : (property) a: number
+>a : (property) a: number
+const arr = [1, 2];
+>arr : const arr: number[]
+function get(): V { o.a = 99; arr.push(7); return V.A; }
+>get : function get(): V
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>o : const o: {
+>       a: number;
+>   }
+>a : (property) a: number
+>arr : const arr: number[]
+>push : (method) Array<number>.push(...items: number[]): number
+>V : const V: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+function bump(v: V): number { o.a = 98; return v.kind === "A" ? 1 : 2; }
+>bump : function bump(v: V): number
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>o : const o: {
+>       a: number;
+>   }
+>a : (property) a: number
+>v : (parameter) v: V
+>kind : (property) kind: "A" | "B"
+export function objectScrutinee() {
+>objectScrutinee : function objectScrutinee(): {
+>       a: number;
+>       b: number;
+>   }
+  return { ...o, b: match (get()) { A => 1, B => 0 } };
+>o : const o: {
+>       a: number;
+>   }
+>b : (property) b: number
+>get : function get(): V
+export function arrayScrutinee() {
+>arrayScrutinee : function arrayScrutinee(): number[]
+  return [...arr, match (get()) { A => 1, B => 0 }];
+>arr : const arr: number[]
+>get : function get(): V
+export function objectArm(v: V) {
+>objectArm : function objectArm(v: V): {
+>       a: number;
+>       b: number;
+>   }
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+  o.a = 1;
+>o : const o: {
+>       a: number;
+>   }
+>a : (property) a: number
+  return { ...o, b: match (v) { A => bump(v), B => 0 } };
+>o : const o: {
+>       a: number;
+>   }
+>b : (property) b: number
+>v : (parameter) v: V
+>bump : function bump(v: V): number
+>v : (parameter) v: V
+export function arrayArm(v: V) {
+>arrayArm : function arrayArm(v: V): number[]
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+  arr.length = 2;
+>arr : const arr: number[]
+>length : (property) Array<number>.length: number
+  return [...arr, match (v) { A => arr.push(3), B => 0 }];
+>arr : const arr: number[]
+>v : (parameter) v: V
+>arr : const arr: number[]
+>push : (method) Array<number>.push(...items: number[]): number
+console.log(JSON.stringify(objectScrutinee()));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>objectScrutinee : function objectScrutinee(): {
+>       a: number;
+>       b: number;
+>   }
+console.log(JSON.stringify(arrayScrutinee()));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>arrayScrutinee : function arrayScrutinee(): number[]
+console.log(JSON.stringify(objectArm(V.A)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>objectArm : function objectArm(v: V): {
+>       a: number;
+>       b: number;
+>   }
+>V : const V: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+console.log(JSON.stringify(arrayArm(V.A)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>arrayArm : function arrayArm(v: V): number[]
+>V : const V: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+

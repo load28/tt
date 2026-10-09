@@ -43,6 +43,10 @@ pub(crate) enum MarkKind {
     AssertedAnnotationEnd,
     /// The receiver a nested pattern tests ([`crate::PayloadTemp`]).
     Payload,
+    /// Start of the tag literal that receiver is compared with.
+    PayloadTagStart,
+    /// End of the same literal.
+    PayloadTagEnd,
     /// Start of a value explicitly returned from a `result` block.
     ResultReturnStart,
     /// End of the same returned value.
@@ -51,12 +55,17 @@ pub(crate) enum MarkKind {
     DeclaredNameEnd,
     DestructuredListStart,
     DestructuredListEnd,
+    RelocatedOperandStart,
+    RelocatedOperandEnd,
     SharedBindingStart,
     SharedBindingOccurrence {
         end: usize,
         shorthand: bool,
+        declared: bool,
     },
     SharedBindingEnd,
+    RestatementStart,
+    RestatementEnd,
     /// The glue after it is written for the source at `src`, a construct
     /// part that starts there (a match arm), so the printer lays it out as
     /// that source's: on one line with it when a directive governs that line.
@@ -192,6 +201,9 @@ struct TargetFile<'a> {
     /// The original source, when the caller can supply it — required for
     /// the preservation check's whitespace classification.
     source: Option<&'a str>,
+    /// Where each line comment of the source ends, in order: copied text
+    /// ending there ends its line, whatever is written after it.
+    line_comment_ends: Vec<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -355,6 +367,7 @@ impl<'a> TargetFile<'a> {
             len: rope.len,
             source_len,
             source: None,
+            line_comment_ends: Vec::new(),
         }
     }
 
@@ -709,24 +722,36 @@ impl<'a> TargetFile<'a> {
                 .any(|statement| statement.start <= at && at <= statement.line_end)
         };
         let mut following: Vec<(Option<usize>, Option<usize>)> = Vec::new();
+        let mut line_breaks: Vec<Option<usize>> = Vec::new();
         if !governed.is_empty() {
             following = vec![(None, None); self.pieces.len()];
+            line_breaks = vec![None; self.pieces.len()];
             let mut next = (None, None);
+            let mut point = None;
             for (index, piece) in self.pieces.iter().enumerate().rev() {
                 following[index] = next;
-                if let TargetPiece::Source {
-                    origin: ExactOrigin { start, .. },
-                    ..
-                } = piece
-                {
-                    next.0 = Some(*start);
-                    if governed_line(*start) {
-                        next.1 = Some(*start);
+                match piece {
+                    TargetPiece::Source {
+                        origin: ExactOrigin { start, .. },
+                        ..
+                    } => {
+                        next.0 = Some(*start);
+                        if governed_line(*start) {
+                            next.1 = Some(*start);
+                        }
+                        point = Some(*start);
                     }
+                    TargetPiece::Mark {
+                        src,
+                        kind: MarkKind::SourcePoint,
+                    } => point = Some(*src),
+                    TargetPiece::Break { .. } => line_breaks[index] = point.take(),
+                    _ => {}
                 }
             }
         }
         let mut previous_source_end: Option<usize> = None;
+        let mut crossed: Option<(usize, usize)> = None;
         let mut single_line_breaks = Vec::new();
         let mut out = String::with_capacity(self.len + self.len / 8);
         let mut scopes: Vec<String> = Vec::new();
@@ -738,12 +763,16 @@ impl<'a> TargetFile<'a> {
         let mut selector_slots = Vec::new();
         let mut operand_slots = Vec::new();
         let mut asserted_slots = Vec::new();
+        let mut restatements: Vec<(usize, usize)> = Vec::new();
         let mut declared_names: Vec<DeclaredName> = Vec::new();
         let mut shared_bindings: Vec<SharedBinding> = Vec::new();
         let mut destructured_lists: Vec<crate::DestructuredList> = Vec::new();
+        let mut relocated_operands: Vec<crate::RelocatedOperand> = Vec::new();
+        let mut open_operands: Vec<usize> = Vec::new();
         let mut anchors: Vec<EmitAnchor> = Vec::new();
         let mut inserted: Vec<crate::InsertedGlue> = Vec::new();
         let mut open: Vec<OpenAnchor> = Vec::new();
+        let mut comment_open = false;
         for (index, piece) in self.pieces.iter().enumerate() {
             let (next_source, next_governed) = following.get(index).copied().unwrap_or_default();
             let single_line = match (previous_source_end, next_source, next_governed) {
@@ -855,7 +884,24 @@ impl<'a> TargetFile<'a> {
                 } => payloads.push(PayloadTemp {
                     src: *src,
                     out: out.len(),
+                    tag: (out.len(), out.len()),
                 }),
+                TargetPiece::Mark {
+                    src,
+                    kind: MarkKind::PayloadTagStart,
+                } => {
+                    if let Some(payload) = payloads.last_mut().filter(|p| p.src == *src) {
+                        payload.tag = (out.len(), out.len());
+                    }
+                }
+                TargetPiece::Mark {
+                    src,
+                    kind: MarkKind::PayloadTagEnd,
+                } => {
+                    if let Some(payload) = payloads.last_mut().filter(|p| p.src == *src) {
+                        payload.tag.1 = out.len();
+                    }
+                }
                 TargetPiece::Mark {
                     src,
                     kind: MarkKind::ResultReturnStart,
@@ -923,6 +969,32 @@ impl<'a> TargetFile<'a> {
                     list.out_end = out.len();
                 }
                 TargetPiece::Mark {
+                    src,
+                    kind: MarkKind::RelocatedOperandStart,
+                } => {
+                    open_operands.push(relocated_operands.len());
+                    relocated_operands.push(crate::RelocatedOperand {
+                        src: *src,
+                        src_end: *src,
+                        out: out.len(),
+                        out_end: out.len(),
+                    });
+                }
+                TargetPiece::Mark {
+                    src,
+                    kind: MarkKind::RelocatedOperandEnd,
+                } => {
+                    let operand = open_operands
+                        .pop()
+                        .map(|index| &mut relocated_operands[index])
+                        .filter(|operand| operand.src <= *src)
+                        .unwrap_or_else(|| {
+                            crate::ice::bug!("relocated operand end has no matching start")
+                        });
+                    operand.src_end = *src;
+                    operand.out_end = out.len();
+                }
+                TargetPiece::Mark {
                     kind: MarkKind::SharedBindingStart,
                     ..
                 } => shared_bindings.push(SharedBinding {
@@ -932,7 +1004,12 @@ impl<'a> TargetFile<'a> {
                 }),
                 TargetPiece::Mark {
                     src,
-                    kind: MarkKind::SharedBindingOccurrence { end, shorthand },
+                    kind:
+                        MarkKind::SharedBindingOccurrence {
+                            end,
+                            shorthand,
+                            declared,
+                        },
                 } => shared_bindings
                     .last_mut()
                     .filter(|binding| binding.out_end == binding.out)
@@ -944,7 +1021,24 @@ impl<'a> TargetFile<'a> {
                         src: *src,
                         src_end: *end,
                         shorthand: *shorthand,
+                        declared: *declared,
                     }),
+                TargetPiece::Mark {
+                    kind: MarkKind::RestatementStart,
+                    ..
+                } => restatements.push((out.len(), out.len())),
+                TargetPiece::Mark {
+                    kind: MarkKind::RestatementEnd,
+                    ..
+                } => {
+                    restatements
+                        .last_mut()
+                        .filter(|(start, end)| start == end)
+                        .unwrap_or_else(|| {
+                            crate::ice::bug!("restatement end has no matching start")
+                        })
+                        .1 = out.len();
+                }
                 TargetPiece::Mark {
                     kind: MarkKind::SharedBindingEnd,
                     ..
@@ -961,10 +1055,57 @@ impl<'a> TargetFile<'a> {
                 TargetPiece::ScopeClose => {
                     scopes.pop();
                 }
+                TargetPiece::Break { depth } if comment_open => {
+                    comment_open = false;
+                    out.push_str(newline);
+                    if let Some(base) = scopes.last() {
+                        out.push_str(base);
+                    }
+                    for _ in 0..*depth {
+                        out.push_str(INDENT);
+                    }
+                }
+                TargetPiece::Generated { text, .. }
+                    if comment_open && !text.is_empty() && !text.starts_with(['\n', '\r']) =>
+                {
+                    comment_open = false;
+                    let indent = line_indent(&out).to_owned();
+                    out.push_str(newline);
+                    out.push_str(&indent);
+                    if single_line && text.contains('\n') {
+                        single_line_breaks.push(out.len());
+                        out.push_str(&single_line_text(text));
+                    } else {
+                        push_generated(&mut out, text, newline);
+                    }
+                }
                 TargetPiece::Break { .. } if single_line => {
-                    single_line_breaks.push(out.len());
-                    if !out.ends_with(' ') {
-                        out.push(' ');
+                    let gap = previous_source_end.zip(line_breaks[index]);
+                    let source_lines = match (self.source, gap) {
+                        (Some(source), Some((previous, next)))
+                            if previous < next && crossed != gap =>
+                        {
+                            source[previous..next].matches('\n').count()
+                        }
+                        _ => 0,
+                    };
+                    if source_lines > 0 {
+                        crossed = gap;
+                        let (_, next) = gap.unwrap_or_default();
+                        let source = self.source.unwrap_or_default();
+                        let line = source[..next].rfind('\n').map_or(0, |at| at + 1);
+                        let indent = &source[line..next];
+                        let indent =
+                            &indent[..indent.len() - indent.trim_start_matches([' ', '\t']).len()];
+                        for _ in 0..source_lines {
+                            out.push_str(newline);
+                        }
+                        out.push_str(indent);
+                    } else {
+                        single_line_breaks.push(out.len());
+                        if !out.ends_with(' ') {
+                            out.push(' ');
+                        }
                     }
                 }
                 TargetPiece::Break { depth } => {
@@ -986,6 +1127,16 @@ impl<'a> TargetFile<'a> {
                     origin: ExactOrigin { start, .. },
                 } => {
                     previous_source_end = Some(start + text.len());
+                    if comment_open && !text.is_empty() && !text.starts_with(['\n', '\r']) {
+                        let indent = line_indent(&out).to_owned();
+                        out.push_str(newline);
+                        out.push_str(&indent);
+                    }
+                    comment_open = !text.is_empty()
+                        && self
+                            .line_comment_ends
+                            .binary_search(&(start + text.len()))
+                            .is_ok();
                     let at = out.len();
                     if let Some(last) = mappings.last_mut()
                         && last.src + last.len == *start
@@ -1006,6 +1157,7 @@ impl<'a> TargetFile<'a> {
         if result_returns.iter().any(|mark| mark.out == mark.out_end) {
             crate::ice::bug!("Result return start has no matching end")
         }
+        debug_assert!(crate::typescript::mapper::in_output_order(&mappings));
         marks.sort_by_key(|mark| mark.out);
         payloads.sort_by_key(|mark| mark.out);
         result_returns.sort_by_key(|mark| mark.out);
@@ -1020,10 +1172,12 @@ impl<'a> TargetFile<'a> {
             selector_slots,
             operand_slots,
             asserted_slots,
+            restatements,
             generated_names: std::collections::HashSet::new(),
             declared_names,
             shared_bindings,
             destructured_lists,
+            relocated_operands,
             inserted,
             support_imports: Vec::new(),
             commonjs: false,

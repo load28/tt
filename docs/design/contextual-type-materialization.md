@@ -80,7 +80,14 @@ $tt_v0 = $tt_a0.value;
 ```
 
 Every other value is written directly, as before: `$tt_v0 = 1;`,
-`$tt_v0 = g();`.
+`$tt_v0 = g();`. That includes an object literal none of whose properties,
+methods or accessors is typed by context (`$tt_v0 = { a: n };`): carrying it
+would widen it into a type that is no longer an object literal type, and a
+union of object literal types reads a property one of them lacks as
+`undefined` (TASK-781). When two or more values written to a join are object
+literal types, the join is the widened type of the storage where all of its
+writes reach it, which adds each sibling's missing property as optional
+`undefined`, as a declaration initialized with their union is typed.
 
 A logical operation writes its left operand to operand storage in the test
 of the `if` that branches on it (`if ($tt_v0 = l)`, TASK-595), where no

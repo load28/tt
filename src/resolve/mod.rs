@@ -225,6 +225,14 @@ pub struct VariantDef {
     /// The variants, in declaration order — a [`VariantRef`]'s index
     /// indexes this.
     pub variants: Vec<VariantDecl>,
+    pub(crate) scope: Option<Span>,
+}
+
+impl VariantDef {
+    pub(crate) fn visible_at(&self, at: usize) -> bool {
+        self.scope
+            .is_none_or(|scope| scope.start <= at && at < scope.end)
+    }
 }
 
 /// Where a definition came from — what a diagnostic names.
@@ -339,6 +347,9 @@ pub struct UnresolvedUse {
     /// only: a case suggestion comes from `against`'s own variants, a
     /// field suggestion from the named case's own fields.
     pub suggestion: String,
+    /// The text that replaces the name, when one names something the site
+    /// does not already cover.
+    pub(crate) replacement: Option<String>,
 }
 
 /// What kind of name an [`UnresolvedUse`] is.
@@ -401,6 +412,7 @@ impl Resolver {
                         origin: DeclOrigin::Local(decl.node),
                         generics: decl.generics.clone(),
                         variants,
+                        scope: decl.scope,
                     },
                     hir.source_map.node_span(decl.node),
                 ))
@@ -441,25 +453,59 @@ impl Resolver {
                             }),
                         })
                         .collect(),
+                    scope: None,
                 },
                 None,
                 hir,
             );
         }
+        let mut builtins = HashMap::new();
         for (name, generics, variants) in builtin_variants() {
             if self.resolution.type_ns.contains_key(&name) {
                 continue; // shadowed by a local or imported declaration
             }
             self.declare_variant(
-                name,
+                name.clone(),
                 VariantDef {
                     origin: DeclOrigin::Builtin,
                     generics: generics.to_string(),
                     variants,
+                    scope: None,
                 },
                 None,
                 hir,
             );
+            builtins.insert(name.clone(), self.resolution.type_ns[&name]);
+        }
+        for item in &hir.items {
+            let hir::Item::Import(import) = item else {
+                continue;
+            };
+            let hir::ImportKind::Std(module) = import.kind else {
+                continue;
+            };
+            let bound: Vec<(String, &str)> = match &import.names {
+                hir::ImportNames::Named(entries) => entries
+                    .iter()
+                    .filter_map(|(name, alias)| {
+                        let builtin = std_builtin_type(module, name)?;
+                        Some((alias.clone().unwrap_or_else(|| name.clone()), builtin))
+                    })
+                    .collect(),
+                hir::ImportNames::Namespace(namespace) => STD_BUILTIN_TYPES
+                    .iter()
+                    .filter_map(|&(name, _)| {
+                        let builtin = std_builtin_type(module, name)?;
+                        Some((format!("{namespace}.{name}"), builtin))
+                    })
+                    .collect(),
+                hir::ImportNames::None => Vec::new(),
+            };
+            for (name, builtin) in bound {
+                if let Some(&def) = builtins.get(builtin) {
+                    self.resolution.type_ns.entry(name).or_insert(def);
+                }
+            }
         }
     }
 
@@ -519,7 +565,11 @@ impl Resolver {
             for arm in &site.arms {
                 collect_position_tags(hir, arm.pattern, position, positions, &mut tags);
             }
-            let subject = self.identify(&tags);
+            let at = hir
+                .source_map
+                .node_span(site.node)
+                .map_or(0, |span| span.start);
+            let subject = self.identify(&tags, at);
             // Resolve this position's constructor uses against the
             // identified variant. A site with no matching case provides no
             // declaration evidence: its subject may be a hand-written
@@ -547,7 +597,7 @@ impl Resolver {
     /// module docs): a variant containing **every** tag, in shadowing order;
     /// otherwise the unique variant containing the most of them (at least
     /// one); a tie or no overlap identifies nothing.
-    fn identify(&self, tags: &[&str]) -> Option<DefId> {
+    fn identify(&self, tags: &[&str], at: usize) -> Option<DefId> {
         if tags.is_empty() {
             return None;
         }
@@ -556,8 +606,8 @@ impl Resolver {
             .defs
             .iter()
             .filter_map(|(id, def)| match &def.kind {
-                DefKind::Variant(data) => Some((id, data)),
-                DefKind::VariantValue { .. } => None,
+                DefKind::Variant(data) if data.visible_at(at) => Some((id, data)),
+                DefKind::Variant(_) | DefKind::VariantValue { .. } => None,
             })
             .filter(|(id, _)| {
                 // Only names visible after shadowing count: a replaced
@@ -682,10 +732,22 @@ impl Resolver {
                         .resolution
                         .variant_of(variant_def)
                         .expect("the id came from the variant table");
-                    nearest(&path.name, data.variants.iter().map(|v| v.name.as_str()))
+                    let covered = cases_covered_beside(hir, site, path.node);
+                    nearest(&path.name, data.variants.iter().map(|v| v.name.as_str())).map(
+                        |suggestion| {
+                            let replacement = nearest(
+                                &path.name,
+                                data.variants
+                                    .iter()
+                                    .map(|v| v.name.as_str())
+                                    .filter(|name| !covered.contains(name)),
+                            );
+                            (suggestion, replacement)
+                        },
+                    )
                 };
                 self.resolution.uses.insert(path.node, Res::Unresolved);
-                if let Some(suggestion) = suggestion {
+                if let Some((suggestion, replacement)) = suggestion {
                     self.resolution.unresolved.push(UnresolvedUse {
                         site,
                         node: path.node,
@@ -693,6 +755,7 @@ impl Resolver {
                         kind: UseKind::Case,
                         against: variant_def,
                         tag: None,
+                        replacement,
                         suggestion,
                     });
                 }
@@ -771,6 +834,12 @@ impl Resolver {
                     );
                     self.resolution.uses.insert(field_pat.node, Res::Unresolved);
                     if let Some(suggestion) = suggestion {
+                        let replacement = match &field_pat.binding {
+                            FieldBinding::Named { alias: None } => {
+                                format!("{suggestion}: {}", field_pat.name)
+                            }
+                            _ => suggestion.clone(),
+                        };
                         self.resolution.unresolved.push(UnresolvedUse {
                             site,
                             node: field_pat.node,
@@ -779,6 +848,7 @@ impl Resolver {
                             against: variant.variant_def,
                             tag: Some(variant_name.clone()),
                             suggestion,
+                            replacement: Some(replacement),
                         });
                     }
                 }
@@ -857,6 +927,22 @@ fn collect_position_tags_grown<'h>(
     }
 }
 
+const STD_BUILTIN_TYPES: [(&str, &str); 2] = [("TOption", "Option"), ("TResult", "Result")];
+
+fn std_builtin_type(module: crate::StdModule, name: &str) -> Option<&'static str> {
+    let builtin = STD_BUILTIN_TYPES
+        .iter()
+        .find(|(exported, _)| *exported == name)?
+        .1;
+    let exports = match module {
+        crate::StdModule::Types => true,
+        crate::StdModule::Option => builtin == "Option",
+        crate::StdModule::Result => builtin == "Result",
+        crate::StdModule::Runtime => false,
+    };
+    exports.then_some(builtin)
+}
+
 /// `Option`/`Result` as declaration identities — the same shapes as the
 /// standard library module and [`crate::analysis`]'s table.
 fn builtin_variants() -> Vec<(String, &'static str, Vec<VariantDecl>)> {
@@ -913,6 +999,38 @@ fn builtin_variants() -> Vec<(String, &'static str, Vec<VariantDecl>)> {
 /// assert_eq!(found.unresolved[0].name, "Circel");
 /// assert_eq!(found.unresolved[0].suggestion, "Circle");
 /// ```
+fn cases_covered_beside(hir: &HirFile, site: PatternSiteId, node: hir::NodeId) -> Vec<&str> {
+    let arms = &hir.sites[site].arms;
+    let constructor = |pattern: hir::PatternId| match &hir.patterns[pattern] {
+        hir::Pat::Constructor { path, fields, .. } => Some((path, fields)),
+        _ => None,
+    };
+    let alternatives = |arm: &hir::SiteArm| match &hir.patterns[arm.pattern] {
+        hir::Pat::Or(members) => members
+            .iter()
+            .filter_map(|&member| constructor(member))
+            .collect(),
+        _ => constructor(arm.pattern).into_iter().collect::<Vec<_>>(),
+    };
+    let holds = |arm: &hir::SiteArm| alternatives(arm).iter().any(|(path, _)| path.node == node);
+    if !arms.iter().any(holds) {
+        return Vec::new();
+    }
+    arms.iter()
+        .filter(|arm| arm.guard.is_none() || holds(arm))
+        .flat_map(alternatives)
+        .filter_map(|(path, fields)| {
+            (path.node != node
+                && fields.as_ref().is_none_or(|fields| {
+                    fields
+                        .iter()
+                        .all(|field| matches!(field.binding, hir::FieldBinding::Named { .. }))
+                }))
+            .then_some(path.name.as_str())
+        })
+        .collect()
+}
+
 fn nearest<'a>(written: &str, declared: impl Iterator<Item = &'a str>) -> Option<String> {
     nearest_within(written, declared, usize::MAX).map(|(name, _)| name)
 }

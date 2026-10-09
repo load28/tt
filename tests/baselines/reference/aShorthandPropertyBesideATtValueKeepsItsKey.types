@@ -1,0 +1,161 @@
+=== aShorthandPropertyBesideATtValueKeepsItsKey.tt ===
+variant V { A, B }
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+function get(): V { return V.A; }
+>get : function get(): V
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>V : const V: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+function read(): TResult<number, string> { return Result.Ok(2); }
+>read : function read(): TResult<number, string>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+export function matched(a: number) {
+>matched : function matched(a: number): {
+>       a: number;
+>       b: number;
+>   }
+>a : (parameter) a: number
+  return { a, b: match (get()) { A => 1, B => 0 } };
+>a : (parameter) a: number
+>b : (property) b: number
+>get : function get(): V
+export function tried(a: number): TResult<{ a: number; b: number }, string> {
+>tried : function tried(a: number): TResult<{
+>       a: number;
+>       b: number;
+>   }, string>
+>a : (parameter) a: number
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+>a : (property) a: number
+>b : (property) b: number
+  return Result.Ok({ a, b: try read() });
+>Ok : const Ok: <{
+>       a: number;
+>       b: number;
+>   }>(value: {
+>       a: number;
+>       b: number;
+>   }) => Result.TOk<{
+>       a: number;
+>       b: number;
+>   }>
+>a : (parameter) a: number
+>b : (property) b: number
+>read : function read(): TResult<number, string>
+export function nested(a: number) {
+>nested : function nested(a: number): ({
+>       a: number;
+>       b: Result.TErr<string> | {
+>           kind: "Ok";
+>           value: number;
+>       };
+>   } | {
+>       a: number;
+>       b: string;
+>   })[]
+>a : (parameter) a: number
+  const x = { a, b: result { const q = try read(); return q; } };
+>x : const x: {
+>       a: number;
+>       b: Result.TErr<string> | {
+>           kind: "Ok";
+>           value: number;
+>       };
+>   }
+>a : (parameter) a: number
+>b : (property) b: Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>q : const q: number
+>read : function read(): TResult<number, string>
+>q : const q: number
+  const y = { a, b: 1 |> String };
+>y : const y: {
+>       a: number;
+>       b: string;
+>   }
+>a : (property) a: number
+>b : (property) b: string
+>String : var String: (value?: any) => string
+  return [x, y];
+>x : const x: {
+>       a: number;
+>       b: Result.TErr<string> | {
+>           kind: "Ok";
+>           value: number;
+>       };
+>   }
+>y : const y: {
+>       a: number;
+>       b: string;
+>   }
+const r: { a: number; b: number } = matched(5);
+>r : const r: {
+>       a: number;
+>       b: number;
+>   }
+>a : (property) a: number
+>b : (property) b: number
+>matched : function matched(a: number): {
+>       a: number;
+>       b: number;
+>   }
+console.log(JSON.stringify(r));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>r : const r: {
+>       a: number;
+>       b: number;
+>   }
+console.log(JSON.stringify(tried(5)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>tried : function tried(a: number): TResult<{
+>       a: number;
+>       b: number;
+>   }, string>
+console.log(JSON.stringify(nested(5)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>nested : function nested(a: number): ({
+>       a: number;
+>       b: Result.TErr<string> | {
+>           kind: "Ok";
+>           value: number;
+>       };
+>   } | {
+>       a: number;
+>       b: string;
+>   })[]
+

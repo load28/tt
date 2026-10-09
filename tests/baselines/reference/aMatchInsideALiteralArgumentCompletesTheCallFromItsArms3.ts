@@ -4,7 +4,7 @@ consume({outer: {item: match (x) { A(v) => v, _ => 0 }}});
 
 //// [aMatchInsideALiteralArgumentCompletesTheCallFromItsArms3.ts]
 {
-  const $tt_v1 = (consume);
+  const $tt_v1: typeof consume = (consume);
   {
     const $tt_m = x;
     switch ($tt_m.kind) {

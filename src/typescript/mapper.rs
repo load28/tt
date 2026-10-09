@@ -27,6 +27,70 @@ pub(crate) enum DiagnosticOrigin {
     Nearest { start: usize },
 }
 
+pub(crate) fn shared_binding_origin(
+    shared: &[crate::SharedBinding],
+    start: usize,
+    end: usize,
+) -> Option<DiagnosticOrigin> {
+    shared
+        .iter()
+        .find(|binding| binding.out <= start && end.max(start) <= binding.out_end)
+        .and_then(|binding| {
+            binding
+                .occurrences
+                .iter()
+                .find(|occurrence| !occurrence.declared)
+                .or_else(|| binding.occurrences.first())
+        })
+        .map(|occurrence| DiagnosticOrigin::Exact {
+            start: occurrence.src,
+            end: occurrence.src_end,
+        })
+}
+
+/// A span made of copied text and of the reads of operands moved out of
+/// their place, back to back in the output and in source order, is the
+/// source text they stand for. `None` when the span holds no such read, or
+/// any glue, or pieces out of source order.
+pub(crate) fn relocated_origin(
+    mappings: &[EmitMapping],
+    relocated: &[crate::RelocatedOperand],
+    start: usize,
+    end: usize,
+) -> Option<DiagnosticOrigin> {
+    if relocated.is_empty() || end <= start {
+        return None;
+    }
+    let mut at = start;
+    let mut source: Option<(usize, usize)> = None;
+    let mut read = false;
+    while at < end {
+        let (from, to, next) = if let Some(operand) = relocated
+            .iter()
+            .find(|operand| operand.out == at && operand.out_end <= end)
+        {
+            read = true;
+            (operand.src, operand.src_end, operand.out_end)
+        } else {
+            let mapping = chunk_holding(mappings, at)?;
+            let stop = end.min(mapping.out + mapping.len);
+            (
+                mapping.src + (at - mapping.out),
+                mapping.src + (stop - mapping.out),
+                stop,
+            )
+        };
+        source = match source {
+            None => Some((from, to)),
+            Some((first, last)) if last == from => Some((first, to)),
+            Some(_) => return None,
+        };
+        at = next;
+    }
+    let (start, end) = source?;
+    read.then_some(DiagnosticOrigin::Exact { start, end })
+}
+
 /// Projects one emitted diagnostic span without inventing a partially
 /// mapped source range.
 pub(crate) fn diagnostic_origin(
@@ -38,9 +102,16 @@ pub(crate) fn diagnostic_origin(
     source: &str,
 ) -> Option<DiagnosticOrigin> {
     let end = end.max(start);
+    // Mappings are in output order and do not overlap
+    // ([`in_output_order`]): the ones ending at or before `start` come
+    // first, and the next one is the only one that can cover the span.
+    let after = mappings.partition_point(|mapping| mapping.out + mapping.len <= start);
+    let covering =
+        |mapping: &&EmitMapping| mapping.out <= start && end <= mapping.out + mapping.len;
     if let Some(mapping) = mappings
-        .iter()
-        .find(|mapping| mapping.out <= start && end <= mapping.out + mapping.len)
+        .get(after)
+        .filter(covering)
+        .or_else(|| mappings[..after].last().filter(covering))
     {
         return Some(DiagnosticOrigin::Exact {
             start: mapping.src + (start - mapping.out),
@@ -53,26 +124,29 @@ pub(crate) fn diagnostic_origin(
     // after `radius.`. A range that starts where copied text ends, copies
     // nothing, and opens no construct's glue is that position after the
     // user's text, as the cursor before the glue is (`Affinity::Preceding`).
+    // The chunk that ends last before `start` is the only candidate: an
+    // anchor or a non-blank byte between it and `start` lies between every
+    // earlier chunk and `start` too.
     let occupied_end = end.max(start.saturating_add(1));
-    if !mappings
+    crate::work::tick_by("diagnostic origin entries", anchors.len());
+    let last_anchor = anchors
         .iter()
-        .any(|m| m.out < occupied_end && start < m.out + m.len)
-        && !anchors.iter().any(|anchor| anchor.out == start)
-        && let Some(chunk) = mappings
+        .map(|anchor| anchor.out)
+        .filter(|&out| out <= start)
+        .max();
+    if !mappings.get(after).is_some_and(|m| m.out < occupied_end)
+        && last_anchor != Some(start)
+        && let Some(chunk) = mappings[..after]
             .iter()
-            .filter(|m| m.len > 0 && m.out + m.len <= start)
-            .filter(|m| {
-                !anchors
-                    .iter()
-                    .any(|anchor| m.out + m.len <= anchor.out && anchor.out <= start)
-            })
+            .rev()
+            .find(|m| m.len > 0)
+            .filter(|m| last_anchor.is_none_or(|anchor| anchor < m.out + m.len))
             .filter(|m| {
                 m.out + m.len == start
                     || code
                         .get(m.out + m.len..start)
                         .is_some_and(|gap| gap.bytes().all(|b| b.is_ascii_whitespace()))
             })
-            .max_by_key(|m| m.out + m.len)
     {
         let at = chunk.src + chunk.len;
         // The delimiter belongs to generated glue, but the missing operand
@@ -114,6 +188,7 @@ pub(crate) fn diagnostic_origin(
 /// Offset of `byte` in `text`, counted in UTF-16 code units — TypeScript's
 /// own coordinate space. An offset past the end clamps to the end.
 pub(crate) fn to_utf16(text: &str, byte: usize) -> usize {
+    crate::work::tick("utf-16 scans");
     let signature = crate::error::signature_len(text);
     let text = crate::error::decoded(text);
     let byte = byte.saturating_sub(signature);
@@ -127,6 +202,7 @@ pub(crate) fn to_utf16(text: &str, byte: usize) -> usize {
 /// offset past the end clamps to the length; one landing inside a surrogate
 /// pair clamps to the start of that character.
 pub(crate) fn from_utf16(text: &str, utf16: usize) -> usize {
+    crate::work::tick("utf-16 scans");
     let signature = crate::error::signature_len(text);
     let text = crate::error::decoded(text);
     let mut units = 0;
@@ -151,10 +227,24 @@ pub(crate) fn to_output(mappings: &[EmitMapping], src: usize) -> Option<usize> {
 /// Where an emitted byte came from in the source, or `None` when it is
 /// compiler-written glue.
 pub(crate) fn to_source(mappings: &[EmitMapping], out: usize) -> Option<usize> {
+    chunk_holding(mappings, out).map(|m| m.src + (out - m.out))
+}
+
+/// Whether `mappings` are in output order and do not overlap in the output
+/// — what [`crate::MappedEmit::mappings`] promises, and what lets an output
+/// offset be found by binary search.
+pub(crate) fn in_output_order(mappings: &[EmitMapping]) -> bool {
     mappings
-        .iter()
-        .find(|m| out >= m.out && out < m.out + m.len)
-        .map(|m| m.src + (out - m.out))
+        .windows(2)
+        .all(|pair| pair[0].out + pair[0].len <= pair[1].out)
+}
+
+/// The chunk whose output holds byte `out`. Chunks are in output order and
+/// do not overlap ([`in_output_order`]), so their ends do not decrease and
+/// the first chunk ending past `out` is the only one that can hold it.
+fn chunk_holding(mappings: &[EmitMapping], out: usize) -> Option<&EmitMapping> {
+    let index = mappings.partition_point(|m| m.out + m.len <= out);
+    mappings.get(index).filter(|m| m.out <= out)
 }
 
 /// [`to_output`], but a chunk's **end** offset belongs to it too — and when
@@ -246,10 +336,10 @@ pub(crate) fn typed_cursor_to_output(
 
 /// The inverse of [`to_output_inclusive`], for answers coming back.
 pub(crate) fn to_source_inclusive(mappings: &[EmitMapping], out: usize) -> Option<usize> {
-    mappings
-        .iter()
-        .filter(|m| m.out <= out)
-        .max_by_key(|m| m.out)
+    let starting = mappings.partition_point(|m| m.out <= out);
+    starting
+        .checked_sub(1)
+        .map(|index| &mappings[index])
         .filter(|m| out <= m.out + m.len)
         .map(|m| m.src + (out - m.out))
 }
@@ -263,14 +353,15 @@ pub(crate) fn to_source_span(
         let at = to_source_inclusive(mappings, start)?;
         return (end == start).then_some((at, at));
     }
-    let first = mappings
-        .iter()
-        .find(|m| start >= m.out && start < m.out + m.len)?;
+    let first = chunk_holding(mappings, start)?;
     let mut last = first;
     while end > last.out + last.len {
-        last = mappings
+        let (out, src) = (last.out + last.len, last.src + last.len);
+        let from = mappings.partition_point(|m| m.out < out);
+        last = mappings[from..]
             .iter()
-            .find(|m| m.len > 0 && m.out == last.out + last.len && m.src == last.src + last.len)?;
+            .take_while(|m| m.out == out)
+            .find(|m| m.len > 0 && m.src == src)?;
     }
     Some((first.src + (start - first.out), last.src + (end - last.out)))
 }
@@ -286,16 +377,47 @@ pub(crate) fn to_source_or_nearest(mappings: &[EmitMapping], out: usize) -> Opti
     if let Some(exact) = to_source(mappings, out) {
         return Some((exact, true));
     }
-    mappings
-        .iter()
-        .filter(|m| m.out < out)
-        .max_by_key(|m| m.out)
+    mappings[..mappings.partition_point(|m| m.out < out)]
+        .last()
         .map(|m| (m.src + m.len.saturating_sub(1), false))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn diagnostic_origins_cost_one_pass_over_the_anchors_each() {
+        let entries = |n: usize| {
+            let mappings: Vec<EmitMapping> = (0..n)
+                .map(|i| EmitMapping {
+                    src: i,
+                    out: 3 * i,
+                    len: 1,
+                })
+                .collect();
+            let anchors: Vec<EmitAnchor> = (0..n)
+                .map(|i| EmitAnchor {
+                    out: 3 * i + 2,
+                    end: 3 * i + 3,
+                    src: i,
+                    src_end: i + 1,
+                    owner_end: i + 1,
+                    context: None,
+                    kind: AnchorKind::Try,
+                })
+                .collect();
+            let code = "a  ".repeat(n);
+            let source = "a".repeat(n);
+            crate::work::measure(|| {
+                for i in 0..n {
+                    diagnostic_origin(&mappings, &anchors, 3 * i + 1, 3 * i + 2, &code, &source);
+                }
+            })["diagnostic origin entries"]
+        };
+        let (small, large) = (entries(200), entries(400));
+        assert!(large <= 4 * small + 4 * 400, "{small} -> {large}");
+    }
     use crate::AnchorKind;
 
     #[test]

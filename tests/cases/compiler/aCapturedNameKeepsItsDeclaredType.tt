@@ -1,0 +1,19 @@
+// @run: aCapturedNameKeepsItsDeclaredType.tt
+variant V { A(n: number), B }
+function assertPos(n: number): asserts n {
+  if (n <= 0) throw new Error("not positive");
+}
+const checks: { assertPos: typeof assertPos } = { assertPos };
+export function asserted(v: V) {
+  assertPos(match (v) { A(n) => n, B => 1 });
+  checks.assertPos(match (v) { A(n) => n, B => 1 });
+  return "asserted";
+}
+export function keyed(v: V) {
+  const sym: unique symbol = Symbol();
+  const d = { [sym]: match (v) { A(n) => n, B => 0 } };
+  const it = { [Symbol.iterator]: match (v) { A => function* () { yield 1; }, B => function* () { yield 2; } } };
+  return [d[sym], ...it];
+}
+console.log(asserted(V.A(2)));
+console.log(JSON.stringify(keyed(V.A(5))));

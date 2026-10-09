@@ -31,7 +31,7 @@ const State = {
 declare const state: State;
 
 let $tt_v0: number;
-const $tt_v1 = (consume);
+const $tt_v1: typeof consume = (consume);
 {
   const $tt_m = state;
   switch ($tt_m.kind) {
@@ -70,7 +70,7 @@ const consumed = $tt_v0;
 
 
 let $tt_v6: (number) | (undefined);
-const $tt_v5 = (maybeConsume);
+const $tt_v5: typeof maybeConsume = (maybeConsume);
 if ($tt_v5 != null) {
   {
     const $tt_m = state;
@@ -96,7 +96,7 @@ if ($tt_v5 != null) {
 const optional = $tt_v6;
 
 let $tt_v7: Item;
-const $tt_v8 = (generic);
+const $tt_v8: typeof generic = (generic);
 const $tt_v9 = $tt_v8<Item>;
 {
   const $tt_m = state;

@@ -1,0 +1,65 @@
+=== aParenthesizedRightOperandKeepsItsParenthesesInAShortCircuit.tt ===
+const r = (n: number): TResult<number, string> => Result.Ok(n);
+>r : const r: (n: number) => TResult<number, string>
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>n : (parameter) n: number
+const g = (x: unknown) => x;
+>g : const g: (x: unknown) => unknown
+>x : (parameter) x: unknown
+>x : (parameter) x: unknown
+function f(o: { x: number; y: number | null }): TResult<unknown, string> {
+>f : function f(o: {
+>       x: number;
+>       y: number | null;
+>   }): TResult<unknown, string>
+>o : (parameter) o: {
+>       x: number;
+>       y: number | null;
+>   }
+>x : (property) x: number
+>y : (property) y: number | null
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  const value = g((o.y ?? (o.x += try r(5))));
+>value : const value: unknown
+>g : const g: (x: unknown) => unknown
+>o : (parameter) o: {
+>       x: number;
+>       y: number | null;
+>   }
+>y : (property) y: number | null
+>o : (parameter) o: {
+>       x: number;
+>       y: number | null;
+>   }
+>x : (property) x: number
+>r : const r: (n: number) => TResult<number, string>
+  return Result.Ok([value, o.x]);
+>Ok : const Ok: <unknown[]>(value: unknown[]) => Result.TOk<unknown[]>
+>value : const value: unknown
+>o : (parameter) o: {
+>       x: number;
+>       y: number | null;
+>   }
+>x : (property) x: number
+console.log(JSON.stringify(f({ x: 1, y: null })), JSON.stringify(f({ x: 1, y: 7 })));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>f : function f(o: {
+>       x: number;
+>       y: number | null;
+>   }): TResult<unknown, string>
+>x : (property) x: number
+>y : (property) y: number | null
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>f : function f(o: {
+>       x: number;
+>       y: number | null;
+>   }): TResult<unknown, string>
+>x : (property) x: number
+>y : (property) y: number | null
+

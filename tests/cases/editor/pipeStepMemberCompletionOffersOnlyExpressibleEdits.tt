@@ -1,0 +1,6 @@
+// @completions: dot, optional
+// @filename: main.tt
+const o = { "a-b": 1, cc: 2 };
+export const r = o |> ./*dot*/;
+const m: { "a-b": number; cc: number } | undefined = undefined as any;
+export const s = m |> ?./*optional*/;

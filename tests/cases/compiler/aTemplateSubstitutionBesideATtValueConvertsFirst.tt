@@ -1,0 +1,8 @@
+// @run: aTemplateSubstitutionBesideATtValueConvertsFirst.tt
+variant V { A, B }
+const arr = [1, 2];
+function get(): V { arr.push(3); return V.A; }
+export function f() {
+  return `${arr}|${match (get()) { A => "a", B => "b" }}`;
+}
+console.log(f());

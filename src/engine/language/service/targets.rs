@@ -17,9 +17,26 @@ pub(in super::super) fn source_edit(
     splice: Option<usize>,
     edit: &serde_json::Value,
 ) -> Option<TextEdit> {
-    let start = mapper::from_utf16(code, u16_offset(code, position_of(&edit["range"]["start"])));
-    let end = mapper::from_utf16(code, u16_offset(code, position_of(&edit["range"]["end"])));
+    let (start, end) = source_byte_span(code, mappings, inserted, splice, &edit["range"])?;
+    Some(TextEdit {
+        range: span_range(source, start, end),
+        new_text: edit["newText"].as_str()?.to_string(),
+    })
+}
+
+pub(in super::super) fn source_byte_span(
+    code: &str,
+    mappings: &[EmitMapping],
+    inserted: &[crate::InsertedGlue],
+    splice: Option<usize>,
+    range: &serde_json::Value,
+) -> Option<(usize, usize)> {
+    let start = mapper::from_utf16(code, u16_offset(code, position_of(&range["start"])));
+    let end = mapper::from_utf16(code, u16_offset(code, position_of(&range["end"])));
     let (start, end) = mapper::to_source_span(mappings, start, end).or_else(|| {
+        if start == 0 && end == 0 {
+            return Some((0, 0));
+        }
         let glue = inserted
             .iter()
             .find(|glue| start == end && (start == glue.out || start == glue.out_end))?;
@@ -29,10 +46,7 @@ pub(in super::super) fn source_edit(
         Some(at) if byte > at => byte.checked_sub(PROBE_NAME.len()).filter(|&b| b >= at),
         _ => Some(byte),
     };
-    Some(TextEdit {
-        range: span_range(source, unsplice(start)?, unsplice(end)?),
-        new_text: edit["newText"].as_str()?.to_string(),
-    })
+    Some((unsplice(start)?, unsplice(end)?))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -67,6 +81,28 @@ fn target_coordinates(_session: &ServiceSession, uri: &str) -> Option<TargetCoor
 /// the target is not a file, cannot be read, or the span has no source
 /// counterpart for `purpose` — the caller decides whether that skips one
 /// result (navigation) or refuses the whole operation (rename).
+/// Whether `range` of the projected document `uri` names lies in text the
+/// lowering restates from the source (a capture's `typeof` query): the
+/// lowering writes it again from the source, so an edit of the source
+/// covers it.
+pub(in super::super) fn restated_target(
+    session: &mut ServiceSession,
+    overlays: &HashMap<PathBuf, String>,
+    uri: &str,
+    range: &serde_json::Value,
+) -> bool {
+    let Some(TargetCoordinates::Projected(tt_path)) = target_coordinates(session, uri) else {
+        return false;
+    };
+    let Some(doc) = serve_doc_only(session, overlays, &tt_path) else {
+        return false;
+    };
+    let code_lines = doc.code_lines();
+    let start = byte_at(&code_lines, position_of(&range["start"]));
+    let end = byte_at(&code_lines, position_of(&range["end"]));
+    crate::engine::projection::restated(&doc.restatements, start, end)
+}
+
 pub(in super::super) fn map_target(
     session: &mut ServiceSession,
     overlays: &HashMap<PathBuf, String>,
@@ -84,9 +120,9 @@ pub(in super::super) fn map_target(
             if crate::SourceKind::from_tt_path(&path).is_some()
                 && let Some(doc) = serve_doc_only(session, overlays, &path)
             {
-                let start =
-                    mapper::from_utf16(&doc.source, u16_offset(&doc.source, lsp_range.start));
-                let end = mapper::from_utf16(&doc.source, u16_offset(&doc.source, lsp_range.end));
+                let lines = doc.source_lines();
+                let start = byte_at(&lines, lsp_range.start);
+                let end = byte_at(&lines, lsp_range.end);
                 if authored_shared_binding(&doc, start, end).is_some() {
                     return None;
                 }
@@ -95,16 +131,23 @@ pub(in super::super) fn map_target(
         }
         TargetCoordinates::Projected(tt_path) => {
             let doc = serve_doc_only(session, overlays, &tt_path)?;
-            let start = u16_offset(&doc.code, lsp_range.start);
-            let end = u16_offset(&doc.code, lsp_range.end);
-            let (s, e) = match from_projected_span(&doc, start, end) {
+            let code_lines = doc.code_lines();
+            let start = byte_at(&code_lines, lsp_range.start);
+            let end = byte_at(&code_lines, lsp_range.end);
+            let (s, e) = match mapper::to_source_span(&doc.mappings, start, end) {
                 Some(span) => span,
+                None if start == 0 && end == 0 => (0, 0),
+                None if start == 0 && end == doc.code.len() => (0, doc.source.len()),
                 None if purpose == TargetUse::Navigation => declared_name_span(&doc, start, end)?,
                 None => return None,
             };
+            let source_lines = doc.source_lines();
             return Some(Location {
                 path: tt_path,
-                range: source_range(&doc.source, s, e),
+                range: Range {
+                    start: byte_position(&source_lines, s),
+                    end: byte_position(&source_lines, e),
+                },
             });
         }
     };

@@ -1,0 +1,21 @@
+// @run: templateSubstitutionsBeforeALoweredValueRunFirstInArmsAndGuards.tt
+variant S { A, B }
+const log: string[] = [];
+function o(t: string): S { log.push("subject" + t); return S.A; }
+const g = { get p() { log.push("g.p"); return 1; } };
+function F(x: unknown) { return x; }
+function main() {
+  const a = match (o("0")) { A if `${g.p}${match (o("1")) { A => 1, B => 2 }}` !== "" => 1, _ => 2 };
+  log.push("|");
+  const b = match (o("0")) { A => { return `${g.p}${match (o("1")) { A => 1, B => 2 }}`; }, B => "" };
+  log.push("|");
+  const c = match (o("0")) { A => [g.p, match (o("1")) { A => 1, B => 2 }], B => [] };
+  log.push("|");
+  const d = match (o("0")) { A => g.p + match (o("1")) { A => 1, B => 2 }, B => 0 };
+  log.push("|");
+  const e = match (o("0")) { A => ({ x: g.p, y: match (o("1")) { A => 1, B => 2 } }), B => 0 };
+  log.push("|");
+  const h = 1 |> F |> (v => `${g.p}${match (o("1")) { A => 1, B => 2 }}`);
+}
+main();
+console.log(log.join(", "));

@@ -51,13 +51,13 @@ function swap(n: number): number {
   return n;
 }
 function inResult(v: number) {
-  let $tt_v0: ({
+  let $tt_v0: {
     kind: "Err";
     error: string;
-}) | ({
+} | {
     kind: "Ok";
     value: string;
-});
+};
   $tt_v0: {
     const $tt_t0 = ok(1);
     if (!("value" in $tt_t0)) {
@@ -67,7 +67,7 @@ function inResult(v: number) {
     const q = $tt_t0.value;
     if (v > 5) {
       let $tt_v1: number;
-      const $tt_v2 = (s);
+      const $tt_v2: typeof s = (s);
       {
         const $tt_m = v;
         switch ($tt_m) {
@@ -75,14 +75,13 @@ function inResult(v: number) {
           default: $tt_v1 = 1; break;
         }
       }
-      { const $tt_a0 = { value: { kind: "Ok" as const, value: $tt_v2(($tt_v1 === 0 ? swap(6) : 2)) + q } }; $tt_v0 = $tt_a0.value; break $tt_v0; }
+      { $tt_v0 = { kind: "Ok" as const, value: $tt_v2(($tt_v1 === 0 ? swap(6) : 2)) + q }; break $tt_v0; }
     }
     let $tt_subject_1;
     let $tt_subject_2;
     
     {
-      const $tt_a1 = { value: { kind: "Ok" as const, value: [($tt_subject_1 = v, ($tt_subject_1 === 1) ? "a" : "b"), ($tt_subject_2 = q, ($tt_subject_2 === 1) ? "c" : "d")].join("") + q } };
-      $tt_v0 = $tt_a1.value;
+      $tt_v0 = { kind: "Ok" as const, value: [($tt_subject_1 = v, ($tt_subject_1 === 1) ? "a" : "b"), ($tt_subject_2 = q, ($tt_subject_2 === 1) ? "c" : "d")].join("") + q };
       break $tt_v0;
     }
   }
@@ -96,7 +95,7 @@ function inArm(v: number) {
       case 1: {
         const q = 1; if (q > 0) {
           let $tt_v6: number;
-          const $tt_v7 = (s);
+          const $tt_v7: typeof s = (s);
           {
             const $tt_m = v;
             switch ($tt_m) {
@@ -162,8 +161,7 @@ function template(v: number) {
         }
       }
     }
-    const $tt_a2 = { value: { kind: "Ok" as const, value: `${$tt_v10}-${q}` } };
-    $tt_v8 = $tt_a2.value;
+    $tt_v8 = { kind: "Ok" as const, value: `${$tt_v10}-${q}` };
     break $tt_v8;
   }
   return $tt_v8;

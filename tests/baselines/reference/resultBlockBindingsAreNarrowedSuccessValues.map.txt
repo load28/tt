@@ -14,10 +14,10 @@
 4:47 -> 36:3 len 266  "\ntype User = { id: number; name: string; company"...
 11:9 -> 50:11 len 4  "user"
 11:20 -> 45:20 len 11  "getUser(id)"
-11:32 -> 50:31 len 3  "\n  "
+11:31 -> 50:30 len 4  ";\n  "
 12:9 -> 56:9 len 7  "company"
 12:23 -> 51:18 len 26  "getCompany(user.companyId)"
-12:50 -> 56:32 len 67  "\n  const label: string = user.name.toUpperCase()"...
+12:49 -> 56:31 len 68  ";\n  const label: string = user.name.toUpperCase("...
 14:10 -> 59:44 len 24  "{ user, company, label }"
 15:2 -> 64:2 len 40  ";\nconst check = (id: number): string => "
 16:46 -> 68:19 len 8  "view(id)"

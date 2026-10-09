@@ -1,0 +1,13 @@
+//// [aHandWrittenTagNearAVariantCaseIsCheckedByItsType.tt] 11 mapping(s)
+1:26 -> 25:3 len 89  "\ntype H = { kind: \"Alpha\" } | { kind: \"Betta\" };"...
+5:1 -> 46:1 len 17  "export const r = "
+5:25 -> 31:17 len 1  "h"
+5:39 -> 34:16 len 1  "1"
+5:51 -> 38:16 len 1  "2"
+5:54 -> 46:24 len 2  ";\n"
+6:1 -> 64:1 len 17  "export const t = "
+6:25 -> 49:17 len 1  "o"
+6:39 -> 52:16 len 1  "1"
+6:51 -> 56:16 len 1  "2"
+6:54 -> 64:24 len 2  ";\n"
+

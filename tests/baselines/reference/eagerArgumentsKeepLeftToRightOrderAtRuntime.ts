@@ -15,7 +15,7 @@ const trace: number[] = [];
 function mark(n: number): number { trace.push(n); return n; }
 function g(a: number, b: number, c: number): void { console.log(a, b, c); }
 let $tt_v0: number;
-const $tt_v1 = (g);
+const $tt_v1: typeof g = (g);
 const $tt_v2: number = (mark(1));
 {
   const $tt_m = mark(2);

@@ -921,6 +921,19 @@ documents.onDidClose((e) => {
 
 const KEYWORD_SNIPPETS: CompletionItem[] = [
   {
+    label: "val",
+    kind: CompletionItemKind.Keyword,
+    detail: "tt read-only binding modifier",
+    documentation: {
+      kind: MarkupKind.Markdown,
+      value:
+        "Makes a binding and every path read through it read-only:\n" +
+        "`val const config = load();`. A parameter takes it too:\n" +
+        "`function read(val user: User) {}`.",
+    },
+    insertText: "val ",
+  },
+  {
     label: "variant",
     kind: CompletionItemKind.Snippet,
     detail: "tt variant declaration",
@@ -1327,13 +1340,7 @@ connection.onHover(async (params) => {
   // so the engine answers from the compiler's own declaration table. It
   // answers only where the service cannot be asked; everywhere else
   // (`Shape.Circle(1)`, `const s: Shape`) the service knows more.
-  const sym = await engine.ttSymbol(
-    await compilerOf(doc),
-    bufferPath(doc),
-    doc.getText(),
-    params.position,
-    logEngine,
-  );
+  const sym = await ttSymbolOrPattern(doc, params.position);
   if (!sym) return tsHover(doc, params.position);
   // A shorthand pattern name is also the binding it declares, and a
   // binding hovers with its own type — `Some(value)` over a
@@ -1367,6 +1374,26 @@ connection.onHover(async (params) => {
   };
 });
 
+/** The tt name at a position: from the text alone when the declaration
+ * table names it, else from the project for a nested pattern's tag whose
+ * variant only TypeScript can identify. */
+async function ttSymbolOrPattern(
+  doc: TextDocument,
+  position: { line: number; character: number },
+) {
+  const sym = await engine.ttSymbol(
+    await compilerOf(doc),
+    bufferPath(doc),
+    doc.getText(),
+    position,
+    logEngine,
+  );
+  if (sym) return sym;
+  const fsPath = enginePath(doc);
+  if (fsPath === null) return null;
+  return engine.patternSymbol(await compilerOf(doc), fsPath, position, logEngine);
+}
+
 /** Hover for everything the tt layer does not own, from the engine. */
 async function tsHover(
   doc: TextDocument,
@@ -1397,13 +1424,7 @@ connection.onDefinition(async (params) => {
   // knows where each is declared — in this file or in the `.tt` the import
   // names — because the emitted TypeScript carries none of them.
   {
-    const sym = await engine.ttSymbol(
-      await compilerOf(doc),
-      bufferPath(doc),
-      doc.getText(),
-      params.position,
-      logEngine,
-    );
+    const sym = await ttSymbolOrPattern(doc, params.position);
     if (sym?.definition) {
       // An unsaved buffer is served under a synthetic name, so a
       // declaration the engine found in it belongs to this document rather

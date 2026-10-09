@@ -71,6 +71,7 @@ impl EditorSource {
             }
         }
         emit.mappings = mappings;
+        debug_assert!(crate::typescript::mapper::in_output_order(&emit.mappings));
         for mark in &mut emit.scrutinee_temps {
             mark.src = self.original(mark.src);
         }
@@ -98,6 +99,10 @@ impl EditorSource {
                 occurrence.src = self.original(occurrence.src);
                 occurrence.src_end = self.original(occurrence.src_end);
             }
+        }
+        for operand in &mut emit.relocated_operands {
+            operand.src = self.original(operand.src);
+            operand.src_end = self.original(operand.src_end);
         }
         for list in &mut emit.destructured_lists {
             list.src = self.original(list.src);

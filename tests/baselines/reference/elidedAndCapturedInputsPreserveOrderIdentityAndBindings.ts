@@ -92,7 +92,7 @@ function pair(first: Item, second: Item): string { trace.push("call"); return `$
 trace.length = 0;
 shared = 1;
 let $tt_v1: string;
-const $tt_v2 = (pair);
+const $tt_v2: typeof pair = (pair);
 const $tt_v3: Item = ({kind: "item" as const, run: () => shared});
 {
   const $tt_m = mark("subject", State.Ready(4));
@@ -115,7 +115,7 @@ const completed = $tt_v1;
 console.log(completed, trace.join(","));
 trace.length = 0;
 function effectful(): Item { trace.push("effectful"); return {kind: "item", run: () => 0}; }
-const $tt_v5 = (pair);
+const $tt_v5: typeof pair = (pair);
 const $tt_v6: Item = (effectful());
 {
   const $tt_m = mark<State>("subject", State.Empty);

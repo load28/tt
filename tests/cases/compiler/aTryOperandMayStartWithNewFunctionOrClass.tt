@@ -1,0 +1,13 @@
+import type { TResult } from "@tt/std";
+declare const rr: TResult<number, string>;
+declare class Parser { constructor(s: string); parse(): TResult<number, string>; }
+declare class Box { r: TResult<number, string>; }
+export function f(s: string): TResult<number, string> {
+  const n = try new Parser(s).parse();
+  const a = try function () { return rr; }();
+  const b = try class { static r = rr; }.r;
+  const c = try new Box().r;
+  try new Box().r;
+  const d = try (new Box()).r;
+  return { kind: "Ok", value: n + a + b + c + d };
+}

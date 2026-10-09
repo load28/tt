@@ -1,6 +1,6 @@
 //// [aLoopHeaderMatchIsEvaluatedEveryIteration.tt] 12 mapping(s)
 1:1 -> 1:1 len 133  "\nlet n = 0;\nfunction next(): number { n = n + 1;"...
-6:8 -> 8:19 len 2  "id"
+6:8 -> 8:30 len 2  "id"
 6:10 -> 26:15 len 1  "("
 6:18 -> 10:19 len 6  "next()"
 6:28 -> 12:12 len 1  "1"

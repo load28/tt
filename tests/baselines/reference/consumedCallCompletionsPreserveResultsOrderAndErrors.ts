@@ -99,7 +99,7 @@ trace.length = 0;
 let unreached = "kept";
 try {
   let $tt_v3: number;
-  const $tt_v4 = (throws);
+  const $tt_v4: typeof throws = (throws);
   {
     const $tt_m = State.Ready(2);
     switch ($tt_m.kind) {

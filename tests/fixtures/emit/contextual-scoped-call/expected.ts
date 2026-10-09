@@ -26,7 +26,7 @@ const State = {
 declare const state: State;
 declare function consume(item: {run: (x: number) => number}): void;
 {
-  const $tt_v1 = (consume);
+  const $tt_v1: typeof consume = (consume);
   {
     const $tt_m = state;
     switch ($tt_m.kind) {
@@ -47,7 +47,7 @@ declare function consume(item: {run: (x: number) => number}): void;
 }
 declare function generic<T>(item: T): void;
 {
-  const $tt_v3 = (generic);
+  const $tt_v3: typeof generic = (generic);
   const $tt_v4 = $tt_v3<{run: (x: number) => number}>;
   {
     const $tt_m = state;

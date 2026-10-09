@@ -1,0 +1,9 @@
+// @completions: bool, afterTrue, mixed, numbers
+export variant Ev { A, B }
+declare const b: boolean;
+declare const t: true | "x";
+declare const n: 0 | 1 | false;
+export const a = match (b) { /*bool*/ };
+export const c = match (b) { true => 1, /*afterTrue*/ };
+export const d = match (t) { /*mixed*/ };
+export const e = match (n) { /*numbers*/ };

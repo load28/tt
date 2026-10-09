@@ -1,0 +1,11 @@
+// @references: nested, top, builtin
+import type { TOption } from "@tt/std";
+variant Shape { Circle(radius: number), Point }
+variant Box<T> { Full(item: T), Empty }
+declare const b: Box<Shape>;
+declare const s: Shape;
+declare const o: TOption<number>;
+export const x = match (b) { Full(item: Cir/*nested*/cle(radius)) => radius, _ => 0 };
+export const y = match (s) { Cir/*top*/cle(radius) => radius, Point => 0 };
+export const z = match (o) { So/*builtin*/me(value) => value, None => 0 };
+export const w = Shape.Circle(1);

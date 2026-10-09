@@ -1,0 +1,29 @@
+// @run: main.ttx
+// @filename: tsconfig.json
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "jsx": "react",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  }
+}
+// @filename: main.ttx
+variant S { A, B }
+const log: string[] = [];
+const React = {
+  createElement(tag: { name: string }, _props: unknown, ..._children: unknown[]) {
+    log.push(`create ${tag.name}`);
+    return null;
+  },
+};
+function o(): S { log.push("subject"); return S.A; }
+function Comp(_p: { k: number; z: number }) { return null; }
+function main() {
+  return <Comp {...{ get k() { log.push("k"); return 1; } }} z={match (o()) { A => 1, B => 2 }} />;
+}
+main();
+console.log(log.join(", "));

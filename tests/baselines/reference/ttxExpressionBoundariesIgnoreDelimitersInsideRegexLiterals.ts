@@ -35,7 +35,8 @@ const State = {
 };
 declare const state: State;
 let $tt_v0$view: string;
-const $tt_v1$view = (/}/.test("}"));
+const $tt_v1$view = (Panel);
+const $tt_v2$view = (/}/.test("}"));
 {
   const $tt_m = state;
   switch ($tt_m.kind) {
@@ -53,4 +54,4 @@ const $tt_v1$view = (/}/.test("}"));
     }
   }
 }
-const view = <Panel visible={$tt_v1$view} value={$tt_v0$view} />;
+const view = <$tt_v1$view visible={$tt_v2$view} value={$tt_v0$view} />;

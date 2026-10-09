@@ -113,6 +113,7 @@ pub(crate) fn check_all(
         semantic,
         tokens,
         function_targets: std::cell::OnceCell::new(),
+        result_blocks: Vec::new(),
     };
     checker.visit_program(program, Ctx::Top, Place::Module);
     // One analysis, two reports. Resolution comes first — a pattern whose
@@ -161,8 +162,9 @@ pub(crate) fn resolution_errors(analyses: &crate::analysis::PatternAnalyses) -> 
         });
         // The message states the problem; the replacement is carried as a
         // suggestion rather than spelled into the sentence. The analysis
-        // only produces an entry when it can name a replacement, so every
-        // one of these has exactly one — and it is the same datum the CLI
+        // only produces an entry when it can name a declared name the use
+        // resembles; its replacement is offered when that name is not one
+        // the site already covers — and it is the same datum the CLI
         // renders as `help:` and an editor offers as a code action
         // (TASK-213 decision 2).
         let (message, hint, code) = match (&unresolved.kind, &unresolved.tag) {
@@ -180,16 +182,13 @@ pub(crate) fn resolution_errors(analyses: &crate::analysis::PatternAnalyses) -> 
                 DiagnosticCode::UnknownCase,
             ),
         };
-        errors.push(
-            TtError::span(unresolved.start, unresolved.end, message)
-                .code(code)
-                .suggest(
-                    hint,
-                    unresolved.start,
-                    unresolved.end,
-                    unresolved.suggestion.clone(),
-                ),
-        );
+        let error = TtError::span(unresolved.start, unresolved.end, message).code(code);
+        errors.push(match &unresolved.replacement {
+            Some(replacement) => {
+                error.suggest(hint, unresolved.start, unresolved.end, replacement.clone())
+            }
+            None => error,
+        });
     }
     errors
 }
@@ -209,6 +208,7 @@ struct Checker<'a> {
     /// The innermost function-like boundary of every token, with match
     /// bodies and arm arrows skipped: the target a statement `try` reaches.
     function_targets: std::cell::OnceCell<crate::flow::FunctionTargets>,
+    result_blocks: Vec<usize>,
 }
 
 /// The bindings or-pattern alternatives are compared by, sorted so they

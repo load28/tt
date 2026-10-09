@@ -38,8 +38,8 @@ pub(crate) use comments::{comments, directive_governed_lines, leading_documentat
 pub(crate) use facts::{TokenFacts, statement_only_keyword};
 pub(crate) use names::identifier_names_with_prefix;
 pub(crate) use queries::{
-    AutomaticSemicolon, automatic_semicolons, contains_await, continues_statement,
-    has_top_level_comma, is_member_receiver, is_primary_expression, statement_continues_after,
+    AutomaticSemicolon, automatic_semicolons, continues_statement, has_top_level_comma,
+    is_member_receiver, is_operand_expression, is_primary_expression, statement_continues_after,
     type_parameter_names,
 };
 pub(crate) use validation::{
@@ -263,7 +263,7 @@ type TraceSink<'t> = Option<&'t mut Trace>;
 /// The byte just past the numeric literal starting at `i` (a digit, or a
 /// `.` before one): digits and separators, a fraction, an exponent, a radix
 /// prefix, and a BigInt suffix.
-fn number_end(src: &[u8], i: usize, end: usize) -> usize {
+pub(super) fn number_end(src: &[u8], i: usize, end: usize) -> usize {
     let digits = |mut j: usize, hex: bool| {
         while let Some(b) = at(src, j, end) {
             if b.is_ascii_digit() || b == b'_' || (hex && b.is_ascii_hexdigit()) {
@@ -377,8 +377,21 @@ fn lex_region_grown(
     // Significant tokens run about one per six source bytes across real
     // TypeScript and one per four in tt source and the TypeScript the
     // compiler generates, so sizing up front for one per three spares the
-    // repeated doubling that dominated lexing on large files.
-    let mut tokens: Vec<Token> = Vec::with_capacity((end - start) / 3 + 8);
+    // repeated doubling that dominated lexing on large files. A braced
+    // region ends at its closing `}`, not at `end`, so its extent is unknown
+    // here: sizing it by the rest of the text would reserve that text once
+    // per nested region.
+    let mut tokens: Vec<Token> = if braced {
+        Vec::new()
+    } else {
+        Vec::with_capacity((end - start) / 3 + 8)
+    };
+    if braced {
+        crate::work::tick_by(
+            "token slots reserved for a braced region",
+            tokens.capacity(),
+        );
+    }
     let mut i = start;
     if start == 0 && !braced && src.starts_with(b"#!") {
         i = line_end(src, 0, end);

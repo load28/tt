@@ -1,0 +1,14 @@
+//// [anOrPatternFieldMissingFromOneCaseIsReportedAtThatCase.tt] 12 mapping(s)
+1:18 -> 20:21 len 6  "number"
+1:18 -> 23:10 len 6  "number"
+1:32 -> 21:21 len 6  "string"
+1:32 -> 24:10 len 6  "string"
+1:41 -> 25:3 len 29  "\nexport function f(v: V) {\n  "
+3:3 -> 41:3 len 7  "return "
+3:17 -> 29:19 len 1  "v"
+3:37 -> 33:18 len 1  "n"
+3:40 -> 41:16 len 32  ";\n}\nexport function g(v: V) {\n  "
+6:23 -> 44:18 len 1  "v"
+6:32 -> 46:5 len 9  "return 0;"
+6:44 -> 48:24 len 15  "\n  return n;\n}\n"
+

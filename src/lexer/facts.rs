@@ -41,25 +41,27 @@ use crate::scanner::{at, ident_end, skip_trivia, starts_identifier};
 
 /// What the lexer knows about one token's grammar position.
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
-pub(crate) struct TokenFacts(u16);
+pub(crate) struct TokenFacts(u32);
 
 impl TokenFacts {
-    const LINE_BREAK_BEFORE: u16 = 1;
-    const ENDS_EXPRESSION: u16 = 1 << 1;
-    const ASI_BEFORE: u16 = 1 << 2;
-    const STATEMENT_START: u16 = 1 << 3;
-    const LABEL: u16 = 1 << 4;
-    const MEMBER: u16 = 1 << 5;
-    const FUNCTION_BODY: u16 = 1 << 6;
-    const GENERATOR_BODY: u16 = 1 << 7;
-    const CONSTRUCTOR_BODY: u16 = 1 << 8;
-    const TYPE_ARGUMENTS_OPEN: u16 = 1 << 9;
-    const TYPE_ARGUMENTS_CLOSE: u16 = 1 << 10;
-    const DECLARATION: u16 = 1 << 11;
-    const OPERAND_START: u16 = 1 << 12;
-    const MODIFIED: u16 = 1 << 13;
-    const CLASS_BODY: u16 = 1 << 14;
-    const STATIC_BLOCK: u16 = 1 << 15;
+    const LINE_BREAK_BEFORE: u32 = 1;
+    const ENDS_EXPRESSION: u32 = 1 << 1;
+    const ASI_BEFORE: u32 = 1 << 2;
+    const STATEMENT_START: u32 = 1 << 3;
+    const LABEL: u32 = 1 << 4;
+    const MEMBER: u32 = 1 << 5;
+    const FUNCTION_BODY: u32 = 1 << 6;
+    const GENERATOR_BODY: u32 = 1 << 7;
+    const CONSTRUCTOR_BODY: u32 = 1 << 8;
+    const TYPE_ARGUMENTS_OPEN: u32 = 1 << 9;
+    const TYPE_ARGUMENTS_CLOSE: u32 = 1 << 10;
+    const DECLARATION: u32 = 1 << 11;
+    const OPERAND_START: u32 = 1 << 12;
+    const MODIFIED: u32 = 1 << 13;
+    const CLASS_BODY: u32 = 1 << 14;
+    const STATIC_BLOCK: u32 = 1 << 15;
+    const SETTER_BODY: u32 = 1 << 16;
+    const UNTERMINATED_BEFORE: u32 = 1 << 17;
 
     /// A line terminator (ECMA-262 §12.3: LF, CR, U+2028, U+2029), possibly
     /// inside a comment, separates this token from the previous one.
@@ -84,6 +86,13 @@ impl TokenFacts {
     /// This token begins a statement.
     pub(crate) fn statement_start(self) -> bool {
         self.0 & Self::STATEMENT_START != 0
+    }
+
+    /// The statement before this token ended with no `;`, line terminator
+    /// or `}` between them, so no automatic semicolon is inserted
+    /// (§12.10.1) and the token cannot begin a statement there.
+    pub(crate) fn unterminated_before(self) -> bool {
+        self.0 & Self::UNTERMINATED_BEFORE != 0
     }
 
     /// This identifier is a statement label, where it is declared or where
@@ -136,6 +145,10 @@ impl TokenFacts {
         self.0 & Self::CONSTRUCTOR_BODY != 0
     }
 
+    pub(crate) fn setter_body(self) -> bool {
+        self.0 & Self::SETTER_BODY != 0
+    }
+
     /// This `{` opens a class body (ECMA-262 §15.7, `ClassBody`). What it
     /// holds outside a method's body, a field initializer or a computed
     /// member name, is evaluated by the class definition or by its own
@@ -176,7 +189,7 @@ impl TokenFacts {
         self.with(Self::ENDS_EXPRESSION)
     }
 
-    fn with(self, flag: u16) -> Self {
+    fn with(self, flag: u32) -> Self {
         Self(self.0 | flag)
     }
 }
@@ -200,6 +213,8 @@ impl std::fmt::Debug for TokenFacts {
             (Self::MODIFIED, "modified"),
             (Self::CLASS_BODY, "class-body"),
             (Self::STATIC_BLOCK, "static-block"),
+            (Self::SETTER_BODY, "setter"),
+            (Self::UNTERMINATED_BEFORE, "unterminated-before"),
         ];
         let set: Vec<&str> = names
             .iter()
@@ -622,7 +637,7 @@ impl<'s> Machine<'s> {
         self.stack.push(frame);
     }
 
-    fn mark(&mut self, flag: u16) {
+    fn mark(&mut self, flag: u32) {
         self.facts = self.facts.with(flag);
     }
 

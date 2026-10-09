@@ -75,6 +75,8 @@ pub struct ProjectedDocument {
     /// reads, so a file that did not change is never re-parsed for its
     /// exports (`docs/design/compiler-core.md` §11).
     exported_variant_symbols: std::sync::OnceLock<Vec<crate::VariantSymbol>>,
+    source_lines: std::sync::OnceLock<crate::lines::LineIndex>,
+    code_utf16: std::sync::OnceLock<crate::lines::Utf16Map>,
     /// Relative `.tt` imports collected while projecting this content version.
     /// Shared by snapshot graph discovery and semantic cache dependencies.
     imports: Vec<crate::TtImport>,
@@ -96,6 +98,31 @@ impl ProjectedDocument {
                 crate::SourceKind::from_path(&self.source_path).unwrap_or_default(),
             )
         })
+    }
+
+    /// The 1-based line and code-point column of a source byte, as
+    /// [`crate::line_col`] answers, over lines measured once per content
+    /// version.
+    pub(crate) fn line_col(&self, at: usize) -> (usize, usize) {
+        let index = self
+            .source_lines
+            .get_or_init(|| crate::lines::LineMap::ecma(&self.source).index());
+        let (line, column) = crate::lines::LineMap::indexed(&self.source, index).char_position(at);
+        (line + 1, column + 1)
+    }
+
+    /// Replaces the emitted module, and with it what was measured of the
+    /// one it replaces.
+    pub(crate) fn replace_emit(&mut self, emit: MappedEmit) {
+        self.emit = emit;
+        self.code_utf16 = std::sync::OnceLock::new();
+    }
+
+    /// The emitted module's byte and UTF-16 offsets, measured once per
+    /// content version.
+    pub(crate) fn code_utf16(&self) -> &crate::lines::Utf16Map {
+        self.code_utf16
+            .get_or_init(|| crate::lines::Utf16Map::new(&self.emit.code))
     }
 
     /// The dependency edges of this projected content version.
@@ -183,6 +210,8 @@ impl ProjectedDocument {
             recovered_declaration: !report.recovered_declarations.is_empty(),
             unparsed,
             exported_variant_symbols: std::sync::OnceLock::new(),
+            source_lines: std::sync::OnceLock::new(),
+            code_utf16: std::sync::OnceLock::new(),
             imports: scan.imports,
         })
     }
@@ -244,21 +273,15 @@ pub(crate) fn std_package_modules(
         })
 }
 
-/// The path the compiler emits a lowered module's declarations to:
-/// `src/token.tt.ts` → `src/token.tt.d.ts`, which is the sidecar name a
-/// specifier written `"./token.tt"` resolves to.
-pub(crate) fn declaration_path_of(file: &ProjectedDocument) -> PathBuf {
-    file.module_path.with_extension("d.ts")
-}
-
 /// Builds the batch of questions the whole snapshot asks in one round trip.
 ///
 /// Every question is anchored at a byte the compiler can see: a probe whose
 /// anchor did not survive lowering as verbatim text (a nested tt construct)
 /// is dropped rather than asked about at an approximate position.
-pub(crate) fn assemble(
+pub(crate) fn assemble<'d>(
     files: &[Arc<ProjectedDocument>],
     blocked: &[Arc<BlockedFile>],
+    deferred: impl IntoIterator<Item = &'d PathBuf>,
     root: &Path,
     sources: &[PathBuf],
 ) -> (Query, Probes) {
@@ -288,8 +311,8 @@ pub(crate) fn assemble(
                 // for the smallest expression node covering this exact range,
                 // so member calls and non-ASCII identifiers are classified as
                 // values rather than by an arbitrary token position.
-                start: mapper::to_utf16(&file.emit.code, result_return.out),
-                end: mapper::to_utf16(&file.emit.code, result_return.out_end),
+                start: file.code_utf16().to_utf16(result_return.out),
+                end: file.code_utf16().to_utf16(result_return.out_end),
             });
             probes.result_returns.push(SourceAnchor {
                 source_path: file.source_path.clone(),
@@ -306,7 +329,7 @@ pub(crate) fn assemble(
             {
                 continue;
             }
-            let Some(position) = scrutinee_position(&file.emit, probe.offset) else {
+            let Some(position) = scrutinee_position(file, probe.offset) else {
                 continue;
             };
             query.literals.push(LiteralQuery {
@@ -342,7 +365,7 @@ pub(crate) fn assemble(
                 .scrutinee_temps
                 .iter()
                 .filter(|t| t.src == probe.offset)
-                .map(|t| mapper::to_utf16(&file.emit.code, t.out))
+                .map(|t| file.code_utf16().to_utf16(t.out))
                 .collect();
             if temps.len() != probe.arity {
                 continue;
@@ -371,7 +394,7 @@ pub(crate) fn assemble(
         // checker's to answer.
         let val = &file.val;
         for binding in &val.bindings {
-            let Some(position) = anchor(&file.emit, binding.ident) else {
+            let Some(position) = anchor(file, binding.ident) else {
                 continue;
             };
             query.symbols.push(SymbolQuery {
@@ -402,13 +425,13 @@ pub(crate) fn assemble(
             {
                 continue;
             }
-            let Some(root) = anchor(&file.emit, mutation.root) else {
+            let Some(root) = anchor(file, mutation.root) else {
                 continue;
             };
             // A method call needs a second question: is the method one of
             // TypeScript's own?
             let method = match &mutation.method {
-                Some((_, at)) => match anchor(&file.emit, *at) {
+                Some((_, at)) => match anchor(file, *at) {
                     Some(position) => {
                         query.symbols.push(SymbolQuery {
                             module: file.module_path.clone(),
@@ -442,7 +465,7 @@ pub(crate) fn assemble(
         // Which call names which declaration is symbol identity, so the
         // declaration identifiers are asked about alongside the calls.
         for function in &val.functions {
-            let Some(position) = anchor(&file.emit, function.ident) else {
+            let Some(position) = anchor(file, function.ident) else {
                 continue;
             };
             query.symbols.push(SymbolQuery {
@@ -456,10 +479,10 @@ pub(crate) fn assemble(
             });
         }
         for pass in &val.passes {
-            let Some(position) = anchor(&file.emit, pass.offset) else {
+            let Some(position) = anchor(file, pass.offset) else {
                 continue;
             };
-            let Some(callee_position) = anchor(&file.emit, pass.callee_at) else {
+            let Some(callee_position) = anchor(file, pass.callee_at) else {
                 continue;
             };
             query.symbols.push(SymbolQuery {
@@ -512,11 +535,12 @@ pub(crate) fn assemble(
             };
             query.tags.push(TagQuery {
                 module: file.module_path.clone(),
-                position: mapper::to_utf16(&file.emit.code, temp.out),
+                position: file.code_utf16().to_utf16(temp.out),
                 covered: Vec::new(),
             });
             probes.payloads.push(PayloadAnchor {
                 source_path: file.source_path.clone(),
+                offset: probe.offset,
                 tag: probe.tag.clone(),
                 field: probe.field.clone(),
             });
@@ -532,6 +556,12 @@ pub(crate) fn assemble(
         path: module_path_of(&file.source_path),
         text: "export {};\n".to_string(),
     }));
+    query
+        .modules
+        .extend(deferred.into_iter().map(|source| Module {
+            path: module_path_of(source),
+            text: "export {};\n".to_string(),
+        }));
     query.syntax_blocked.extend(
         blocked
             .iter()
@@ -672,15 +702,17 @@ pub(crate) struct ValBindingAnchor {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PayloadAnchor {
     pub source_path: PathBuf,
+    /// Byte offset of the nested pattern's tag the question was asked at.
+    pub offset: usize,
     pub tag: String,
     pub field: String,
 }
 
 /// The UTF-16 offset in the emitted module a source byte landed at, or
 /// `None` when it was not copied verbatim.
-fn anchor(emit: &MappedEmit, source_byte: usize) -> Option<usize> {
-    let out = mapper::to_output(&emit.mappings, source_byte)?;
-    Some(mapper::to_utf16(&emit.code, out))
+fn anchor(file: &ProjectedDocument, source_byte: usize) -> Option<usize> {
+    let out = mapper::to_output(&file.emit.mappings, source_byte)?;
+    Some(file.code_utf16().to_utf16(out))
 }
 
 /// Where to ask about the type a `match` is over: the temporary the emitted
@@ -692,12 +724,13 @@ fn anchor(emit: &MappedEmit, source_byte: usize) -> Option<usize> {
 /// literal constituents, so every exhaustiveness question came back silent.
 /// The temporary is the scrutinee's *value*, and the type the checker gives
 /// it is the narrowed one at the match. See [`crate::ScrutineeTemp`].
-fn scrutinee_position(emit: &MappedEmit, keyword_offset: usize) -> Option<usize> {
-    let temp = emit
+fn scrutinee_position(file: &ProjectedDocument, keyword_offset: usize) -> Option<usize> {
+    let temp = file
+        .emit
         .scrutinee_temps
         .iter()
         .find(|temp| temp.src == keyword_offset)?;
-    Some(mapper::to_utf16(&emit.code, temp.out))
+    Some(file.code_utf16().to_utf16(temp.out))
 }
 
 /// Where a TypeScript diagnostic belongs in the `.tt` source, and whether
@@ -739,7 +772,7 @@ fn translate_on_glue(
 /// position is the user's own text (mapped) or belongs to no construct.
 #[cfg(test)]
 fn glue_anchor(file: &ProjectedDocument, utf16_start: usize) -> Option<crate::EmitAnchor> {
-    let out = mapper::from_utf16(&file.emit.code, utf16_start);
+    let out = file.code_utf16().to_byte(utf16_start);
     if mapper::to_source_inclusive(&file.emit.mappings, out).is_some() {
         return None;
     }
@@ -751,11 +784,26 @@ pub(crate) fn diagnostic_origin(
     utf16_start: usize,
     utf16_end: usize,
 ) -> Option<mapper::DiagnosticOrigin> {
+    let (start, end) = (
+        file.code_utf16().to_byte(utf16_start),
+        file.code_utf16().to_byte(utf16_end),
+    );
+    if let Some(origin) = mapper::shared_binding_origin(&file.emit.shared_bindings, start, end) {
+        return Some(origin);
+    }
+    if let Some(origin) = mapper::relocated_origin(
+        &file.emit.mappings,
+        &file.emit.relocated_operands,
+        start,
+        end,
+    ) {
+        return Some(origin);
+    }
     mapper::diagnostic_origin(
         &file.emit.mappings,
         &file.emit.anchors,
-        mapper::from_utf16(&file.emit.code, utf16_start),
-        mapper::from_utf16(&file.emit.code, utf16_end),
+        file.code_utf16().to_byte(utf16_start),
+        file.code_utf16().to_byte(utf16_end),
         &file.emit.code,
         &file.source,
     )
@@ -795,6 +843,23 @@ pub(crate) fn origin_intersects_tt_error(
             let tt_end = tt.end.unwrap_or_else(|| tt_start.saturating_add(1));
             start < tt_end && tt_start < end
         })
+}
+
+pub(crate) fn restated(restatements: &[(usize, usize)], start: usize, end: usize) -> bool {
+    restatements
+        .iter()
+        .any(|&(from, to)| from <= start && end <= to)
+}
+
+pub(crate) fn diagnostic_restates_source(
+    file: &ProjectedDocument,
+    diagnostic: &crate::typescript::backend::Diagnostic,
+) -> bool {
+    restated(
+        &file.emit.restatements,
+        file.code_utf16().to_byte(diagnostic.start),
+        file.code_utf16().to_byte(diagnostic.end),
+    )
 }
 
 pub(crate) fn diagnostic_intersects_recovery(

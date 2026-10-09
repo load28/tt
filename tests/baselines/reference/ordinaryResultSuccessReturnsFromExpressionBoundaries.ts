@@ -36,7 +36,7 @@ $tt_v3: {
     $tt_v3 = $tt_t3;
     break $tt_v3;
   }
-  const item = $tt_t3.value; { const $tt_a0 = { value: { kind: "Ok" as const, value: item } }; $tt_v3 = $tt_a0.value; break $tt_v3; }
+  const item = $tt_t3.value; { $tt_v3 = { kind: "Ok" as const, value: item }; break $tt_v3; }
 }
 yield $tt_v3; }
 let $tt_v4$text;
@@ -46,6 +46,6 @@ $tt_v4$text: {
     $tt_v4$text = $tt_t4;
     break $tt_v4$text;
   }
-  const item = $tt_t4.value; { const $tt_a1 = { value: { kind: "Ok" as const, value: item } }; $tt_v4$text = $tt_a1.value; break $tt_v4$text; }
+  const item = $tt_t4.value; { $tt_v4$text = { kind: "Ok" as const, value: item }; break $tt_v4$text; }
 }
 const text = `value=${$tt_v4$text}`;

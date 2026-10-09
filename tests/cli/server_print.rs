@@ -267,3 +267,41 @@ fn server_dependencies_refuse_what_dependencies_refuses_in_its_words() {
         dir.join("src/plain.ts"),
     ]);
 }
+
+#[test]
+fn server_refuses_a_position_that_is_not_two_non_negative_integers() {
+    let text = "export const value = 1;\n";
+    let ask = |method: &str, position: serde_json::Value| {
+        serde_json::json!({
+            "method": method,
+            "params": { "path": "x.tt", "text": text, "position": position },
+        })
+    };
+    let mut requests = Vec::new();
+    for position in [
+        serde_json::json!({ "line": 4294967297u64, "character": 7 }),
+        serde_json::json!({ "line": "0", "character": 13 }),
+        serde_json::json!({ "line": 0, "character": "13" }),
+        serde_json::json!({ "line": -1, "character": 13 }),
+        serde_json::json!({ "line": 0.5, "character": 13 }),
+        serde_json::json!("0:13"),
+    ] {
+        requests.push(ask("ttSymbol", position.clone()));
+        requests.push(ask("ttCompletions", position));
+    }
+    requests.push(ask(
+        "ttSymbol",
+        serde_json::json!({ "line": 0, "character": 13 }),
+    ));
+    let answers = server_answers(&requests);
+    let (refused, accepted) = answers.split_at(answers.len() - 1);
+    for answer in refused {
+        assert!(
+            answer["error"]
+                .as_str()
+                .is_some_and(|error| error.contains("\"position")),
+            "{answer}"
+        );
+    }
+    assert!(accepted[0]["error"].is_null(), "{}", accepted[0]);
+}

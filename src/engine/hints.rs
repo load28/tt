@@ -59,12 +59,9 @@ pub(super) fn hints(path: &Path, source: &str, texts: Texts<'_>) -> Vec<TtHint> 
             let Some(arm) = analysis.arms.get(index) else {
                 continue;
             };
-            // The body span runs to the arm's delimiter, so it can carry
-            // trailing whitespace — a dimmed range should stop at the code.
-            let end = source[..arm.body_end].trim_end().len();
             out.push(TtHint {
                 kind: TtHintKind::UnreachableArm,
-                range: span_range(source, arm.pattern_start, end),
+                range: span_range(source, arm.pattern_start, arm.end),
                 message: "unreachable arm: an earlier arm already matches every value \
                           this one would"
                     .to_string(),
@@ -99,6 +96,32 @@ mod tests {
             found[0].range.end.character,
             start + "A(x: z) => z".len() as u32
         );
+    }
+
+    #[test]
+    fn a_dead_arm_is_hinted_through_its_last_token() {
+        for (src, arm) in [
+            (
+                "variant E { A(x: string), B }\n\
+                 const v = match (e) { A(x) => x, B => \"b\", _ => { return \"z\"; } };\n",
+                "_ => { return \"z\"; }",
+            ),
+            (
+                "variant E { A(x: string), B }\n\
+                 const v = match (e) { A(x) => x, B => \"b\", _ => \"z\" // trailing\n};\n",
+                "_ => \"z\"",
+            ),
+        ] {
+            let found = hints(src);
+            assert_eq!(found.len(), 1, "{found:?}");
+            let line = src.lines().nth(1).expect("second line");
+            let start = line.find(arm).expect("the dead arm") as u32;
+            assert_eq!(
+                (found[0].range.start.character, found[0].range.end.character),
+                (start, start + arm.len() as u32),
+                "{src}"
+            );
+        }
     }
 
     #[test]

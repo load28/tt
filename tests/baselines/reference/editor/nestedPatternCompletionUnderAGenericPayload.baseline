@@ -1,0 +1,36 @@
+=== completions /*nested*/ nestedPatternCompletionUnderAGenericPayload.tt:9:17 ===
+  |     Has(item: Point()) => 0,
+  |                 ^ /*nested*/
+completion: 0 item(s), member false, probe no
+ttCompletions: pattern true, member null
+patternCompletions:
+  Circle (case) "Shape.Circle(radius: number)"
+  Point (case) "Shape.Point"
+editor completion: 2 item(s)
+  Circle (EnumMember, 0Circle)
+  Point (EnumMember, 0Point)
+
+=== completions /*empty*/ nestedPatternCompletionUnderAGenericPayload.tt:15:15 ===
+  |     Has(item: ) => 0,
+  |               ^ /*empty*/
+completion: 0 item(s), member false, probe yes
+ttCompletions: pattern true, member null
+patternCompletions:
+  Circle (case) "Shape.Circle(radius: number)"
+  Point (case) "Shape.Point"
+editor completion: 2 item(s)
+  Circle (EnumMember, 0Circle)
+  Point (EnumMember, 0Point)
+
+=== completions /*deeper*/ nestedPatternCompletionUnderAGenericPayload.tt:21:29 ===
+  |     Full(value: Has(item: Circle(radius: r))) => r,
+  |                             ^ /*deeper*/
+completion: 0 item(s), member false, probe no
+ttCompletions: pattern true, member null
+patternCompletions:
+  Circle (case) "Shape.Circle(radius: number)"
+  Point (case) "Shape.Point"
+editor completion: 2 item(s)
+  Circle (EnumMember, 0Circle)
+  Point (EnumMember, 0Point)
+

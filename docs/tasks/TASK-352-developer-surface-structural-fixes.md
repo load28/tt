@@ -3,6 +3,11 @@
 > TASK-353 supersedes the deferral of issue 19 and corrects the output path
 > and staging-file ownership decisions below.
 >
+> TASK-769 reverses Decision 5: every input, directory or file, now mirrors
+> under the deepest directory all inputs share, as `tsc` computes one root
+> for its outputs, so relative imports between inputs resolve in the output
+> tree.
+>
 > TASK-425 narrows Decision 6 and Issue 7: a named or open file outside the
 > configured program is now checked in its default (inferred) project, as
 > the language service checks it. The declaration-based coverage fallback

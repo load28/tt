@@ -52,8 +52,7 @@ const total = async (a: number, b: number) => {
   }
   const y = $tt_t1.value;
   {
-    const $tt_a0 = { value: { kind: "Ok" as const, value: x + y } };
-    $tt_v0 = $tt_a0.value;
+    $tt_v0 = { kind: "Ok" as const, value: x + y };
     break $tt_v0;
   }
   }

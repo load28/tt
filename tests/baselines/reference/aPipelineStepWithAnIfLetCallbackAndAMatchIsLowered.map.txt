@@ -1,0 +1,21 @@
+//// [aPipelineStepWithAnIfLetCallbackAndAMatchIsLowered.tt] 19 mapping(s)
+1:18 -> 2:21 len 6  "number"
+1:18 -> 5:10 len 6  "number"
+1:30 -> 7:3 len 141  "\nconst pick = (f: (v: V) => number, fallback: nu"...
+4:3 -> 38:3 len 7  "return "
+4:10 -> 12:20 len 2  "vs"
+4:16 -> 14:34 len 4  "pick"
+4:20 -> 35:20 len 1  "("
+4:21 -> 15:30 len 9  "(v) => { "
+4:39 -> 18:17 len 1  "n"
+4:44 -> 16:22 len 1  "v"
+4:48 -> 19:9 len 9  "return n;"
+4:59 -> 21:6 len 12  " return 0; }"
+4:71 -> 35:27 len 2  ", "
+4:80 -> 23:21 len 4  "mode"
+4:88 -> 25:14 len 1  "1"
+4:93 -> 26:20 len 2  "-1"
+4:102 -> 30:20 len 1  "9"
+4:105 -> 35:35 len 1  ")"
+4:106 -> 38:16 len 71  ";\n}\nconsole.log(f([V.A(3), V.B], 1).join(\",\"), f"...
+

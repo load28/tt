@@ -1,0 +1,13 @@
+// @run: aTaggedTemplateBesideATtValuePassesItsSubstitutionsAsValues.tt
+function tag(s: TemplateStringsArray, ...v: unknown[]) { return v; }
+variant V { A(n: number), B }
+export function plain(x: number, v: V) {
+  return tag`${x}${match (v) { A(n) => n, B => -1 }}`;
+}
+export function grouped(x: number, v: V) {
+  return tag`${(x)}${match (v) { A(n) => n, B => -1 }}`;
+}
+export function branch(c: boolean, x: number, v: V) {
+  return c ? tag`${(x)}${match (v) { A(n) => n, B => -1 }}` : null;
+}
+console.log(JSON.stringify([plain(5, V.A(1)), grouped(6, V.B), branch(true, 7, V.A(2))]));

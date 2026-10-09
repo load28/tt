@@ -1,0 +1,15 @@
+=== diagnostics main.ttx ===
+diagnostics: 4 diagnostic(s)
+  1:16-1:23 "Reading" error TS2300: Duplicate identifier 'at'. (in code ttc generated for this construct)
+  1:16-1:23 "Reading" error TS2717: Subsequent property declarations must have the same type.  Property 'at' must be of type 'number', but here has type 'string'. (in code ttc generated for this construct)
+    related 1:16-1:23 "Reading": 'at' was also declared here.
+  1:33-1:43 "at: number" error TS2300: Duplicate identifier 'at'. (in code ttc generated for this construct)
+  1:16-1:23 "Reading" error TS1117: An object literal cannot have multiple properties with the same name. (in code ttc generated for this construct)
+published: 5 diagnostic(s)
+  1:16-1:23 "Reading" error ts1117 (ttc): An object literal cannot have multiple properties with the same name. (in code ttc generated for this construct)
+  1:16-1:23 "Reading" error ts2300 (ttc): Duplicate identifier 'at'. (in code ttc generated for this construct)
+  1:16-1:23 "Reading" error ts2717 (ttc): Subsequent property declarations must have the same type.  Property 'at' must be of type 'number', but here has type 'string'. (in code ttc generated for this construct)
+    related main.ttx 1:16-1:23 "Reading": 'at' was also declared here.
+  1:33-1:43 "at: number" error ts2300 (ttc): Duplicate identifier 'at'. (in code ttc generated for this construct)
+  1:45-1:47 "at" error variant-duplicate-field (ttc): variant Reading: case "Sample" declares field `at` twice
+

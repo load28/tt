@@ -1,4 +1,4 @@
-//// [runtimeAMethodCallAroundAValueStaysAMemberCall.tt] 26 mapping(s)
+//// [runtimeAMethodCallAroundAValueStaysAMemberCall.tt] 29 mapping(s)
 1:1 -> 19:1 len 29  "\nconst trace: string[] = [];\n"
 3:19 -> 27:3 len 489  "\nfunction pick(k: K): K { trace.push(\"pick\"); re"...
 14:3 -> 47:3 len 35  "const v: string | number = r.first("
@@ -7,6 +7,9 @@
 14:69 -> 47:58 len 1  "2"
 14:72 -> 47:60 len 63  ");\n  return v;\n}\nfunction optional(o: O | undefi"...
 18:3 -> 73:3 len 30  "const s: string | undefined = "
+18:33 -> 52:7 len 1  "o"
+18:33 -> 57:20 len 5  "o?.id"
+18:33 -> 61:20 len 5  "o?.id"
 18:46 -> 54:21 len 7  "pick(k)"
 18:62 -> 57:26 len 6  "o.name"
 18:75 -> 61:26 len 3  "\"b\""

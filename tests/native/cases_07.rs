@@ -109,7 +109,10 @@ fn types_that_cannot_write_every_file_exits_3_and_names_each_one() {
 #[test]
 fn types_that_cannot_check_exits_2_and_leaves_earlier_output() {
     require_tsgo!();
-    let dir = project(&[("src/a.tt", "export const a: number = 1;\n")]);
+    let dir = project(&[
+        ("src/a.tt", "export const a: number = 1;\n"),
+    ]);
+    fs::write(dir.join("src/b.tt"), b"export const b = \"\xff\";\n").unwrap();
     let out_dir = dir.join("out");
     fs::create_dir_all(&out_dir).unwrap();
     fs::write(out_dir.join("a.tt.d.ts"), "export {};\n").unwrap();
@@ -118,7 +121,7 @@ fn types_that_cannot_check_exits_2_and_leaves_earlier_output() {
         &[
             "--types",
             "--json-report",
-            "src/missing.tt",
+            "src",
             "-o",
             out_dir.to_str().unwrap(),
         ],
@@ -155,10 +158,8 @@ fn types_without_a_report_prints_nothing_on_stdout() {
 }
 
 #[test]
-fn types_names_each_file_of_a_declaration_collision_once() {
+fn types_report_same_named_files_of_two_directory_inputs_apart() {
     require_emit!();
-    // Two directory inputs mirror to one output tree, so both `x.tt` files
-    // claim `types/x.tt.d.ts` and its map.
     let dir = project(&[]);
     for (input, value) in [("src/a", 1), ("src/b", 2)] {
         fs::create_dir_all(dir.join(input)).unwrap();
@@ -173,25 +174,22 @@ fn types_names_each_file_of_a_declaration_collision_once() {
         &["--types", "--json-report", "-o", "types", "src/a", "src/b"],
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert_eq!(output.status.code(), Some(3), "{stderr}");
+    assert_eq!(output.status.code(), Some(0), "{stderr}");
     let report = json_report(&output);
-    assert_eq!(reported_paths(&report, "written"), Vec::<PathBuf>::new());
+    assert_eq!(reported_paths(&report, "failed"), Vec::<PathBuf>::new());
     let types = fs::canonicalize(&dir).unwrap().join("types");
-    let mut failed = reported_paths(&report, "failed");
-    failed.sort();
+    let mut written = reported_paths(&report, "written");
+    written.sort();
     assert_eq!(
-        failed,
-        vec![types.join("x.tt.d.ts"), types.join("x.tt.d.ts.map")],
+        written,
+        vec![
+            types.join("a/x.tt.d.ts"),
+            types.join("a/x.tt.d.ts.map"),
+            types.join("b/x.tt.d.ts"),
+            types.join("b/x.tt.d.ts.map"),
+        ],
         "{report}"
     );
-    for name in ["x.tt.d.ts", "x.tt.d.ts.map"] {
-        let prefix = format!("ttc: cannot write types/{name}:");
-        assert_eq!(
-            stderr.lines().filter(|line| line.starts_with(&prefix)).count(),
-            1,
-            "{name}: {stderr}"
-        );
-    }
 }
 
 /// Reads a running watch's stderr and waits for its passes.

@@ -5,7 +5,7 @@ pair(match (x) { A(v) => v, _ => 0 }, last());
 //// [finalArgumentCompletionsCallThroughCapturedEarlierArguments2.ts]
 {
   let $tt_v0;
-  const $tt_v1 = (pair);
+  const $tt_v1: typeof pair = (pair);
   {
     const $tt_m = x;
     switch ($tt_m.kind) {

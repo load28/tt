@@ -1,0 +1,36 @@
+=== completions /*first*/ completionAfterIsBeforeTheArrow.tt:3:27 ===
+  | const a = match (ab) { is  };
+  |                           ^ /*first*/
+completion: 2008 item(s), member false, probe yes
+  Alpha (Class, 11)
+  Beta (Class, 11)
+  ... 2006 global or keyword item(s) (sortText 15, no source)
+ttCompletions: pattern false, member null
+patternCompletions: null
+editor completion: 2008 item(s)
+  Alpha (Class, 211)
+  Beta (Class, 211)
+  ... 2006 global or keyword item(s) (sortText 215, no source)
+
+=== completions /*second*/ completionAfterIsBeforeTheArrow.tt:4:42 ===
+  | const b = match (ab) { is Alpha => 1, is  };
+  |                                          ^ /*second*/
+completion: 1046 item(s), member false, probe yes
+  Alpha (Class, 11)
+  Beta (Class, 11)
+  a (Variable, 11)
+  ab (Variable, 11)
+  b (Variable, 11)
+  is (Variable, 11)
+  ... 1040 global or keyword item(s) (sortText 15, no source)
+ttCompletions: pattern false, member null
+patternCompletions: null
+editor completion: 1046 item(s)
+  Alpha (Class, 211)
+  Beta (Class, 211)
+  a (Variable, 211)
+  ab (Variable, 211)
+  b (Variable, 211)
+  is (Variable, 211)
+  ... 1040 global or keyword item(s) (sortText 215, no source)
+

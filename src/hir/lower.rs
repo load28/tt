@@ -181,6 +181,21 @@ impl Lower<'_> {
                             Span::new(field.name_off, field.name_off + field.name.len()),
                             AstOrigin::VariantField,
                         );
+                        let imports = field
+                            .imports
+                            .iter()
+                            .map(|decl| {
+                                (
+                                    self.node(Self::span(decl.spec), AstOrigin::Import),
+                                    match decl.kind {
+                                        ast::TtSpecifier::Relative(kind) => {
+                                            ImportKind::Relative(kind)
+                                        }
+                                        ast::TtSpecifier::Std(module) => ImportKind::Std(module),
+                                    },
+                                )
+                            })
+                            .collect();
                         self.hir.fields.alloc(FieldData {
                             node: field_node,
                             owner: variant,
@@ -188,6 +203,7 @@ impl Lower<'_> {
                             optional: field.optional,
                             ty_text: field.ty.clone(),
                             ty_span: Span::new(field.ty_off, field.ty_off + field.ty.len()),
+                            imports,
                             comments: field.comments.clone(),
                         })
                     })
@@ -203,7 +219,17 @@ impl Lower<'_> {
             declared: decl.declared,
             generics: decl.generics.clone(),
             generics_span: Span::new(decl.generics_off, decl.generics_off + decl.generics.len()),
+            header: Span::new(
+                decl.keyword_off + "variant".len(),
+                crate::scanner::skip_trivia(
+                    self.source.as_bytes(),
+                    decl.generics_off + decl.generics.len(),
+                    decl.span.end,
+                )
+                .0,
+            ),
             variants,
+            scope: decl.scope.map(Self::span),
         }));
         owner
     }
@@ -585,7 +611,7 @@ impl Lower<'_> {
                     Span::new(stmt.expr.span.end, stmt.else_body.span.start),
                 ],
             }],
-            trailing: None,
+            trailing: Some(Span::new(stmt.else_body.span.end, stmt.owner_span.end)),
         });
         let else_body = self.lower_body(&stmt.else_body);
         LetElseStmt {

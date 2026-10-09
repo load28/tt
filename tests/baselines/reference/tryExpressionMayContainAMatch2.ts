@@ -26,7 +26,7 @@ var $tt_show: (value: unknown) => string = function (value) {
 };
 function f(): X {
   let $tt_v0;
-  const $tt_v1 = (wrap);
+  const $tt_v1: typeof wrap = (wrap);
   {
     const $tt_m = m;
     switch ($tt_m.kind) {

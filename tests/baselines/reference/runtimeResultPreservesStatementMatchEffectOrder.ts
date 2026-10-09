@@ -69,8 +69,7 @@ const run = (tag: number) => {
   
   events.push("after");
   {
-    const $tt_a0 = { value: { kind: "Ok" as const, value: value } };
-    $tt_v0 = $tt_a0.value;
+    $tt_v0 = { kind: "Ok" as const, value: value };
     break $tt_v0;
   }
   }

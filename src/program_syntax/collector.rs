@@ -198,30 +198,32 @@ fn outermost_placeholder_at(
 }
 
 pub(super) struct ParentCollector {
-    pub(super) placeholders: HashSet<ProjectedSpan>,
-    pub(super) arm_blocks: HashMap<ProjectedSpan, BodyId>,
+    pub(super) placeholders: crate::position_hash::PositionSet<ProjectedSpan>,
+    pub(super) arm_blocks: crate::position_hash::PositionMap<ProjectedSpan, BodyId>,
     pub(super) tt_bindings: projection::TtBindings,
-    pub(super) single_return_bodies: HashMap<ProjectedSpan, BodyId>,
+    pub(super) single_return_bodies: crate::position_hash::PositionMap<ProjectedSpan, BodyId>,
     pub(super) source_start: HostOrigin,
-    pub(super) expected_identifiers: HashMap<ProjectedSpan, TtNodeId>,
-    pub(super) expected_calls: HashMap<ProjectedSpan, TtNodeId>,
+    pub(super) expected_identifiers: crate::position_hash::PositionMap<ProjectedSpan, TtNodeId>,
+    pub(super) expected_calls: crate::position_hash::PositionMap<ProjectedSpan, TtNodeId>,
     pub(super) expected_exit_calls: HashSet<TtNodeId>,
-    pub(super) synthetic_returns: HashSet<ProjectedSpan>,
+    pub(super) synthetic_returns: crate::position_hash::PositionSet<ProjectedSpan>,
     pub(super) found: HashMap<TtNodeId, FoundOverlay>,
     pub(super) duplicates: Vec<TtNodeId>,
     pub(super) source_segments: ProjectionSegments,
-    pub(super) projection_only_protocol_parents: HashSet<ProjectedSpan>,
-    pub(super) host_owners: Vec<ProjectedHostOwner>,
-    pub(super) protocol_frames: Vec<ProjectedProtocolFrame>,
+    pub(super) projection_only_protocol_parents: crate::position_hash::PositionSet<ProjectedSpan>,
+    pub(super) host_owners: Stack<ProjectedHostOwner>,
+    pub(super) protocol_frames: Stack<std::rc::Rc<ProjectedProtocolFrame>>,
+    pub(super) parent_marks: Vec<(usize, Option<super::parents::ParentPath>)>,
+    pub(super) parent_edges: super::parents::ParentEdges,
     pub(super) occupied_names: HashSet<String>,
     pub(super) function_depth: usize,
     pub(super) function_targets: Vec<EvaluationOwner>,
     /// The projected spans of the `DecisionCallExpression` placeholders.
-    pub(super) decision_calls: HashSet<ProjectedSpan>,
+    pub(super) decision_calls: crate::position_hash::PositionSet<ProjectedSpan>,
     /// The function each decision placeholder calls: the projection's
     /// stand-in for a match's arms, which the lowering writes as statements
     /// in the match's own owner, so it is no evaluation owner of its own.
-    pub(super) decision_functions: HashSet<ProjectedSpan>,
+    pub(super) decision_functions: crate::position_hash::PositionSet<ProjectedSpan>,
     pub(super) contextual_types: Vec<Option<ProjectedSpan>>,
     pub(super) assertions: Vec<Option<ProjectedSpan>>,
     pub(super) function_return_types: Vec<Option<ProjectedSpan>>,
@@ -236,7 +238,7 @@ pub(super) struct ParentCollector {
     /// body, whether the block is free of cleanup boundaries, and the
     /// function depth the block sits at.
     pub(super) arm_block_scopes: Vec<(BodyId, bool, usize)>,
-    pub(super) global_statements: HashMap<ProjectedSpan, GlobalStatement>,
+    pub(super) global_statements: crate::position_hash::PositionMap<ProjectedSpan, GlobalStatement>,
 }
 
 pub(super) struct CollectedProgramSyntax {
@@ -244,22 +246,53 @@ pub(super) struct CollectedProgramSyntax {
     pub(super) owners: Vec<HostOwnerSyntax>,
     pub(super) occupied_names: HashSet<String>,
     pub(super) globals: HashMap<SourceSpan, GlobalStatement>,
+    #[cfg(test)]
+    pub(super) parent_edges: super::parents::ParentEdges,
 }
 
 pub(super) struct FoundOverlay {
-    pub(super) ambient: bool,
-    pub(super) decorated_classes: Vec<usize>,
-    pub(super) decision_functions: Vec<usize>,
-    pub(super) parents: Vec<AstParentKind>,
-    pub(super) host_owners: Vec<ProjectedHostOwner>,
-    pub(super) protocol_frames: Vec<ProjectedProtocolFrame>,
+    pub(super) parents: super::parents::ParentPath,
+    pub(super) host_owners: crate::chain::Chain<ProjectedHostOwner>,
+    /// The frames enclosing the overlay, shared with every other overlay
+    /// under them: a frame lists all of its positions, so copying it per
+    /// overlay would cost each sibling the size of the whole list.
+    pub(super) protocol_frames: Stack<std::rc::Rc<ProjectedProtocolFrame>>,
     pub(super) exits: Vec<ProjectedHostExit>,
     pub(super) function_target: Option<EvaluationOwner>,
     pub(super) contextual_type: Option<ProjectedSpan>,
     pub(super) assertion: Option<Option<ProjectedSpan>>,
-    pub(super) loop_head_reads: bool,
     pub(super) function_return_type: Option<ProjectedSpan>,
     pub(super) function_return_awaited: bool,
+}
+
+pub(super) struct Stack<T>(crate::chain::Chain<T>);
+
+impl<T> Default for Stack<T> {
+    fn default() -> Self {
+        Stack(crate::chain::Chain::new())
+    }
+}
+
+impl<T> Clone for Stack<T> {
+    fn clone(&self) -> Self {
+        Stack(self.0.clone())
+    }
+}
+
+impl<T> Stack<T> {
+    pub(super) fn push(&mut self, item: T) {
+        let rest = std::mem::take(&mut self.0);
+        self.0 = crate::chain::Chain::cons(item, rest);
+    }
+
+    pub(super) fn pop(&mut self) {
+        let rest = self.0.rest().cloned().unwrap_or_default();
+        self.0 = rest;
+    }
+
+    pub(super) fn chain(&self) -> &crate::chain::Chain<T> {
+        &self.0
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -278,7 +311,7 @@ pub(super) struct ProjectedHostExit {
 pub(super) enum ProjectedProtocolFrame {
     Ordered {
         parent: ProjectedSpan,
-        positions: Vec<(ProjectedSpan, Effects)>,
+        positions: Vec<(ProjectedSpan, Effects, EvaluationInputMode)>,
         kind: OrderedEvaluationKind,
         /// Whether the operation has no spread element. A spread copies its
         /// operand at the literal's own position, running whatever getters
@@ -324,6 +357,7 @@ pub(super) enum ProjectedProtocolFrame {
         /// For a call in an optional chain, the link that decides whether
         /// it is evaluated.
         optional: Option<OptionalCallTest>,
+        spread_free: bool,
     },
     Member {
         parent: ProjectedSpan,
@@ -348,7 +382,7 @@ pub(super) enum ProjectedProtocolFrame {
     },
     Jsx {
         parent: ProjectedSpan,
-        expressions: Vec<(ProjectedSpan, Effects, bool)>,
+        expressions: Vec<(ProjectedSpan, Effects, JsxPosition)>,
     },
     Suspend {
         parent: ProjectedSpan,
@@ -397,6 +431,7 @@ pub(super) struct ProjectedReferencePart {
     pub(super) span: ProjectedSpan,
     pub(super) effects: Effects,
     pub(super) read_at_call: bool,
+    pub(super) this_of_super: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -415,6 +450,9 @@ pub(super) struct ProjectedHostOwner {
     /// a value's parent path here leaves exactly the edges between the owner
     /// and the value ([`owner_reach`]).
     pub(super) edge: usize,
+    pub(super) iteration: bool,
+    pub(super) labeled: bool,
+    pub(super) unbraced: bool,
     pub(super) split: Option<ProjectedDeclaratorSplit>,
 }
 
@@ -429,33 +467,40 @@ pub(super) struct ProjectedDeclaratorSplit {
 pub(super) fn object_evaluation_positions(
     node: &ObjectLit,
     source_start: HostOrigin,
-    placeholders: &HashSet<ProjectedSpan>,
+    placeholders: &crate::position_hash::PositionSet<ProjectedSpan>,
     segments: &ProjectionSegments,
-) -> Vec<(ProjectedSpan, Effects)> {
+) -> Vec<(ProjectedSpan, Effects, EvaluationInputMode)> {
     let mut positions = Vec::new();
     for property in &node.props {
         match property {
             PropOrSpread::Spread(spread) => {
                 positions.push((
                     operand_span(&spread.expr, source_start, placeholders, segments),
-                    expression_effects(&spread.expr),
+                    object_spread_effects(&spread.expr),
+                    EvaluationInputMode::ObjectSpread,
                 ));
             }
             PropOrSpread::Prop(property) => match &**property {
                 Prop::Shorthand(identifier) => {
-                    positions.push((projected_span(identifier.span, source_start), Effects::ANY));
+                    positions.push((
+                        projected_span(identifier.span, source_start),
+                        Effects::ANY,
+                        EvaluationInputMode::ShorthandProperty,
+                    ));
                 }
                 Prop::KeyValue(property) => {
                     push_computed_property(&mut positions, &property.key, source_start);
                     positions.push((
                         operand_span(&property.value, source_start, placeholders, segments),
                         expression_effects(&property.value),
+                        EvaluationInputMode::Value,
                     ));
                 }
                 Prop::Assign(property) => {
                     positions.push((
                         operand_span(&property.value, source_start, placeholders, segments),
                         expression_effects(&property.value),
+                        EvaluationInputMode::Value,
                     ));
                 }
                 Prop::Getter(property) => {
@@ -474,7 +519,7 @@ pub(super) fn object_evaluation_positions(
 }
 
 pub(super) fn push_computed_property(
-    positions: &mut Vec<(ProjectedSpan, Effects)>,
+    positions: &mut Vec<(ProjectedSpan, Effects, EvaluationInputMode)>,
     name: &PropName,
     source_start: HostOrigin,
 ) {
@@ -482,6 +527,7 @@ pub(super) fn push_computed_property(
         positions.push((
             projected_span(computed.expr.span(), source_start),
             expression_effects(&computed.expr),
+            EvaluationInputMode::Value,
         ));
     }
 }
@@ -493,7 +539,7 @@ pub(super) fn push_computed_property(
 pub(super) fn argument_positions(
     arguments: &[swc_ecma_ast::ExprOrSpread],
     source_start: HostOrigin,
-    placeholders: &HashSet<ProjectedSpan>,
+    placeholders: &crate::position_hash::PositionSet<ProjectedSpan>,
     segments: &ProjectionSegments,
 ) -> Vec<(ProjectedSpan, bool, Effects)> {
     arguments
@@ -518,68 +564,104 @@ pub(super) fn jsx_expression_span(
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum JsxPosition {
+    Tag,
+    Value,
+    Spread,
+    ChildElement,
+}
+
 pub(super) fn jsx_evaluation_positions(
     node: &JSXElement,
     source_start: HostOrigin,
-) -> Vec<(ProjectedSpan, bool)> {
+) -> Vec<(ProjectedSpan, JsxPosition)> {
+    let tag = match &node.opening.name {
+        swc_ecma_ast::JSXElementName::Ident(name) => {
+            let text: &str = &name.sym;
+            let intrinsic =
+                text.starts_with(|c: char| c.is_ascii_lowercase()) || text.contains('-');
+            (!intrinsic).then(|| projected_span(name.span, source_start))
+        }
+        swc_ecma_ast::JSXElementName::JSXMemberExpr(member) => {
+            Some(projected_span(member.span(), source_start))
+        }
+        swc_ecma_ast::JSXElementName::JSXNamespacedName(_) => None,
+    };
     let attributes = node
         .opening
         .attrs
         .iter()
         .filter_map(|attribute| match attribute {
-            JSXAttrOrSpread::SpreadElement(spread) => {
-                Some((projected_span(spread.expr.span(), source_start), false))
-            }
+            JSXAttrOrSpread::SpreadElement(spread) => Some((
+                projected_span(spread.expr.span(), source_start),
+                JsxPosition::Spread,
+            )),
             JSXAttrOrSpread::JSXAttr(attribute) => match attribute.value.as_ref()? {
                 JSXAttrValue::JSXExprContainer(container) => {
-                    jsx_expression_span(&container.expr, source_start).map(|span| (span, false))
+                    jsx_expression_span(&container.expr, source_start)
+                        .map(|span| (span, JsxPosition::Value))
                 }
-                JSXAttrValue::JSXElement(element) => {
-                    Some((projected_span(element.span, source_start), false))
-                }
-                JSXAttrValue::JSXFragment(fragment) => {
-                    Some((projected_span(fragment.span, source_start), false))
-                }
+                JSXAttrValue::JSXElement(element) => Some((
+                    projected_span(element.span, source_start),
+                    JsxPosition::Value,
+                )),
+                JSXAttrValue::JSXFragment(fragment) => Some((
+                    projected_span(fragment.span, source_start),
+                    JsxPosition::Value,
+                )),
                 JSXAttrValue::Str(_) => None,
             },
         });
     let children = node.children.iter().filter_map(|child| match child {
         JSXElementChild::JSXExprContainer(container) => {
-            jsx_expression_span(&container.expr, source_start).map(|span| (span, false))
+            jsx_expression_span(&container.expr, source_start)
+                .map(|span| (span, JsxPosition::Value))
         }
-        JSXElementChild::JSXSpreadChild(spread) => {
-            Some((projected_span(spread.expr.span(), source_start), false))
-        }
-        JSXElementChild::JSXElement(element) => {
-            Some((projected_span(element.span, source_start), true))
-        }
-        JSXElementChild::JSXFragment(fragment) => {
-            Some((projected_span(fragment.span, source_start), true))
-        }
+        JSXElementChild::JSXSpreadChild(spread) => Some((
+            projected_span(spread.expr.span(), source_start),
+            JsxPosition::Value,
+        )),
+        JSXElementChild::JSXElement(element) => Some((
+            projected_span(element.span, source_start),
+            JsxPosition::ChildElement,
+        )),
+        JSXElementChild::JSXFragment(fragment) => Some((
+            projected_span(fragment.span, source_start),
+            JsxPosition::ChildElement,
+        )),
         JSXElementChild::JSXText(_) => None,
     });
-    attributes.chain(children).collect()
+    tag.map(|span| (span, JsxPosition::Tag))
+        .into_iter()
+        .chain(attributes)
+        .chain(children)
+        .collect()
 }
 
 pub(super) fn jsx_fragment_positions(
     node: &JSXFragment,
     source_start: HostOrigin,
-) -> Vec<(ProjectedSpan, bool)> {
+) -> Vec<(ProjectedSpan, JsxPosition)> {
     node.children
         .iter()
         .filter_map(|child| match child {
             JSXElementChild::JSXExprContainer(container) => {
-                jsx_expression_span(&container.expr, source_start).map(|span| (span, false))
+                jsx_expression_span(&container.expr, source_start)
+                    .map(|span| (span, JsxPosition::Value))
             }
-            JSXElementChild::JSXSpreadChild(spread) => {
-                Some((projected_span(spread.expr.span(), source_start), false))
-            }
-            JSXElementChild::JSXElement(element) => {
-                Some((projected_span(element.span, source_start), true))
-            }
-            JSXElementChild::JSXFragment(fragment) => {
-                Some((projected_span(fragment.span, source_start), true))
-            }
+            JSXElementChild::JSXSpreadChild(spread) => Some((
+                projected_span(spread.expr.span(), source_start),
+                JsxPosition::Value,
+            )),
+            JSXElementChild::JSXElement(element) => Some((
+                projected_span(element.span, source_start),
+                JsxPosition::ChildElement,
+            )),
+            JSXElementChild::JSXFragment(fragment) => Some((
+                projected_span(fragment.span, source_start),
+                JsxPosition::ChildElement,
+            )),
             JSXElementChild::JSXText(_) => None,
         })
         .collect()

@@ -74,7 +74,7 @@ const okay = (name: string, value: number): R => { order.push(name); return { ki
 const fail = (name: string): R => { order.push(name); return { kind: "Err", error: name }; };
 const report = (value: unknown) => { console.log(order.join(","), String(value)); order.length = 0; };
 let $tt_v0: number;
-const $tt_v2 = (report);
+const $tt_v2: typeof report = (report);
 do {
   let $tt_v50: number;
   let $tt_v1: number;
@@ -102,7 +102,7 @@ do {
 } while (false);
 $tt_v2($tt_v0);
 let $tt_v4: number;
-const $tt_v6 = (report);
+const $tt_v6: typeof report = (report);
 do {
   let $tt_v51: number;
   let $tt_v5: number;
@@ -130,7 +130,7 @@ do {
 } while (false);
 $tt_v6($tt_v4);
 let $tt_v8: number;
-const $tt_v10 = (report);
+const $tt_v10: typeof report = (report);
 do {
   let $tt_v52: number;
   let $tt_v9: number;
@@ -157,7 +157,7 @@ do {
 } while (false);
 $tt_v10($tt_v8);
 let $tt_v11: number[];
-const $tt_v13 = (report);
+const $tt_v13: typeof report = (report);
 do {
   let $tt_v53: number[];
   let $tt_v12: number;
@@ -185,7 +185,7 @@ do {
 } while (false);
 $tt_v13($tt_v11);
 let $tt_v15: number;
-const $tt_v17 = (report);
+const $tt_v17: typeof report = (report);
 do {
   let $tt_v54: number;
   let $tt_v16: number;
@@ -212,7 +212,7 @@ do {
 } while (false);
 $tt_v17($tt_v15);
 let $tt_v18: number;
-const $tt_v20 = (report);
+const $tt_v20: typeof report = (report);
 do {
   let $tt_v55: string;
   let $tt_v19: number;
@@ -239,7 +239,7 @@ do {
 } while (false);
 $tt_v20($tt_v18);
 let $tt_v21: number;
-const $tt_v23 = (report);
+const $tt_v23: typeof report = (report);
 do {
   let $tt_v22: number;
   const $tt_v24 = (callee());
@@ -266,11 +266,11 @@ do {
 } while (false);
 $tt_v23($tt_v21);
 let $tt_v25: number;
-const $tt_v27 = (report);
+const $tt_v27: typeof report = (report);
 do {
   const $tt_v57 = mark("head", 3);
   let $tt_v26: number;
-  const $tt_v28 = (make);
+  const $tt_v28: typeof make = (make);
   {
     const $tt_m = subject("arg");
     switch ($tt_m.kind) {
@@ -293,7 +293,7 @@ do {
 } while (false);
 $tt_v27($tt_v25);
 let $tt_v29: number;
-const $tt_v32 = (report);
+const $tt_v32: typeof report = (report);
 do {
   let $tt_v58: number;
   let $tt_v30: number;
@@ -341,7 +341,7 @@ do {
 } while (false);
 $tt_v32($tt_v29);
 let $tt_v36: string;
-const $tt_v38 = (report);
+const $tt_v38: typeof report = (report);
 do {
   let $tt_v59: number;
   let $tt_v41: number;
@@ -376,7 +376,7 @@ do {
 } while (false);
 $tt_v38($tt_v36);
 let $tt_v42: string;
-const $tt_v44 = (report);
+const $tt_v44: typeof report = (report);
 do {
   let $tt_v60: false;
   let $tt_v47: false;

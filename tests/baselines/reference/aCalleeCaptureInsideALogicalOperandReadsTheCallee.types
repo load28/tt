@@ -1,0 +1,45 @@
+=== aCalleeCaptureInsideALogicalOperandReadsTheCallee.tt ===
+function R(x: number): TResult<number, string> { return Result.Ok(x); }
+>R : function R(x: number): TResult<number, string>
+>x : (parameter) x: number
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>x : (parameter) x: number
+function obj(x: unknown) { return x; }
+>obj : function obj(x: unknown): unknown
+>x : (parameter) x: unknown
+>x : (parameter) x: unknown
+function g(x: unknown) { return x; }
+>g : function g(x: unknown): unknown
+>x : (parameter) x: unknown
+>x : (parameter) x: unknown
+const n = { m: (x: number) => x * 10 };
+>n : const n: {
+>       m: (x: number) => number;
+>   }
+>m : (property) m: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+function t(): TResult<unknown, string> {
+>t : function t(): TResult<unknown, string>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  const r = obj(n?.m(try R(1))) || g(try R(2));
+>r : const r: unknown
+>obj : function obj(x: unknown): unknown
+>n : const n: {
+>       m: (x: number) => number;
+>   }
+>m : (property) m: (x: number) => number
+>R : function R(x: number): TResult<number, string>
+>g : function g(x: unknown): unknown
+>R : function R(x: number): TResult<number, string>
+  return Result.Ok(r);
+>Ok : const Ok: <unknown>(value: unknown) => Result.TOk<unknown>
+>r : const r: unknown
+console.log(JSON.stringify(t()));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>t : function t(): TResult<unknown, string>
+

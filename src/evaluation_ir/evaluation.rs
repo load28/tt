@@ -60,11 +60,26 @@ impl EvaluationFile {
             occupied_names: syntax.occupied_names().map(str::to_owned).collect(),
             declared_names: syntax.declared_names(),
             module_declared_names: syntax.module_declared_names(),
+            if_tests: syntax.if_tests().to_vec(),
+            anonymous_functions: syntax.anonymous_functions().to_vec(),
+            function_names: syntax.function_names().to_vec(),
             directive_prologue_end: syntax.directive_prologue_end(),
-            tt_spans: syntax
-                .core_contexts()
-                .map(|(_, _, _, _, source, _, _)| source)
-                .collect(),
+            tt_spans: TtSpans::new(
+                syntax
+                    .core_contexts()
+                    .map(|(_, _, _, _, source, owner, _)| (source, owner.span))
+                    .collect(),
+            ),
+            lowered_spans: TtSpans::new(
+                syntax
+                    .core_contexts()
+                    .filter(|(root, ..)| match root {
+                        CoreRoot::Expr(expr) => core.has_statement_form(*expr),
+                        CoreRoot::Decision(_) | CoreRoot::Adt(_) | CoreRoot::Propagate(_) => true,
+                    })
+                    .map(|(_, _, _, _, source, owner, _)| (source, owner.span))
+                    .collect(),
+            ),
             script: syntax.is_script(),
             commonjs: syntax.uses_commonjs_syntax(),
             globals: syntax.globals().clone(),
@@ -84,6 +99,31 @@ impl EvaluationFile {
                 RegionPlacement::SourceEdit => return None,
             }
         }
+    }
+
+    fn nested_relocations(&self) -> Vec<SourceSpan> {
+        let mut covered_steps = HashSet::new();
+        let mut covered_inputs = HashSet::new();
+        let mut relocations = Vec::new();
+        for region in &self.regions {
+            let RegionPlacement::Nested {
+                source, protocol, ..
+            } = &region.placement
+            else {
+                continue;
+            };
+            relocations.extend(*source);
+            for step in protocol.steps().fresh(&mut covered_steps) {
+                relocations.push(step.parent);
+                relocations.extend(
+                    step.inputs
+                        .fresh(&mut covered_inputs)
+                        .into_iter()
+                        .map(|input| input.source),
+                );
+            }
+        }
+        relocations
     }
 
     pub(crate) fn lowering_plan(&self, core: &CoreFile) -> Result<LoweringPlan, EvaluationError> {
@@ -209,19 +249,39 @@ impl EvaluationFile {
                 statement_decisions.entry(owner).or_default().push(source);
             }
         }
+        let nested_propagation_sources: Vec<SourceSpan> = self
+            .regions
+            .iter()
+            .filter_map(|region| match (region.root, &region.placement) {
+                (
+                    Some(CoreRoot::Expr(expr)),
+                    RegionPlacement::Nested {
+                        source: Some(source),
+                        ..
+                    },
+                ) if matches!(core.exprs[expr.index()], Expr::Propagate(_)) => Some(*source),
+                _ => None,
+            })
+            .collect();
+        let mut statement_decision_sources: Vec<SourceSpan> =
+            statement_decisions.values().flatten().copied().collect();
+        statement_decision_sources.sort_unstable_by_key(|span| (span.start, span.end));
         let mut next_slot = 0u32;
         let mut occupied_names = self.occupied_names.clone();
         let mut slot_names = Vec::new();
         let mut slot_anchors: Vec<Option<SourceSpan>> = Vec::new();
         let mut value_slots = HashMap::new();
-        let mut capture_dependencies = HashMap::new();
+        let mut captures = HashMap::new();
+        let mut captured_slots = HashMap::new();
         let mut rewrites = Vec::with_capacity(owners.len());
         let mut structurally_owned_children = HashSet::new();
         let mut owned_child_schedules = Vec::new();
+        let mut group_captures = HashMap::new();
+        let mut owned_capabilities = HashMap::new();
         let mut owned_child_exits = Vec::new();
         let mut nested_operations = Vec::new();
         let mut unsupported_owned_children = Vec::new();
-        for (owner, values) in owners {
+        for (group, (owner, values)) in owners.into_iter().enumerate() {
             let assigned = values
                 .into_iter()
                 .map(|value| {
@@ -245,13 +305,16 @@ impl EvaluationFile {
                 })
                 .collect();
             let mut source_slots = HashMap::new();
+            let mut planned_links = PlannedLinks::default();
             let values = assigned
                 .into_iter()
                 .map(|(value, target)| {
                     let schedule = resolve_schedule(
                         value.protocol,
+                        &self.tt_spans,
                         &slots,
                         &mut source_slots,
+                        &mut planned_links,
                         &mut next_slot,
                         &mut slot_names,
                         &mut occupied_names,
@@ -276,20 +339,10 @@ impl EvaluationFile {
                 })
                 .collect::<Result<Vec<_>, EvaluationError>>()?;
             for (source, slot) in &source_slots {
-                capture_dependencies.insert(
-                    slot.target,
-                    source_slots
-                        .iter()
-                        .filter(|(child, dependency)| {
-                            **child != *source
-                                && source.start <= child.start
-                                && child.end <= source.end
-                                && dependency.target.0 < slot.target.0
-                        })
-                        .map(|(child, dependency)| (*child, dependency.target))
-                        .collect(),
-                );
+                captures.insert(slot.target, (group, *source));
+                captured_slots.insert((group, *source), slot.target);
             }
+            group_captures.insert(owner, (slots.clone(), source_slots.clone()));
             let mut values = values;
             // A statement-capable outer Core value owns same-host tt values
             // lexically nested inside it. Its structural emitter evaluates
@@ -311,17 +364,21 @@ impl EvaluationFile {
                         .copied(),
                 )
                 .collect();
-            let owned_children: HashSet<_> = values
+            let outer_spans: Vec<(usize, usize)> = outers
                 .iter()
-                .filter(|child| {
-                    outers.iter().any(|outer| {
-                        outer.start <= child.source.start
-                            && child.source.end <= outer.end
-                            && (outer.start < child.source.start || child.source.end < outer.end)
-                    })
-                })
-                .map(|child| child.expr)
+                .map(|outer| (outer.start, outer.end))
                 .collect();
+            let child_spans: Vec<(usize, usize)> = values
+                .iter()
+                .map(|child| (child.source.start, child.source.end))
+                .collect();
+            let owned_children: HashSet<_> =
+                crate::span_index::innermost_containers(&outer_spans, &child_spans)
+                    .into_iter()
+                    .zip(&values)
+                    .filter(|(outer, _)| outer.is_some())
+                    .map(|(_, child)| child.expr)
+                    .collect();
             structurally_owned_children.extend(owned_children.iter().copied());
             owned_child_exits.extend(
                 values
@@ -329,36 +386,30 @@ impl EvaluationFile {
                     .filter(|value| owned_children.contains(&value.expr) && !value.exits.is_empty())
                     .map(|value| (value.expr, value.exits.clone())),
             );
-            let mut owned_groups: Vec<(SourceSpan, Vec<PlannedValue>)> = Vec::new();
-            for child in values
+            let enclosing: Vec<SourceSpan> = outers
                 .iter()
-                .filter(|value| owned_children.contains(&value.expr))
-            {
-                let Some(outer) = outers
-                    .iter()
-                    .copied()
-                    .filter(|outer| {
-                        *outer != child.source
-                            && outer.start <= child.source.start
-                            && child.source.end <= outer.end
-                    })
-                    .min_by_key(|outer| outer.end - outer.start)
-                else {
+                .copied()
+                .chain(nested_propagation_sources.iter().copied())
+                .collect();
+            let enclosing_spans: Vec<(usize, usize)> = enclosing
+                .iter()
+                .map(|outer| (outer.start, outer.end))
+                .collect();
+            let enclosing_outers =
+                crate::span_index::innermost_containers(&enclosing_spans, &child_spans);
+            let mut owned_groups: Vec<(SourceSpan, Vec<PlannedValue>)> = Vec::new();
+            let mut owned_group_index: HashMap<SourceSpan, usize> = HashMap::new();
+            let mut inside_counts: HashMap<(usize, SourceSpan), usize> = HashMap::new();
+            for (child, outer) in values.iter().zip(&enclosing_outers) {
+                if !owned_children.contains(&child.expr) {
+                    continue;
+                }
+                let Some(outer) = outer.map(|outer| enclosing[outer]) else {
                     continue;
                 };
-                let steps: Vec<_> = child
-                    .schedule
-                    .steps()
-                    .iter()
-                    .take_while(|step| {
-                        outer.start <= step.parent.start
-                            && step.parent.end <= outer.end
-                            && step.parent != outer
-                    })
-                    .cloned()
-                    .collect();
+                let count = steps_inside(child.schedule.steps(), outer, &mut inside_counts);
                 let schedule = EvaluationSchedule {
-                    steps,
+                    steps: child.schedule.steps().take(count),
                     call_completion: None,
                 };
                 let capability = target_capability(
@@ -369,20 +420,24 @@ impl EvaluationFile {
                     &child.context,
                     &schedule,
                 );
+                owned_capabilities.insert(child.expr, capability);
                 let owned = PlannedValue {
                     schedule,
                     capability,
                     ..child.clone()
                 };
-                match owned_groups.iter_mut().find(|(group, _)| *group == outer) {
-                    Some((_, group)) => group.push(owned),
-                    None => owned_groups.push((outer, vec![owned])),
+                match owned_group_index.get(&outer) {
+                    Some(&group) => owned_groups[group].1.push(owned),
+                    None => {
+                        owned_group_index.insert(outer, owned_groups.len());
+                        owned_groups.push((outer, vec![owned]));
+                    }
                 }
             }
             for (_, mut group) in owned_groups {
                 let operations = plan_conditional_operations(
                     &mut group,
-                    &self.tt_spans,
+                    &self.lowered_spans,
                     &mut next_slot,
                     &mut slot_names,
                     &mut occupied_names,
@@ -408,7 +463,7 @@ impl EvaluationFile {
             values.retain(|value| !owned_children.contains(&value.expr));
             let operations = plan_conditional_operations(
                 &mut values,
-                &self.tt_spans,
+                &self.lowered_spans,
                 &mut next_slot,
                 &mut slot_names,
                 &mut occupied_names,
@@ -421,10 +476,13 @@ impl EvaluationFile {
                 .iter()
                 .map(|operation| (operation.parent, operation.result))
                 .collect();
-            for value in &mut values {
+            for value in values.iter_mut().filter(|_| !operation_slots.is_empty()) {
                 let mut changed = false;
-                for step in &mut value.schedule.steps {
-                    for input in &mut step.inputs {
+                let mut steps = value.schedule.steps.to_vec();
+                for step in &mut steps {
+                    let mut inputs = step.inputs.to_vec();
+                    let mut substituted = false;
+                    for input in &mut inputs {
                         let PlannedEvaluationInput::Source { source, mode, .. } = *input else {
                             continue;
                         };
@@ -432,10 +490,16 @@ impl EvaluationFile {
                             continue;
                         };
                         *input = PlannedEvaluationInput::Slot { slot, mode };
+                        substituted = true;
+                    }
+                    if substituted {
+                        step.inputs = crate::chain::Segments::from_vec(inputs);
                         changed = true;
                     }
                 }
                 if changed {
+                    value.schedule.steps =
+                        crate::chain::ChainSlice::whole(planned_chain(steps, &self.tt_spans));
                     value.capability = target_capability(
                         core,
                         &self.tt_spans,
@@ -500,6 +564,7 @@ impl EvaluationFile {
             })
             .collect();
         let mut nested_source_slots = HashMap::new();
+        let mut nested_links = PlannedLinks::default();
         let mut nested_schedules: HashMap<_, _> = owned_child_schedules.into_iter().collect();
         let mut nested_groups: Vec<(SourceSpan, Option<SourceSpan>, Vec<PlannedValue>)> =
             Vec::new();
@@ -534,6 +599,11 @@ impl EvaluationFile {
                 {
                     break Some(*source);
                 }
+                if let (Some(CoreRoot::Decision(_)), RegionPlacement::Host { source, .. }) =
+                    (ancestor.root, &ancestor.placement)
+                {
+                    break Some(*source);
+                }
                 let RegionPlacement::Nested { parent, .. } = ancestor.placement else {
                     break None;
                 };
@@ -557,15 +627,46 @@ impl EvaluationFile {
             if step_count == 0 {
                 continue;
             }
-            let schedule = resolve_schedule_steps(
-                &protocol.steps()[..step_count],
-                &nested_sources,
-                &mut nested_source_slots,
-                &mut next_slot,
-                &mut slot_names,
-                &mut occupied_names,
-                false,
-            )?;
+            let group = match &host.placement {
+                RegionPlacement::Host { host_owner, .. } => group_captures.get_mut(host_owner),
+                _ => None,
+            };
+            let schedule = match group {
+                Some((group_slots, group_source_slots)) => {
+                    let mut sources = nested_sources.clone();
+                    sources.extend(group_slots.iter().map(|(source, slot)| (*source, *slot)));
+                    resolve_schedule_steps(
+                        protocol.steps(),
+                        step_count,
+                        0,
+                        Elision {
+                            tt_spans: &self.tt_spans,
+                            reserve_names: false,
+                        },
+                        &sources,
+                        group_source_slots,
+                        &mut nested_links,
+                        &mut next_slot,
+                        &mut slot_names,
+                        &mut occupied_names,
+                    )?
+                }
+                None => resolve_schedule_steps(
+                    protocol.steps(),
+                    step_count,
+                    0,
+                    Elision {
+                        tt_spans: &self.tt_spans,
+                        reserve_names: false,
+                    },
+                    &nested_sources,
+                    &mut nested_source_slots,
+                    &mut nested_links,
+                    &mut next_slot,
+                    &mut slot_names,
+                    &mut occupied_names,
+                )?,
+            };
             slot_anchors.resize(slot_names.len(), self.host_anchor(region));
             if let (
                 Expr::Propagate(_),
@@ -605,7 +706,7 @@ impl EvaluationFile {
         for (_, anchor, mut group) in nested_groups {
             let operations = plan_conditional_operations(
                 &mut group,
-                &self.tt_spans,
+                &self.lowered_spans,
                 &mut next_slot,
                 &mut slot_names,
                 &mut occupied_names,
@@ -693,6 +794,7 @@ impl EvaluationFile {
             // its own host owner; only an owner that takes no statements has
             // nowhere to write it.
             if exits_result
+                && capability == TargetCapability::StatementRegion
                 && !matches!(
                     context.owner,
                     EvaluationOwner::ParameterInitializer
@@ -752,19 +854,25 @@ impl EvaluationFile {
                 let CoreRoot::Propagate(node) = region.root? else {
                     return None;
                 };
-                let RegionPlacement::Host {
-                    context,
-                    host_owner,
-                    source,
-                    ..
-                } = &region.placement
-                else {
-                    return None;
+                let (context, owner, source) = match &region.placement {
+                    RegionPlacement::Host {
+                        context,
+                        host_owner,
+                        source,
+                        ..
+                    } => (context, host_owner, source),
+                    RegionPlacement::Nested {
+                        context: Some(context),
+                        owner: Some(owner),
+                        source: Some(source),
+                        ..
+                    } => (context, owner, source),
+                    _ => return None,
                 };
                 (context.continuation == HostContinuation::ForInitialize).then_some(
                     ForInitializerPropagation {
                         node,
-                        owner: *host_owner,
+                        owner: *owner,
                         source: *source,
                     },
                 )
@@ -827,7 +935,11 @@ impl EvaluationFile {
             let Some(CoreRoot::Expr(host_expr)) = ancestor.root else {
                 return None;
             };
-            let reason = match direct_capabilities.get(&host_expr).copied() {
+            let reason = match direct_capabilities
+                .get(&host_expr)
+                .or_else(|| owned_capabilities.get(&host_expr))
+                .copied()
+            {
                 Some(TargetCapability::ExpressionBoundary(reason)) => reason,
                 Some(TargetCapability::StatementRegion) => return None,
                 None => match context.owner {
@@ -861,6 +973,7 @@ impl EvaluationFile {
         let expression_boundary_name = allocate_generated_name("$tt_expr", &mut occupied_names)?;
         let match_raise_name = allocate_generated_name("$tt_raise", &mut occupied_names)?;
         let match_show_name = allocate_generated_name("$tt_show", &mut occupied_names)?;
+        let spread_name = allocate_generated_name("$tt_spread", &mut occupied_names)?;
         let global_bindings: HashMap<SourceSpan, &str> = self
             .globals
             .iter()
@@ -1060,11 +1173,17 @@ impl EvaluationFile {
             )),
             match_raise_name,
             match_show_name,
+            spread_name,
+            statement_decision_sources,
+            if_tests: self.if_tests.clone(),
+            anonymous_functions: self.anonymous_functions.clone(),
+            function_names: self.function_names.clone(),
             match_subject_names,
             owners: rewrites,
             for_initializer_propagations,
             slot_names,
-            capture_dependencies,
+            captures,
+            captured_slots,
             value_slots,
             piped_slots,
             nested_schedules,
@@ -1083,24 +1202,7 @@ impl EvaluationFile {
                 })
                 .collect(),
             structurally_owned_children,
-            nested_relocations: self
-                .regions
-                .iter()
-                .filter_map(|region| match &region.placement {
-                    RegionPlacement::Nested {
-                        source, protocol, ..
-                    } => Some((*source, protocol)),
-                    RegionPlacement::Host { .. } | RegionPlacement::SourceEdit => None,
-                })
-                .flat_map(|(source, protocol)| {
-                    source
-                        .into_iter()
-                        .chain(protocol.steps().iter().flat_map(|step| {
-                            std::iter::once(step.parent)
-                                .chain(step.inputs.iter().map(|input| input.source))
-                        }))
-                })
-                .collect(),
+            nested_relocations: self.nested_relocations(),
             nested_exits: self
                 .regions
                 .iter()
@@ -1185,4 +1287,36 @@ fn statement_decision(core: &CoreFile, extent: NodeId) -> Option<&Decision> {
             Statement::Decision(decision) if decision.extent == extent => Some(decision),
             _ => None,
         })
+}
+
+fn steps_inside(
+    steps: &crate::chain::ChainSlice<PlannedEvaluationStep>,
+    outer: SourceSpan,
+    counts: &mut HashMap<(usize, SourceSpan), usize>,
+) -> usize {
+    let mut unknown = Vec::new();
+    let mut chain = steps.chain();
+    let mut count = 0;
+    while let Some(step) = chain.first() {
+        if let Some(&known) = counts.get(&(chain.identity(), outer)) {
+            count = known;
+            break;
+        }
+        if !(outer.start <= step.parent.start
+            && step.parent.end <= outer.end
+            && step.parent != outer)
+        {
+            break;
+        }
+        unknown.push(chain.identity());
+        let Some(rest) = chain.rest() else {
+            break;
+        };
+        chain = rest;
+    }
+    for identity in unknown.into_iter().rev() {
+        count += 1;
+        counts.insert((identity, outer), count);
+    }
+    count.min(steps.len())
 }

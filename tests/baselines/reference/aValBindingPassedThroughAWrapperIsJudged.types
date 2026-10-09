@@ -1,0 +1,57 @@
+=== aValBindingPassedThroughAWrapperIsJudged.tt ===
+function g(p: { a: number }) { p.a = 1; }
+>g : function g(p: {
+>       a: number;
+>   }): void
+>p : (parameter) p: {
+>       a: number;
+>   }
+>a : (property) a: number
+>p : (parameter) p: {
+>       a: number;
+>   }
+>a : (property) a: number
+val const x = { a: 1 };
+>x : const x: {
+>       a: number;
+>   }
+>a : (property) a: number
+g((x));
+>g : function g(p: {
+>       a: number;
+>   }): void
+>x : const x: {
+>       a: number;
+>   }
+g(x as { a: number });
+>g : function g(p: {
+>       a: number;
+>   }): void
+>x : const x: {
+>       a: number;
+>   }
+>a : (property) a: number
+g(x!);
+>g : function g(p: {
+>       a: number;
+>   }): void
+>x : const x: {
+>       a: number;
+>   }
+[{ a: 1 }].forEach(x => g(x));
+>a : (property) a: number
+>forEach : (method) Array<{ a: number; }>.forEach(callbackfn: (value: {
+>       a: number;
+>   }, index: number, array: {
+>       a: number;
+>   }[]) => void, thisArg?: any): void
+>x : (parameter) x: {
+>       a: number;
+>   }
+>g : function g(p: {
+>       a: number;
+>   }): void
+>x : (parameter) x: {
+>       a: number;
+>   }
+

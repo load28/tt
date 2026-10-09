@@ -1,0 +1,8 @@
+// @filename: other.ts
+export const value = 1;
+// @filename: main.tt
+variant V { A, B }
+const v = V.A as V;
+export async function load() {
+  return await import("./other", match (v) { A => ({ with: {} }), B => undefined });
+}

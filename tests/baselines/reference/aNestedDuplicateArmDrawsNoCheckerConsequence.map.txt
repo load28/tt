@@ -1,0 +1,13 @@
+//// [aNestedDuplicateArmDrawsNoCheckerConsequence.tt] 11 mapping(s)
+1:1 -> 19:1 len 40  "import type { TOption } from \"@tt/std\";\n"
+2:32 -> 21:31 len 6  "number"
+2:32 -> 24:20 len 6  "number"
+2:48 -> 26:3 len 42  "\nexport function f(t: TOption<Shape>) {\n  "
+4:3 -> 48:3 len 7  "return "
+4:17 -> 30:19 len 1  "t"
+4:27 -> 33:17 len 5  "value"
+4:37 -> 34:18 len 1  "0"
+4:48 -> 38:18 len 1  "1"
+4:75 -> 42:18 len 1  "9"
+4:78 -> 48:16 len 4  ";\n}\n"
+

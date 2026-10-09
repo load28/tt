@@ -1,5 +1,11 @@
 # TASK-387: Classify excluded source entries before reading metadata
 
+> TASK-780 decisions C5 and C10 reverse parts of this record: the command
+> line's walk of a directory input now skips a symlink whose target cannot
+> be read, as TypeScript's directory listing does (other unreadable entries
+> are still named), and leaves out dot-files as well as dot-directories,
+> as TypeScript's include patterns do.
+
 - **Status**: Complete
 - **Started**: 2026-09-23
 - **Completed**: 2026-09-23

@@ -1,0 +1,66 @@
+==== ttc --out-dir (exit 1) ====
+error[try-placement]: `try` cannot be used in a repeated loop position — propagating its `Err` across this TypeScript control-flow boundary would run once per iteration
+ --> ./aTryInAResultBlockLoopConditionIsAPlacementError.tt:8:16
+  |
+8 |         while (try r()) { k++; }
+  |                ^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+error[try-placement]: `try` cannot be used in a repeated loop position — propagating its `Err` across this TypeScript control-flow boundary would run once per iteration
+ --> ./aTryInAResultBlockLoopConditionIsAPlacementError.tt:9:28
+  |
+9 |         do { k++; } while (try r());
+  |                            ^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+error[try-placement]: `try` cannot be used in a repeated loop position — propagating its `Err` across this TypeScript control-flow boundary would run once per iteration
+  --> ./aTryInAResultBlockLoopConditionIsAPlacementError.tt:10:22
+   |
+10 |         for (;; k += try r()) { break; }
+   |                      ^^^^^^^
+   |
+   = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+error[try-placement]: `try` cannot be used in a conditionally evaluated expression position — propagating its `Err` across this TypeScript control-flow boundary would evaluate it when the surrounding expression skips it
+  --> ./aTryInAResultBlockLoopConditionIsAPlacementError.tt:17:21
+   |
+17 |         const { a = try r() } = o;
+   |                     ^^^^^^^
+   |
+   = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+
+==== ttc --check-types (exit 1) ====
+error[try-placement]: `try` cannot be used in a repeated loop position — propagating its `Err` across this TypeScript control-flow boundary would run once per iteration
+ --> aTryInAResultBlockLoopConditionIsAPlacementError.tt:8:16
+  |
+8 |         while (try r()) { k++; }
+  |                ^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+error[try-placement]: `try` cannot be used in a repeated loop position — propagating its `Err` across this TypeScript control-flow boundary would run once per iteration
+ --> aTryInAResultBlockLoopConditionIsAPlacementError.tt:9:28
+  |
+9 |         do { k++; } while (try r());
+  |                            ^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+error[try-placement]: `try` cannot be used in a repeated loop position — propagating its `Err` across this TypeScript control-flow boundary would run once per iteration
+  --> aTryInAResultBlockLoopConditionIsAPlacementError.tt:10:22
+   |
+10 |         for (;; k += try r()) { break; }
+   |                      ^^^^^^^
+   |
+   = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+error[try-placement]: `try` cannot be used in a conditionally evaluated expression position — propagating its `Err` across this TypeScript control-flow boundary would evaluate it when the surrounding expression skips it
+  --> aTryInAResultBlockLoopConditionIsAPlacementError.tt:17:21
+   |
+17 |         const { a = try r() } = o;
+   |                     ^^^^^^^
+   |
+   = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

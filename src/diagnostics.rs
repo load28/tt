@@ -116,6 +116,8 @@ pub enum DiagnosticCode {
     VariantRequiredAfterOptional,
     /// A `variant` declared as a module's default export.
     VariantDefaultExport,
+    /// A variant case declaring the same payload field twice.
+    VariantDuplicateField,
     /// A pattern binding the same name twice.
     PatternDuplicateBinding,
     /// A match mixing tag patterns with literal or `is` patterns.
@@ -175,7 +177,7 @@ enum Numbered {
 ///
 /// Append-only: a new code takes the next number, and a retired code keeps
 /// its slot so every later number stays what `tsc` has already printed.
-const NUMBERED_CODES: [Numbered; 52] = [
+const NUMBERED_CODES: [Numbered; 53] = [
     Numbered::Active(DiagnosticCode::StrayPipe),
     Numbered::Active(DiagnosticCode::MalformedPipelinePostfix),
     Numbered::Active(DiagnosticCode::InvalidOptionalReceiver),
@@ -228,6 +230,7 @@ const NUMBERED_CODES: [Numbered; 52] = [
     Numbered::Active(DiagnosticCode::VariantDefaultExport),
     Numbered::Active(DiagnosticCode::MissingPipelineStep),
     Numbered::Active(DiagnosticCode::MissingArmBody),
+    Numbered::Active(DiagnosticCode::VariantDuplicateField),
 ];
 
 /// The numbered slot a code reference names: a name, `tt<number>`, or a
@@ -272,6 +275,7 @@ impl DiagnosticCode {
             DiagnosticCode::VariantDuplicateCase => "variant-duplicate-case",
             DiagnosticCode::VariantInvalidFieldType => "variant-invalid-field-type",
             DiagnosticCode::VariantFieldShadowsTag => "variant-field-shadows-tag",
+            DiagnosticCode::VariantDuplicateField => "variant-duplicate-field",
             DiagnosticCode::VariantRequiredAfterOptional => "variant-required-after-optional",
             DiagnosticCode::VariantDefaultExport => "variant-default-export",
             DiagnosticCode::PatternDuplicateBinding => "pattern-duplicate-binding",
@@ -329,6 +333,7 @@ impl DiagnosticCode {
         DiagnosticCode::VariantDuplicateCase,
         DiagnosticCode::VariantInvalidFieldType,
         DiagnosticCode::VariantFieldShadowsTag,
+        DiagnosticCode::VariantDuplicateField,
         DiagnosticCode::VariantRequiredAfterOptional,
         DiagnosticCode::VariantDefaultExport,
         DiagnosticCode::PatternDuplicateBinding,
@@ -768,6 +773,22 @@ A variant field's type annotation does not parse as TypeScript.
 Field types are emitted into the generated union verbatim, so they are
 checked as TypeScript type syntax where they are written — that way the
 error points at your declaration rather than at generated code."
+            }
+
+            DiagnosticCode::VariantDuplicateField => {
+                "\
+A case declares the same payload field twice.
+
+    variant Reading { Sample(at: Date, value: number, at: string) }
+
+A case's fields become its constructor's parameters and the properties of
+its object, and neither can name one thing twice: the constructor would not
+load (a duplicate parameter is a syntax error in strict code) and the
+property would have two types.
+
+Rename one of them:
+
+    variant Reading { Sample(at: Date, value: number, label: string) }"
             }
 
             DiagnosticCode::VariantFieldShadowsTag => {

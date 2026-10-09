@@ -1,0 +1,26 @@
+// @run: aConditionalOperandHoldingAnotherConditionalOperationReadsItsResult.tt
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+variant G { E, F }
+const ok = (value: number): R<number> => { console.log("ok", value); return { kind: "Ok", value }; };
+const err = (error: string): R<number> => ({ kind: "Err", error });
+
+function or(c: boolean, r: R<number>, g: G): R<number> {
+    const v = (c && try r) || match (g) { E => 10, F => 20 };
+    return { kind: "Ok", value: Number(v) };
+}
+
+function ternary(c: boolean, d: R<number>, e: R<number>): R<number> {
+    const v = (c ? try d : 0) ? 2 : try e;
+    return { kind: "Ok", value: v };
+}
+
+function nullish(c: boolean, r: R<number>, s: R<number>): R<number> {
+    const v = (c && try r) ?? try s;
+    return { kind: "Ok", value: Number(v) };
+}
+
+const show = (r: R<number>) => JSON.stringify(r);
+console.log(show(or(true, ok(0), G.E)), show(or(true, ok(3), G.F)), show(or(false, ok(4), G.F)), show(or(true, err("x"), G.E)));
+console.log(show(ternary(true, ok(1), ok(5))), show(ternary(true, ok(0), ok(6))), show(ternary(false, ok(1), err("y"))));
+console.log(show(nullish(true, ok(7), ok(8))), show(nullish(false, ok(7), err("z"))));
+export {};

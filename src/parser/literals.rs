@@ -306,7 +306,7 @@ fn strip_radix(text: &str, marker: char) -> Option<&str> {
 /// Decodes a string literal's escapes to the value JavaScript would see.
 /// None for an unterminated literal (the byte scanner tolerates those, but
 /// a pattern is not the place for one).
-fn decode_string(text: &str) -> Option<String> {
+pub(crate) fn decode_string(text: &str) -> Option<String> {
     let bytes = text.as_bytes();
     let quote = *bytes.first()?;
     if bytes.len() < 2 || *bytes.last()? != quote {

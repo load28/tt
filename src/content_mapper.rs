@@ -353,7 +353,7 @@ fn collect_extern_variants(file: &Path, imports: &[ttc::TtImport]) -> Vec<ttc::E
         if matches!(import.names, ttc::TtImportNames::None) {
             continue;
         }
-        let imported = dir.join(&import.specifier);
+        let imported = dir.join(import.path());
         let Ok(source) = std::fs::read_to_string(&imported) else {
             continue;
         };

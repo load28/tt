@@ -1,0 +1,8 @@
+=== diagnostics diagnosticOnAnElementWithACapturedAttribute.ttx ===
+diagnostics: 2 diagnostic(s)
+  2:46-2:59 "<div id={id}>" error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+  2:104-2:110 "</div>" error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+published: 2 diagnostic(s)
+  2:46-2:59 "<div id={id}>" error ts7026 (ttc): JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+  2:104-2:110 "</div>" error ts7026 (ttc): JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+

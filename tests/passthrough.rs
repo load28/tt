@@ -974,3 +974,62 @@ fn rules_typescript_checks_after_parsing_are_left_to_typescript() {
         assert_passthrough(source);
     }
 }
+
+#[test]
+fn match_as_an_identifier_beside_a_braced_arrow_is_not_a_malformed_match() {
+    for src in [
+        "class A {}\nclass match extends A {\n  m = () => 1\n}\n",
+        "import match from \"./x\"\nconst h = { f: () => 1 }\nexport {}\n",
+        "declare const match: any;\nexport const a = match\nexport const b = { f: () => 1 };\n",
+        "let match\nexport const h = { f: () => 1 }\n",
+        "export type C<match> = match extends { a: (x: infer U) => void } ? U : never;\n",
+        "export type H<T> = { [match in keyof T]: { f: (t: T[match]) => void } };\n",
+        "export function f<match extends object>(x: match): { g: () => match } { return { g: () => x }; }\n",
+        "export function g(match: unknown): match is { f: () => void } { return true; }\n",
+        "declare const match: any;\nexport const y = match as { f: () => void };\n",
+        "declare const match: any;\nexport const y = match satisfies { f: () => void };\n",
+        "declare let match: any;\nfor (match of [{ f: () => 1 }]) {}\n",
+    ] {
+        assert_passthrough(src);
+    }
+}
+
+#[test]
+fn a_class_body_after_a_match_call_heritage_is_not_an_unfinished_arm_list() {
+    for src in [
+        "declare function match(x: unknown): new () => object;\nexport class D extends match (1) { A }\n",
+        "declare function match(x: unknown): new () => object;\nexport class D extends match (1) { A; B }\n",
+        "declare function match(x: unknown): new () => object;\nexport class D extends match (1) {}\n",
+    ] {
+        assert_passthrough(src);
+    }
+}
+
+#[test]
+fn match_as_an_identifier_beside_a_tt_match_stays_an_identifier() {
+    let src = "declare const match: any;\nexport const y = match as { f: () => void };\n\
+               export const k = (n: number) => match (n) { 1 => \"a\", _ => \"b\" };\n";
+    let out = compile(src, &Options::default()).expect("compile failed");
+    assert!(
+        out.starts_with(
+            "declare const match: any;\nexport const y = match as { f: () => void };\n"
+        ),
+        "{out}"
+    );
+}
+
+#[test]
+fn variant_as_an_identifier_outside_a_declaration_position_passes_through() {
+    for src in [
+        "declare const variant: unknown;\nconst c = (variant as {});\nexport {};\n",
+        "export type P<variant extends { a: 1 }> = variant;\n",
+        "export function mixin<variant extends { new (...a: any[]): {} }>(s: variant) { return s; }\n",
+        "export type C<variant> = variant extends { a: 1 } ? 1 : 2;\n",
+        "export function g(variant: unknown): variant is { a: 1 } { return true; }\n",
+        "let variant: any; for (variant in { a: 1 }) {}\n",
+        "declare const variant: any;\nexport const s = variant satisfies {};\n",
+        "declare function variant(...a: any[]): any;\nexport const K = @variant class { };\n",
+    ] {
+        assert_passthrough(src);
+    }
+}

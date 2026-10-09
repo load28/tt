@@ -36,12 +36,12 @@ function pick(n: number) {
     const $tt_m = n;
     switch ($tt_m) {
       case 1: {
-        const $tt_a2 = { value: () => b.m().k };
+        const $tt_a2 = { value: (void 0, () => b.m().k) };
         $tt_v1 = $tt_a2.value;
         break;
       }
       default: {
-        const $tt_a3 = { value: function () { return 0; } };
+        const $tt_a3 = { value: (void 0, function () { return 0; }) };
         $tt_v1 = $tt_a3.value;
         break;
       }

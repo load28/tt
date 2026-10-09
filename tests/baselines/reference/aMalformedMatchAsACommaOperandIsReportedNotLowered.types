@@ -1,0 +1,29 @@
+=== aMalformedMatchAsACommaOperandIsReportedNotLowered.tt ===
+variant O { A(n: number), B }
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => O
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const log: string[] = [];
+>log : const log: string[]
+export function f(o: O) {
+>f : function f(o: O): void
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  match (o) { A(n) log.push("a" + n), B => 0 }, log.push("second");
+>o : (parameter) o: O
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+

@@ -57,7 +57,7 @@ function current(on: boolean): boolean {
 for (const on of [true, false]) {
   const flag = current(on);
   let $tt_v0: number;
-  const $tt_v1 = (consume);
+  const $tt_v1: typeof consume = (consume);
   {
     const $tt_m = flag;
     switch ($tt_m) {

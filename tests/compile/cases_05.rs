@@ -131,6 +131,17 @@ fn exported_variants_names_a_variant_by_its_local_export_specifiers() {
 }
 
 #[test]
+fn a_namespace_member_variant_is_not_a_module_export() {
+    let names: Vec<String> = ttc::exported_variants(
+        "export namespace NS { export variant Inner { P, Q } }\nexport variant Outer { R }\n",
+    )
+    .into_iter()
+    .map(|variant| variant.name)
+    .collect();
+    assert_eq!(names, ["Outer"]);
+}
+
+#[test]
 fn tt_imports_reports_specifiers_and_names() {
     use ttc::TtImportNames;
     let imports = ttc::tt_imports(

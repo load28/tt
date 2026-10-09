@@ -1,0 +1,23 @@
+=== completions /*type*/ instancePatternCompletionInAnUnfinishedArm.tt:3:35 ===
+  | export const a = match (e) { is My };
+  |                                   ^ /*type*/
+completion: 1061 item(s), member false, probe yes
+  MyErr (Class, 11)
+  a (Variable, 11)
+  e (Variable, 11)
+  ... 1058 global or keyword item(s) (sortText 15, no source)
+ttCompletions: pattern false, member null
+patternCompletions: null
+editor completion: 1061 item(s)
+  MyErr (Class, 211)
+  a (Variable, 211)
+  e (Variable, 211)
+  ... 1058 global or keyword item(s) (sortText 215, no source)
+
+=== diagnostics instancePatternCompletionInAnUnfinishedArm.tt ===
+diagnostics: 1 diagnostic(s)
+  1:7-1:12 "MyErr" hint TS6196: 'MyErr' is declared but never used. [unnecessary]
+published: 2 diagnostic(s)
+  1:7-1:12 "MyErr" hint TS6196 (ts): 'MyErr' is declared but never used. [unnecessary]
+  3:18-3:23 "match" error malformed-match (ttc): tt `match` could not be parsed
+

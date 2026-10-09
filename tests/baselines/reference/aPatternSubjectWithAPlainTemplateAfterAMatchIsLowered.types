@@ -1,0 +1,82 @@
+=== aPatternSubjectWithAPlainTemplateAfterAMatchIsLowered.tt ===
+variant V { A(n: number), B }
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => V
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const pick = (k: number, label: string): V => (label.length > 3 ? V.A(k) : V.B);
+>pick : const pick: (k: number, label: string) => V
+>k : (parameter) k: number
+>label : (parameter) label: string
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>label : (parameter) label: string
+>length : (property) String.length: number
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => V
+>k : (parameter) k: number
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+function viaLetElse(k: number) {
+>viaLetElse : function viaLetElse(k: number): number
+>k : (parameter) k: number
+  const A(n) = pick(match (k) { 1 => 10, _ => 20 }, `k=${k}!`) else { return -1; };
+>n : const n: number
+>pick : const pick: (k: number, label: string) => V
+>k : (parameter) k: number
+>k : (parameter) k: number
+  return n;
+>n : const n: number
+function viaIfLet(k: number) {
+>viaIfLet : function viaIfLet(k: number): number
+>k : (parameter) k: number
+  if let A(n) = pick(match (k) { 1 => 10, _ => 20 }, `${k}`) {
+>n : const n: number
+>pick : const pick: (k: number, label: string) => V
+>k : (parameter) k: number
+>k : (parameter) k: number
+    return n;
+>n : const n: number
+function viaOr(k: number, s: string) {
+>viaOr : function viaOr(k: number, s: string): number
+>k : (parameter) k: number
+>s : (parameter) s: string
+  const A(n) = pick(match (k) { 1 => 10, _ => 20 }, s || `k=${k}!`) else { return -3; };
+>n : const n: number
+>pick : const pick: (k: number, label: string) => V
+>k : (parameter) k: number
+>s : (parameter) s: string
+>k : (parameter) k: number
+  return n;
+>n : const n: number
+console.log(viaLetElse(1), viaLetElse(2), viaIfLet(1), viaOr(5, ""));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>viaLetElse : function viaLetElse(k: number): number
+>viaLetElse : function viaLetElse(k: number): number
+>viaIfLet : function viaIfLet(k: number): number
+>viaOr : function viaOr(k: number, s: string): number
+

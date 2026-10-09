@@ -1,0 +1,25 @@
+=== diagnostics tryValueMismatchIsNotAnErrTypeError.tt ===
+diagnostics: 7 diagnostic(s)
+  6:9-6:10 "s" error TS2322: Type 'number' is not assignable to type 'string'.
+  7:9-7:18 "try rr(2)" error TS2322: Type 'number' is not assignable to type 'string'. (in code ttc generated for this construct)
+  8:33-8:42 "try rr(3)" error TS2322: Type 'number' is not assignable to type 'string'. (in code ttc generated for this construct)
+  12:13-12:26 "try String(x)" error TS2322: `try` needs a `Result` — this expression is not one (ts2322: Type 'string' is not assignable to type 'object'.)
+  12:13-12:26 "try String(x)" error TS2322: the `Err` this `try` propagates does not fit the enclosing function's return type — tt has no automatic conversion, so widen the return type or convert the error (ts2322: Type 'string' is not assignable to type 'TResult<number, string>'.)
+  13:3-13:9 "return" error TS2322: Type 'TOk<unknown>' is not assignable to type 'TResult<number, string>'.
+        Type 'TOk<unknown>' is not assignable to type 'TOk<number>'.
+          Type 'unknown' is not assignable to type 'number'.
+  16:13-16:22 "try rr(4)" error TS2322: the `Err` this `try` propagates does not fit the enclosing function's return type — tt has no automatic conversion, so widen the return type or convert the error (ts2322: Type 'TErr<string>' is not assignable to type 'TResult<number, number>'.
+        Type 'TErr<string>' is not assignable to type 'TErr<number>'.
+          Type 'string' is not assignable to type 'number'.)
+published: 7 diagnostic(s)
+  6:9-6:10 "s" error ts2322 (ttc): Type 'number' is not assignable to type 'string'.
+  7:9-7:18 "try rr(2)" error ts2322 (ttc): type mismatch: expected `string`, found `number`
+  8:33-8:42 "try rr(3)" error ts2322 (ttc): type mismatch: expected `string`, found `number`
+  12:13-12:26 "try String(x)" error ts2322 (ttc): `try` needs a `Result` — this expression is not one (ts2322: Type 'string' is not assignable to type 'object'.)
+  12:13-12:26 "try String(x)" error ts2322 (ttc): type mismatch: expected `TResult<number, string>`, found `string`
+  13:3-13:9 "return" error ts2322 (ttc): Type 'TOk<unknown>' is not assignable to type 'TResult<number, string>'.
+        Type 'TOk<unknown>' is not assignable to type 'TOk<number>'.
+          Type 'unknown' is not assignable to type 'number'.
+  16:13-16:22 "try rr(4)" error ts2322 (ttc): type mismatch: expected `number`, found `string`
+        required type: `TResult<number, number>`
+

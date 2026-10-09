@@ -131,13 +131,13 @@ function opt(n: number): O {
   return n !== 0 ? { kind: "Some", value: n } : { kind: "None" };
 }
 function ifLetTry(n: number) {
-  let $tt_v0: ({
+  let $tt_v0: {
     kind: "Err";
     error: string;
-}) | ({
+} | {
     kind: "Ok";
     value: number;
-});
+};
   $tt_v0: {
     {
       const $tt_t0 = opt(n);
@@ -148,27 +148,25 @@ function ifLetTry(n: number) {
           $tt_v0 = $tt_t1;
           break $tt_v0;
         }
-        const $tt_a0 = { value: { kind: "Ok" as const, value: $tt_t1.value } };
-        $tt_v0 = $tt_a0.value;
+        $tt_v0 = { kind: "Ok" as const, value: $tt_t1.value };
         break $tt_v0;
       }
     }
     {
-      const $tt_a1 = { value: { kind: "Ok" as const, value: 0 } };
-      $tt_v0 = $tt_a1.value;
+      $tt_v0 = { kind: "Ok" as const, value: 0 };
       break $tt_v0;
     }
   }
   return $tt_v0;
 }
 function ifLetMatch(n: number) {
-  let $tt_v1: ({
+  let $tt_v1: {
     kind: "Err";
     error: string;
-}) | ({
+} | {
     kind: "Ok";
     value: string;
-});
+};
   $tt_v1: {
     const $tt_t2 = rd(n);
     if (!("value" in $tt_t2)) {
@@ -184,13 +182,11 @@ function ifLetMatch(n: number) {
           const $tt_m = b;
           switch ($tt_m) {
             case 1: {
-              const $tt_a2 = { value: { kind: "Ok" as const, value: "one" } };
-              $tt_v1 = $tt_a2.value;
+              $tt_v1 = { kind: "Ok" as const, value: "one" };
               break;
             }
             default: {
-              const $tt_a3 = { value: { kind: "Ok" as const, value: "many" } };
-              $tt_v1 = $tt_a3.value;
+              $tt_v1 = { kind: "Ok" as const, value: "many" };
               break;
             }
           }
@@ -199,21 +195,20 @@ function ifLetMatch(n: number) {
       }
     }
     {
-      const $tt_a4 = { value: { kind: "Ok" as const, value: "none" } };
-      $tt_v1 = $tt_a4.value;
+      $tt_v1 = { kind: "Ok" as const, value: "none" };
       break $tt_v1;
     }
   }
   return $tt_v1;
 }
 function letElseTry(n: number) {
-  let $tt_v2: ({
+  let $tt_v2: {
     kind: "Err";
     error: string;
-}) | ({
+} | {
     kind: "Ok";
     value: number;
-});
+};
   $tt_v2: {
     const $tt_t4 = opt(n);
     if ($tt_t4.kind !== "Some") {
@@ -222,27 +217,25 @@ function letElseTry(n: number) {
         $tt_v2 = $tt_t5;
         break $tt_v2;
       }
-      const $tt_a5 = { value: { kind: "Ok" as const, value: $tt_t5.value } };
-      $tt_v2 = $tt_a5.value;
+      $tt_v2 = { kind: "Ok" as const, value: $tt_t5.value };
       break $tt_v2;
     }
     const { value: b } = $tt_t4;
     {
-      const $tt_a6 = { value: { kind: "Ok" as const, value: b } };
-      $tt_v2 = $tt_a6.value;
+      $tt_v2 = { kind: "Ok" as const, value: b };
       break $tt_v2;
     }
   }
   return $tt_v2;
 }
 function nestedIf(n: number) {
-  let $tt_v3: ({
+  let $tt_v3: {
     kind: "Err";
     error: string;
-}) | ({
+} | {
     kind: "Ok";
     value: number;
-});
+};
   $tt_v3: {
     {
       const $tt_t6 = opt(n);
@@ -254,28 +247,26 @@ function nestedIf(n: number) {
             $tt_v3 = $tt_t7;
             break $tt_v3;
           }
-          const $tt_a7 = { value: { kind: "Ok" as const, value: $tt_t7.value } };
-          $tt_v3 = $tt_a7.value;
+          $tt_v3 = { kind: "Ok" as const, value: $tt_t7.value };
           break $tt_v3;
         }
       }
     }
     {
-      const $tt_a8 = { value: { kind: "Ok" as const, value: 0 } };
-      $tt_v3 = $tt_a8.value;
+      $tt_v3 = { kind: "Ok" as const, value: 0 };
       break $tt_v3;
     }
   }
   return $tt_v3;
 }
 function template(n: number) {
-  let $tt_v4: ({
+  let $tt_v4: {
     kind: "Err";
     error: string;
-}) | ({
+} | {
     kind: "Ok";
     value: string;
-});
+};
   $tt_v4: {
     const $tt_t8 = rd(n);
     if (!("value" in $tt_t8)) {
@@ -301,14 +292,12 @@ function template(n: number) {
             }
           }
         }
-        const $tt_a9 = { value: { kind: "Ok" as const, value: `<${$tt_v9}>` } };
-        $tt_v4 = $tt_a9.value;
+        $tt_v4 = { kind: "Ok" as const, value: `<${$tt_v9}>` };
         break $tt_v4;
       }
     }
     {
-      const $tt_a10 = { value: { kind: "Ok" as const, value: "" } };
-      $tt_v4 = $tt_a10.value;
+      $tt_v4 = { kind: "Ok" as const, value: "" };
       break $tt_v4;
     }
   }

@@ -1,0 +1,36 @@
+=== anAwaitOutsideAnAsyncFunctionInAResultBoundaryIsLocated.tt ===
+declare function g(): Promise<TResult<number, string>>;
+>g : function g(): Promise<TResult<number, string>>
+>Promise : interface Promise<T>
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+export function F(p: any) {
+>F : function F(p: any): any
+>p : (parameter) p: any
+  const { a = result { const z = try await g(); return z; } } = p;
+>a : const a: any
+>z : const z: number
+>g : function g(): Promise<TResult<number, string>>
+>z : const z: number
+>p : (parameter) p: any
+  return a;
+>a : const a: any
+export function H(p: any) {
+>H : function H(p: any): TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>p : (parameter) p: any
+  const q = result { const z = try await g(); return z; };
+>q : const q: TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>z : const z: number
+>g : function g(): Promise<TResult<number, string>>
+>z : const z: number
+  return q;
+>q : const q: TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+

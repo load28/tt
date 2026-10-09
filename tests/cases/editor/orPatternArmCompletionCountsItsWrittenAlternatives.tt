@@ -1,0 +1,4 @@
+// @completions: alternative
+export variant Shape { Circle(radius: number), Rect(width: number), Point }
+declare const s: Shape;
+export const a = match (s) { Circle | /*alternative*/ };

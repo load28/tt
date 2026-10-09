@@ -116,7 +116,7 @@ impl Project {
             return Ok(Some(HoverInfo {
                 signature,
                 documentation,
-                range: source_range(&doc.source, s, e),
+                range: doc.source_range(s, e),
             }));
         }
         Ok(None)
@@ -136,10 +136,9 @@ impl Project {
         let semantics = self.semantic_analyses(path, &doc.source);
         let analyses = &semantics.analyses;
         if let Some(binding) = analyses.binding_at(byte) {
-            let range = source_range(
-                &doc.source,
-                mapper::to_utf16(&doc.source, binding.start),
-                mapper::to_utf16(&doc.source, binding.end),
+            let range = doc.source_range(
+                doc.source_utf16().to_utf16(binding.start),
+                doc.source_utf16().to_utf16(binding.end),
             );
             if binding.alternatives > 1
                 && let Some(info) = self.isolated_alternative_hover(doc, path, binding, byte, range)
@@ -156,10 +155,9 @@ impl Project {
             return Ok(Some(HoverInfo {
                 signature: format!("const {}: {}", binding.name, ty),
                 documentation: String::new(),
-                range: source_range(
-                    &doc.source,
-                    mapper::to_utf16(&doc.source, start),
-                    mapper::to_utf16(&doc.source, end),
+                range: doc.source_range(
+                    doc.source_utf16().to_utf16(start),
+                    doc.source_utf16().to_utf16(end),
                 ),
             }));
         }
@@ -232,7 +230,9 @@ impl Project {
 
     /// Go to definition, every target already in its own file's coordinates.
     pub fn definition(&mut self, path: &Path, position: Position) -> Result<Vec<Location>, String> {
-        if let Some(declared) = self.tt_name_declaration(path, position) {
+        if let Some(declared) = self.tt_name_declaration(path, position)
+            && !self.arm_tag_unowned(path, position)?
+        {
             return Ok(vec![declared]);
         }
         let found = self.locations(
@@ -332,10 +332,9 @@ impl Project {
             .into_iter()
             .map(|(start, end)| Location {
                 path: path.clone(),
-                range: source_range(
-                    &doc.source,
-                    mapper::to_utf16(&doc.source, start),
-                    mapper::to_utf16(&doc.source, end),
+                range: doc.source_range(
+                    doc.source_utf16().to_utf16(start),
+                    doc.source_utf16().to_utf16(end),
                 ),
             })
             .collect())
@@ -369,7 +368,16 @@ impl Project {
                 location,
             })
             .collect();
-        let Some(declaration) = self.tt_declaration(path, position, &definitions)? else {
+        let declaration = match self.tt_declaration(path, position, &definitions)? {
+            Some(declaration) => Some(declaration),
+            None => self
+                .pattern_symbol_at(path, position)?
+                .and_then(|symbol| symbol.definition),
+        };
+        let Some(declaration) = declaration else {
+            if let Some(found) = self.builtin_case_references(path, position)? {
+                merge_references(&mut references, found);
+            }
             return Ok(references);
         };
         // A tt name's uses are of two kinds: the TypeScript ones the
@@ -410,16 +418,142 @@ impl Project {
                 });
             }
         }
-        for reference in found {
-            match references
-                .iter_mut()
-                .find(|r| crate::engine::names::same_location(&r.location, &reference.location))
-            {
-                Some(known) => known.is_definition |= reference.is_definition,
-                None => references.push(reference),
+        let typed = self.typed_nested_references(&declaration, &found)?;
+        found.extend(typed);
+        merge_references(&mut references, found);
+        Ok(references)
+    }
+
+    /// The nested pattern tags naming the case at `declaration` that only the
+    /// checker can resolve — a payload typed by a type parameter. Only the
+    /// tags spelled as the case is are asked about, one typed question each.
+    fn typed_nested_references(
+        &mut self,
+        declaration: &Location,
+        found: &[Reference],
+    ) -> Result<Vec<Reference>, String> {
+        let Some(declared) = self.text_of(&declaration.path) else {
+            return Ok(Vec::new());
+        };
+        let name = declared
+            .get(
+                source_byte(&declared, declaration.range.start)
+                    ..source_byte(&declared, declaration.range.end),
+            )
+            .unwrap_or_default()
+            .to_string();
+        if name.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut out = Vec::new();
+        for file in self.tt_files()? {
+            let Some(text) = self.text_of(&file) else {
+                continue;
+            };
+            let kind = crate::SourceKind::from_path(&file).unwrap_or_default();
+            let program = crate::parser::parse_with_kind(&text, kind);
+            for probe in crate::probe::payload_probes_of(&program) {
+                if !text[probe.offset..].starts_with(name.as_str())
+                    || text[probe.offset + name.len()..]
+                        .chars()
+                        .next()
+                        .is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '$')
+                {
+                    continue;
+                }
+                let location = Location {
+                    path: file.clone(),
+                    range: super::span_range(&text, probe.offset, probe.offset + name.len()),
+                };
+                if found
+                    .iter()
+                    .any(|r| crate::engine::names::same_location(&r.location, &location))
+                {
+                    continue;
+                }
+                let resolved = self
+                    .pattern_symbol_at(&file, location.range.start)?
+                    .and_then(|symbol| symbol.definition);
+                if resolved.is_some_and(|resolved| {
+                    crate::engine::names::same_location(&resolved, declaration)
+                }) {
+                    out.push(Reference {
+                        location,
+                        is_definition: false,
+                    });
+                }
             }
         }
-        Ok(references)
+        Ok(out)
+    }
+
+    /// The uses of a built-in case (`Some`, `Ok`, ...) written at `position`:
+    /// its standard-library declaration, TypeScript's references to that,
+    /// and every pattern in the project's tt files that names the same case.
+    /// `None` when `position` is not on a built-in case.
+    fn builtin_case_references(
+        &mut self,
+        path: &Path,
+        position: Position,
+    ) -> Result<Option<Vec<Reference>>, String> {
+        let (doc, served) = self.serve(path)?;
+        let byte = source_byte(&doc.source, position);
+        let semantics = self.semantic_analyses(&served, &doc.source);
+        let Some((variant, tag)) = semantics
+            .analyses
+            .resolved
+            .iter()
+            .find(|resolved| {
+                resolved.kind == crate::analysis::NameKind::Case
+                    && resolved.origin == crate::analysis::Origin::Builtin
+                    && resolved.start <= byte
+                    && byte <= resolved.end
+            })
+            .map(|resolved| (resolved.variant_name.clone(), resolved.name.clone()))
+        else {
+            return Ok(None);
+        };
+        let mut found = Vec::new();
+        for definition in self.builtin_case_definition(path, position)? {
+            for location in self.locations(
+                &definition.path,
+                definition.range.start,
+                "textDocument/references",
+                serde_json::json!({ "context": { "includeDeclaration": true } }),
+                Reach::Project,
+            )? {
+                found.push(Reference {
+                    is_definition: false,
+                    location,
+                });
+            }
+            found.push(Reference {
+                location: definition,
+                is_definition: true,
+            });
+        }
+        for file in self.tt_files()? {
+            let Some(text) = self.text_of(&file) else {
+                continue;
+            };
+            let semantics = self.semantic_analyses(&file, &text);
+            for resolved in &semantics.analyses.resolved {
+                if resolved.kind == crate::analysis::NameKind::Case
+                    && resolved.origin == crate::analysis::Origin::Builtin
+                    && resolved.variant_name == variant
+                    && resolved.name == tag
+                {
+                    found.push(Reference {
+                        is_definition: false,
+                        location: Location {
+                            path: file.clone(),
+                            range: super::span_range(&text, resolved.start, resolved.end),
+                        },
+                    });
+                }
+            }
+        }
+        Ok(Some(found))
     }
 
     /// The tt declaration a name at `position` refers to: the name itself
@@ -524,6 +658,8 @@ impl Project {
             }
         }
         let mut out = Vec::new();
+        let mut seen = HashSet::new();
+        session.answering = Some(HashMap::new());
         for location in raw {
             let Some(uri) = location["uri"].as_str() else {
                 continue;
@@ -544,11 +680,17 @@ impl Project {
                     .unwrap_or_default(),
             };
             for mapped in mapped {
-                if !out.contains(&mapped) {
+                let recovered = session.docs.get(&mapped.path).is_some_and(|target| {
+                    let start = target.source_offset(mapped.range.start);
+                    let end = target.source_offset(mapped.range.end);
+                    recovery_intersects(target, start, end)
+                });
+                if !recovered && seen.insert(location_key(&mapped)) {
                     out.push(mapped);
                 }
             }
         }
+        session.answering = None;
         Ok(out)
     }
 
@@ -590,6 +732,19 @@ impl Project {
         position: Position,
     ) -> Result<Option<Vec<crate::engine::TtCompletion>>, String> {
         self.complete_pattern_at(path, position)
+    }
+
+    /// The case a nested pattern's tag names where only TypeScript can
+    /// identify its variant — a payload typed by a type parameter, as
+    /// `item: Circle(r)` under `Has(item: T)` over an `Opt<Shape>`. `None`
+    /// where the parse-only [`crate::engine::tt_symbol_at`] answers, and
+    /// where no such tag is written.
+    pub fn pattern_symbol(
+        &mut self,
+        path: &Path,
+        position: Position,
+    ) -> Result<Option<crate::engine::TtSymbol>, String> {
+        self.pattern_symbol_at(path, position)
     }
 
     /// The signature and documentation behind one completion entry, fetched
@@ -666,61 +821,10 @@ impl Project {
         };
 
         let changes = changes.clone();
-        let mut out = Vec::new();
-        for (edited_uri, edits) in &changes {
-            let Some(edits) = edits.as_array() else {
-                return Ok(Err(None));
-            };
-            for one in edits {
-                let Some(location) = map_target(
-                    session,
-                    overlays,
-                    edited_uri,
-                    &one["range"],
-                    TargetUse::Edit,
-                ) else {
-                    let Some((generated, targets)) =
-                        map_shared_target(session, overlays, edited_uri, &one["range"])
-                    else {
-                        return Ok(Err(None));
-                    };
-                    let text = one["newText"].as_str().unwrap_or(RENAME_PLACEHOLDER);
-                    if text != RENAME_PLACEHOLDER
-                        && text != format!("{generated}: {RENAME_PLACEHOLDER}")
-                    {
-                        return Ok(Err(None));
-                    }
-                    for target in targets {
-                        out.push(RenameEdit {
-                            location: target.location,
-                            new_text: Some(if target.shorthand {
-                                format!("{}: {RENAME_PLACEHOLDER}", target.name)
-                            } else {
-                                RENAME_PLACEHOLDER.to_string()
-                            }),
-                        });
-                    }
-                    continue;
-                };
-                let new_text = one["newText"].as_str().map(String::from);
-                if let Some(text) = &new_text
-                    && text != RENAME_PLACEHOLDER
-                    && !text.contains(RENAME_PLACEHOLDER)
-                {
-                    // A shape we cannot account for — refusing beats
-                    // silently rebinding a different field.
-                    return Ok(Err(None));
-                }
-                // Text a lowering writes more than once (a variant field's
-                // type, in its union and its constructor) is one place in
-                // the source, renamed once.
-                let edit = RenameEdit { location, new_text };
-                if !out.contains(&edit) {
-                    out.push(edit);
-                }
-            }
-        }
-        Ok(if out.is_empty() { Err(None) } else { Ok(out) })
+        session.answering = Some(HashMap::new());
+        let edits = rename_edits(session, overlays, &changes);
+        session.answering = None;
+        Ok(edits)
     }
 
     /// The file's outline as TypeScript sees its declarations, on the source.
@@ -787,14 +891,36 @@ impl Project {
         let session = self.session();
         // A cursor the served text has no place for is asked through a
         // probe, as completion asks there.
-        let source_at = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
-        let projected_at =
-            mapper::typed_cursor_to_output(&doc.mappings, &doc.anchors, &doc.source, source_at)
-                .map(|at| mapper::to_utf16(&doc.code, at));
-        let (code, mappings, at) = match projected_at {
-            Some(at) => (doc.code.clone(), doc.mappings.clone(), at),
+        let source_at = doc.source_utf16().to_byte(doc.source_offset(position));
+        // Text inside a recovered construct is not served, so a cursor there
+        // has no place in the served text even where an offset maps.
+        let recovered = doc
+            .recovered
+            .iter()
+            .any(|&(start, end)| start < source_at && source_at <= end);
+        let projected_at = (!recovered)
+            .then(|| {
+                mapper::typed_cursor_to_output(&doc.mappings, &doc.anchors, &doc.source, source_at)
+                    .or_else(|| {
+                        relocated_read_end(
+                            &doc.code,
+                            &doc.relocated_operands,
+                            crate::SourceKind::from_path(&path).unwrap_or_default(),
+                            source_at,
+                        )
+                    })
+            })
+            .flatten()
+            .map(|at| doc.code_utf16().to_utf16(at));
+        let (code, mappings, relocated, at) = match projected_at {
+            Some(at) => (
+                doc.code.clone(),
+                doc.mappings.clone(),
+                doc.relocated_operands.clone(),
+                at,
+            ),
             None => {
-                let source_at = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
+                let source_at = doc.source_utf16().to_byte(doc.source_offset(position));
                 let Some(probe) =
                     build_probe(&path, &doc.source, source_at, session.probe_count + 1)
                 else {
@@ -802,12 +928,18 @@ impl Project {
                 };
                 session.probe_count += 1;
                 open_served(session, &path, &probe.code);
-                (probe.code, probe.mappings, probe.offset)
+                (probe.code, probe.mappings, Vec::new(), probe.offset)
             }
         };
         open_served(session, &path, &code);
         let kind = crate::SourceKind::from_path(&path).unwrap_or_default();
-        let at = signature_position(&code, &mappings, kind, mapper::from_utf16(&code, at));
+        let at = signature_position(
+            &code,
+            &mappings,
+            &relocated,
+            kind,
+            mapper::from_utf16(&code, at),
+        );
         let question = signature_question(&code, &mappings, &doc.source, kind, at);
         let (asked, at) = match &question {
             Some((question, at)) => {
@@ -960,8 +1092,14 @@ impl Project {
             // range. Extending it would blame the following token (or split a
             // UTF-16 surrogate pair). Only an unlocated glue error needs an
             // anchor extent supplied by the mapper above.
-            let raw = item.message;
-            let code = item.code;
+            let (code, raw) = match crate::engine::semantics::unnamed_generated_operand(
+                item.code,
+                &item.message,
+                &doc.generated_names,
+            ) {
+                Some((code, message)) => (code, message.to_string()),
+                None => (item.code, item.message),
+            };
             let glue = projected_anchor.or_else(|| glue_anchor(&doc, start));
             // The diagnostic's secondary places: the pipeline anchor's
             // producing step, then the checker's own related information —
@@ -973,11 +1111,11 @@ impl Project {
                 && anchor.kind == crate::AnchorKind::Pipe
                 && let Some((context_start, context_end)) = anchor.context
             {
-                let from = mapper::to_utf16(&doc.source, context_start);
-                let to = mapper::to_utf16(&doc.source, context_end).max(from + 1);
+                let from = doc.source_utf16().to_utf16(context_start);
+                let to = doc.source_utf16().to_utf16(context_end).max(from + 1);
                 related.push(ServiceRelated {
                     path: None,
-                    range: source_range(&doc.source, from, to),
+                    range: doc.source_range(from, to),
                     message: "the piped value is produced here".to_string(),
                 });
             }
@@ -996,7 +1134,7 @@ impl Project {
                 let to = if to > from { to } else { from + 1 };
                 related.push(ServiceRelated {
                     path: None,
-                    range: source_range(&doc.source, from, to),
+                    range: doc.source_range(from, to),
                     message: entry.message,
                 });
                 if related.len() >= 3 {
@@ -1010,10 +1148,13 @@ impl Project {
             let translates = |anchor: &crate::EmitAnchor| {
                 anchor.kind != crate::AnchorKind::Pipe || anchor.context.is_some()
             };
-            if let Some((anchor, class)) = glue.filter(translates).and_then(|anchor| {
-                crate::engine::semantics::translation_class(anchor.kind, code)
-                    .map(|class| (anchor, class))
-            }) && !translated_seen.insert((anchor.display().0, anchor.kind, class))
+            if let Some((anchor, class)) = glue
+                .filter(|anchor| !exact && translates(anchor))
+                .and_then(|anchor| {
+                    crate::engine::semantics::translation_class(anchor.kind, code)
+                        .map(|class| (anchor, class))
+                })
+                && !translated_seen.insert((anchor.display().0, anchor.kind, class))
             {
                 continue;
             }
@@ -1023,9 +1164,9 @@ impl Project {
             // through, so the two surfaces cannot drift.
             if !exact && let Some(anchor) = glue {
                 let (display_start, display_end) = anchor.display();
-                let from = mapper::to_utf16(&doc.source, display_start);
-                let to = mapper::to_utf16(&doc.source, display_end).max(from + 1);
-                let range = source_range(&doc.source, from, to);
+                let from = doc.source_utf16().to_utf16(display_start);
+                let to = doc.source_utf16().to_utf16(display_end).max(from + 1);
+                let range = doc.source_range(from, to);
                 let declared = declarations.get_or_insert_with(|| {
                     self.semantic_analyses(&path, &doc.source)
                         .analyses
@@ -1074,7 +1215,7 @@ impl Project {
                 message.push_str(" (in code ttc generated for this construct)");
             }
             let entry = ServiceDiagnostic {
-                range: source_range(&doc.source, s, e),
+                range: doc.source_range(s, e),
                 message,
                 code,
                 severity,
@@ -1196,6 +1337,7 @@ impl Project {
                 last_completion: HashMap::new(),
                 last_probe: None,
                 probe_count: 0,
+                answering: None,
             });
         }
         let documents = self.overlays.clone();
@@ -1214,6 +1356,23 @@ impl Project {
             for path in closed {
                 session.client.close(&file_uri(&path));
                 session.host_served.remove(&path);
+            }
+            let gone: Vec<_> = session
+                .served
+                .keys()
+                .filter(|path| {
+                    !super::super::project::is_host_source(path)
+                        && !overlays.contains_key(*path)
+                        && !path.is_file()
+                })
+                .cloned()
+                .collect();
+            for path in gone {
+                if let Some(uri) = session.uris.remove(&path) {
+                    session.client.close(&uri);
+                }
+                session.served.remove(&path);
+                session.docs.remove(&path);
             }
             for (path, text) in overlays
                 .iter()
@@ -1235,11 +1394,8 @@ impl Project {
             let mut stack = vec![(canonical.clone(), doc.clone())];
             while let Some((file, doc)) = stack.pop() {
                 for import in crate::tt_imports(&doc.source) {
-                    let target = match crate::engine::paths::canonical(
-                        &file
-                            .parent()
-                            .unwrap_or(Path::new("."))
-                            .join(&import.specifier),
+                    let target = match crate::engine::normalize_document_path(
+                        &file.parent().unwrap_or(Path::new(".")).join(import.path()),
                     ) {
                         Ok(target) => target,
                         Err(_) => continue, // unresolvable — tsc's TS2307, not ours
@@ -1276,6 +1432,8 @@ impl Project {
         for projected in snapshot.files {
             let path = &projected.source_path;
             let doc = Arc::new(ServiceDoc {
+                source_utf16: std::sync::OnceLock::new(),
+                code_utf16: std::sync::OnceLock::new(),
                 coordinates: if session.client.serves_authored_sources() {
                     CoordinateSpace::Authored
                 } else {
@@ -1293,13 +1451,17 @@ impl Project {
                 declared_names: projected.emit.declared_names.clone(),
                 shared_bindings: projected.emit.shared_bindings.clone(),
                 destructured_lists: projected.emit.destructured_lists.clone(),
+                relocated_operands: projected.emit.relocated_operands.clone(),
                 completion_scopes: projected.emit.completion_scopes.clone(),
                 recovered: projected.recovered.clone(),
                 syntax_repairs: projected.syntax_repairs.clone(),
                 tt_diagnostics: projected.tt_diagnostics.clone(),
                 generated_names: projected.emit.generated_names.clone(),
+                restatements: projected.emit.restatements.clone(),
                 inserted: projected.emit.inserted.clone(),
                 faithful: true,
+                source_lines: Default::default(),
+                code_lines: Default::default(),
             });
             revisions.push((path.clone(), doc));
         }
@@ -1359,4 +1521,100 @@ impl Project {
 enum Reach {
     File,
     Project,
+}
+
+/// Adds `found` to `references`, once per place: a place both lists name is
+/// a definition when either says so.
+fn merge_references(references: &mut Vec<Reference>, found: Vec<Reference>) {
+    let key = |reference: &Reference| {
+        let path = &reference.location.path;
+        let mut location = reference.location.clone();
+        location.path =
+            crate::engine::normalize_document_path(path).unwrap_or_else(|_| path.clone());
+        location_key(&location)
+    };
+    let mut known: HashMap<_, usize> = references
+        .iter()
+        .enumerate()
+        .map(|(index, reference)| (key(reference), index))
+        .collect();
+    for reference in found {
+        match known.entry(key(&reference)) {
+            std::collections::hash_map::Entry::Occupied(entry) => {
+                references[*entry.get()].is_definition |= reference.is_definition;
+            }
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                entry.insert(references.len());
+                references.push(reference);
+            }
+        }
+    }
+}
+
+/// A rename's edits over the served texts, as edits of the sources: `Err`
+/// when an edit lands somewhere no source change accounts for.
+fn rename_edits(
+    session: &mut ServiceSession,
+    overlays: &HashMap<PathBuf, String>,
+    changes: &serde_json::Map<String, serde_json::Value>,
+) -> Result<Vec<RenameEdit>, Option<String>> {
+    let mut out = Vec::new();
+    let mut seen = HashSet::new();
+    for (edited_uri, edits) in changes {
+        let Some(edits) = edits.as_array() else {
+            return Err(None);
+        };
+        for one in edits {
+            let Some(location) = map_target(
+                session,
+                overlays,
+                edited_uri,
+                &one["range"],
+                TargetUse::Edit,
+            ) else {
+                if restated_target(session, overlays, edited_uri, &one["range"]) {
+                    continue;
+                }
+                let Some((generated, targets)) =
+                    map_shared_target(session, overlays, edited_uri, &one["range"])
+                else {
+                    return Err(None);
+                };
+                let text = one["newText"].as_str().unwrap_or(RENAME_PLACEHOLDER);
+                if text != RENAME_PLACEHOLDER
+                    && text != format!("{generated}: {RENAME_PLACEHOLDER}")
+                {
+                    return Err(None);
+                }
+                for target in targets {
+                    out.push(RenameEdit {
+                        location: target.location,
+                        new_text: Some(if target.shorthand {
+                            format!("{}: {RENAME_PLACEHOLDER}", target.name)
+                        } else {
+                            RENAME_PLACEHOLDER.to_string()
+                        }),
+                    });
+                }
+                continue;
+            };
+            let new_text = one["newText"].as_str().map(String::from);
+            if let Some(text) = &new_text
+                && text != RENAME_PLACEHOLDER
+                && !text.contains(RENAME_PLACEHOLDER)
+            {
+                // A shape we cannot account for — refusing beats
+                // silently rebinding a different field.
+                return Err(None);
+            }
+            // Text a lowering writes more than once (a variant field's
+            // type, in its union and its constructor) is one place in
+            // the source, renamed once.
+            let edit = RenameEdit { location, new_text };
+            if seen.insert((location_key(&edit.location), edit.new_text.clone())) {
+                out.push(edit);
+            }
+        }
+    }
+    if out.is_empty() { Err(None) } else { Ok(out) }
 }

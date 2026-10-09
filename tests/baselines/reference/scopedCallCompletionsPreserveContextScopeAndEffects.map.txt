@@ -3,14 +3,14 @@
 2:30 -> 21:29 len 6  "number"
 2:30 -> 24:18 len 6  "number"
 2:46 -> 26:3 len 228  "\ntype Item = {kind: \"item\"; run: (x: number) => "...
-8:3 -> 32:19 len 7  "consume"
+8:3 -> 32:35 len 7  "consume"
 8:18 -> 34:19 len 5  "state"
 9:11 -> 37:17 len 5  "value"
 10:7 -> 38:9 len 93  "const consume = value + 1;\n      const local = ("...
 13:14 -> 41:16 len 37  "{kind: \"item\", run: x => x + local()}"
 15:14 -> 45:16 len 33  "({kind: \"item\", run: x => x - 1})"
 16:6 -> 53:3 len 188  "\n  trace.push(\"after\");\n  console.log(trace.join"...
-23:3 -> 60:19 len 6  "throws"
+23:3 -> 60:34 len 6  "throws"
 23:17 -> 62:19 len 14  "State.Ready(5)"
 24:11 -> 65:17 len 5  "value"
 24:23 -> 66:9 len 21  "trace.push(\"value\"); "

@@ -18,11 +18,11 @@ function pick(n: number) {
     const $tt_m = n;
     switch ($tt_m) {
       case 1: {
-        $tt_v0 = class { q = 1 };
+        $tt_v0 = (void 0, class { q = 1 });
         break;
       }
       default: {
-        $tt_v0 = class { q = 2 };
+        $tt_v0 = (void 0, class { q = 2 });
         break;
       }
     }
@@ -36,7 +36,7 @@ function pick(n: number) {
         const Local = class { r = 3 }; $tt_v1 = Local; break;
       }
       default: {
-        $tt_v1 = class { r = 4 };
+        $tt_v1 = (void 0, class { r = 4 });
         break;
       }
     }

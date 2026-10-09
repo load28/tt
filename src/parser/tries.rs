@@ -200,7 +200,7 @@ fn scan_primary_operand(cur: &Cursor) -> Option<(usize, usize)> {
                 operand_token_end = k;
             }
         } else if open.is_empty()
-            && crate::lexer::is_primary_expression(
+            && crate::lexer::is_operand_expression(
                 cur.parser.src,
                 operand_start,
                 token.span.end,
@@ -227,6 +227,21 @@ fn scan_primary_operand(cur: &Cursor) -> Option<(usize, usize)> {
             },
         );
         operand_token_end = k;
+    }
+    if operand_end.is_some()
+        && let Some(dot) = cur.tokens.get(operand_token_end)
+        && matches!(dot.kind, TokenKind::Punct(b'.') | TokenKind::OptChain)
+        && !cur
+            .tokens
+            .get(operand_token_end + 1)
+            .is_some_and(|name| match name.kind {
+                TokenKind::Ident | TokenKind::Punct(b'#') => true,
+                TokenKind::Punct(b'(' | b'[') => matches!(dot.kind, TokenKind::OptChain),
+                _ => false,
+            })
+    {
+        operand_end = Some(dot.span.end);
+        operand_token_end += 1;
     }
     operand_end.map(|end| (operand_token_end, end))
 }
@@ -281,18 +296,20 @@ pub(super) fn parse_try_decl<'t>(
 ) -> Option<(Cursor<'t>, usize, TryStmt)> {
     let scan_start = cur.stop_byte_at(cur.idx);
     let (eq_idx, eq_byte) = binding_end(&cur)?;
-    let raw = &cur.parser.src[scan_start..eq_byte];
-    // The span of the binding itself, whitespace on either side dropped:
+    // The span of the binding itself, trivia on either side dropped:
     // codegen copies these bytes so the emitted declaration maps back to
-    // the name the user wrote.
-    let binding_start = scan_start + (raw.len() - raw.trim_start().len());
-    let binding = raw.trim();
-    if binding.is_empty() {
+    // the name the user wrote, and writes the trivia before `=` itself.
+    let binding_start = scan_start;
+    let binding_end = cur.tokens[..eq_idx]
+        .last()
+        .map_or(binding_start, |token| token.span.end)
+        .max(binding_start);
+    if binding_end <= binding_start || binding_end > eq_byte {
         return None;
     }
     let binding_span = Span {
         start: binding_start,
-        end: binding_start + binding.len(),
+        end: binding_end,
     };
     // A real binding starts with the variable name or a destructuring
     // pattern. A leading reserved word means the scan ran across some other
@@ -368,8 +385,8 @@ fn parse_try_tail<'t>(
     if cur.parser.src[span.start..span.end].trim().is_empty() {
         return None;
     }
-    let (operand_token_end, operand_end) = scan_primary_operand(&cur)?;
-    if operand_token_end != semi_idx || !cur.parser.src[operand_end..semi_byte].trim().is_empty() {
+    let (operand_token_end, _) = scan_primary_operand(&cur)?;
+    if operand_token_end != semi_idx {
         return None;
     }
     let expr_tokens = &cur.tokens[cur.idx..semi_idx];

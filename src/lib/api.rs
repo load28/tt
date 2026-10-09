@@ -76,7 +76,7 @@ impl ImportRewrite {
     /// assert!(ImportRewrite::Off.source_candidates("./m.js").is_empty());
     /// ```
     pub fn source_candidates(self, specifier: &str) -> Vec<String> {
-        if !(specifier.starts_with("./") || specifier.starts_with("../")) {
+        if !is_relative_specifier(specifier.as_bytes()) {
             return Vec::new();
         }
         let mut candidates = Vec::new();
@@ -178,6 +178,26 @@ pub struct TtImport {
     pub specifier: String,
     /// What the statement brings into local scope.
     pub names: TtImportNames,
+}
+
+impl TtImport {
+    /// The specifier as a path from the importing file's directory, with `\`
+    /// read as a separator as TypeScript's module resolution reads it.
+    ///
+    /// ```
+    /// let scan = ttc::scan_module("import { A } from \".\\\\m.tt\";");
+    /// assert_eq!(scan.imports[0].path(), std::path::Path::new("./m.tt"));
+    /// ```
+    pub fn path(&self) -> std::path::PathBuf {
+        std::path::PathBuf::from(self.specifier.replace('\\', "/"))
+    }
+}
+
+pub(crate) fn is_relative_specifier(specifier: &[u8]) -> bool {
+    matches!(
+        specifier,
+        [b'.', b'/' | b'\\', ..] | [b'.', b'.', b'/' | b'\\', ..]
+    )
 }
 
 /// The bindings an [`TtImport`] brings into local scope.
@@ -311,7 +331,10 @@ pub(crate) fn scan_module_of(source: &str, program: &ast::Program) -> ModuleScan
             // resolve or collect declarations from.
             ast::TtSpecifier::Std(_) => scan.imports_std = true,
             ast::TtSpecifier::Relative(_) => scan.imports.push(TtImport {
-                specifier: source[decl.spec.start + 1..decl.spec.end - 1].to_string(),
+                specifier: crate::parser::decode_string(&source[decl.spec.start..decl.spec.end])
+                    .unwrap_or_else(|| {
+                        crate::ice::bug!("a lifted import specifier is a complete string")
+                    }),
                 names: match &decl.names {
                     ast::TtImportNames::Namespace(ns) => TtImportNames::Namespace(ns.clone()),
                     ast::TtImportNames::Named(entries) => TtImportNames::Named(entries.clone()),
@@ -476,7 +499,7 @@ pub fn exported_variant_symbols_with_kind(
     source_kind: SourceKind,
 ) -> Vec<VariantSymbol> {
     let (program, tokens) = parser::lex_and_parse_with_kind(source, source_kind);
-    let declared = program_variant_symbols(&program);
+    let declared = variant_symbols_where(&program, |decl| decl.module_level);
     let mut exported: Vec<VariantSymbol> = declared
         .iter()
         .filter(|symbol| symbol.exported)
@@ -498,11 +521,18 @@ pub fn exported_variant_symbols_with_kind(
 }
 
 fn program_variant_symbols(program: &ast::Program) -> Vec<VariantSymbol> {
+    variant_symbols_where(program, |_| true)
+}
+
+fn variant_symbols_where(
+    program: &ast::Program,
+    keep: impl Fn(&ast::VariantDecl) -> bool,
+) -> Vec<VariantSymbol> {
     program
         .segments
         .iter()
         .filter_map(|segment| match segment {
-            ast::Segment::Variant(decl) => Some(VariantSymbol {
+            ast::Segment::Variant(decl) if keep(decl) => Some(VariantSymbol {
                 name: decl.name.clone(),
                 offset: decl.name_off,
                 exported: decl.exported,

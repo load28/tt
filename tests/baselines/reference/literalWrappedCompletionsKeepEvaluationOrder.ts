@@ -60,7 +60,7 @@ type Item = {kind: string; run: (x: number) => number};
 function consume(item: Item) { trace.push("call:" + item.kind + ":" + item.run(3)); }
 for (const state of [State.Ready(4), State.Empty]) {
   trace.length = 0;
-  const $tt_v2 = (consume);
+  const $tt_v2: typeof consume = (consume);
   {
     const $tt_m = mark("subject", state);
     switch ($tt_m.kind) {
@@ -87,18 +87,18 @@ trace.length = 0;
 // their own parameters here: this case is about order, and the value takes
 // the join slot precisely because the literal did not move.
 let $tt_v3: (x: number) => number;
-const $tt_v5 = (consume);
+const $tt_v5: typeof consume = (consume);
 const $tt_v4 = (mark("sibling", "effectful"));
 {
   const $tt_m = mark("subject", State.Ready(1));
   switch ($tt_m.kind) {
     case "Ready": {
       const { value } = $tt_m;
-      $tt_v3 = (x: number) => x + value;
+      $tt_v3 = (void 0, (x: number) => x + value);
       break;
     }
     case "Empty": {
-      $tt_v3 = (x: number) => x;
+      $tt_v3 = (void 0, (x: number) => x);
       break;
     }
     default: {

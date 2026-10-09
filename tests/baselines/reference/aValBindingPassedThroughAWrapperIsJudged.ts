@@ -1,0 +1,9 @@
+//// [aValBindingPassedThroughAWrapperIsJudged.tt] ////
+function g(p: { a: number }) { p.a = 1; }
+val const x = { a: 1 };
+g((x));
+g(x as { a: number });
+g(x!);
+[{ a: 1 }].forEach(x => g(x));
+export {};
+

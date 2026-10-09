@@ -1,0 +1,9 @@
+// @run: aParenthesizedCommaOperandBeforeAValueRunsFirst.tt
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+const log: string[] = [];
+const note = (s: string) => { log.push(s); return 0; };
+const r = (n: number): R<number> => { log.push("r"); return { kind: "Ok", value: n }; };
+function f(o: number) { return ((note("o")), match (o) { 1 => "one", _ => "other" }); }
+function h(): R<string> { const v = ((note("g")), try r(1)); return { kind: "Ok", value: String(v) }; }
+console.log(f(1), JSON.stringify(h()), log.join(","));
+export {};

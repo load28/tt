@@ -1,0 +1,22 @@
+const needsString = (s: string) => s.length;
+const f = (x: number) => x;
+const g = (n: number) => (x: number) => x + n;
+export const a = 1 /*c1*/ |> /*c2*/ f;
+export const b = [1, 2]
+  // keep me 1
+  |> .map((x) => x * 2)
+  // keep me 2
+  |> .join(",");
+export const q = flow
+  // keep me 3
+  |> f
+  // keep me 4
+  |> String;
+export const p = 1
+  // @ts-expect-error -- a number piped into a string step
+  |> needsString;
+export const c = 1
+  // keep me 5
+  |> g(1)
+  // keep me 6
+  |> g(2);

@@ -67,8 +67,7 @@ export class Holder {
         $tt_v3 = $tt_t2;
         break $tt_v3;
       }
-      const $tt_a0 = { value: { kind: "Ok" as const, value: $tt_t2.value } };
-      $tt_v3 = $tt_a0.value;
+      $tt_v3 = { kind: "Ok" as const, value: $tt_t2.value };
       break $tt_v3;
     }
     this.value = $tt_v3;

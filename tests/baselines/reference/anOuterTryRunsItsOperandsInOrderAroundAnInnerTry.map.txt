@@ -1,0 +1,12 @@
+//// [anOuterTryRunsItsOperandsInOrderAroundAnInnerTry.tt] 10 mapping(s)
+1:1 -> 1:1 len 383  "import * as Result from \"@tt/std/result\";\nimport"...
+10:9 -> 22:9 len 1  "x"
+10:17 -> 11:32 len 4  "half"
+10:21 -> 18:24 len 2  "(("
+10:23 -> 12:52 len 1  "k"
+10:28 -> 12:55 len 3  "abs"
+10:31 -> 18:32 len 5  ") + ("
+10:40 -> 13:18 len 7  "half(k)"
+10:47 -> 18:43 len 2  "))"
+10:49 -> 22:25 len 79  ";\n  return Result.Ok(x);\n}\nconsole.log(JSON.stri"...
+

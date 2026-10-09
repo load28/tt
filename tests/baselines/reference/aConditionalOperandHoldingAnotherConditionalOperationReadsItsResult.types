@@ -1,0 +1,258 @@
+=== aConditionalOperandHoldingAnotherConditionalOperationReadsItsResult.tt ===
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Ok"
+>value : (property) value: T
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Err"
+>error : (property) error: string
+variant G { E, F }
+>G : type G = {
+>       kind: "E";
+>   } | {
+>       kind: "F";
+>   }
+>E : (property) E: {
+>       readonly kind: "E";
+>   }
+>F : (property) F: {
+>       readonly kind: "F";
+>   }
+const ok = (value: number): R<number> => { console.log("ok", value); return { kind: "Ok", value }; };
+>ok : const ok: (value: number) => R<number>
+>value : (parameter) value: number
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>value : (parameter) value: number
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+const err = (error: string): R<number> => ({ kind: "Err", error });
+>err : const err: (error: string) => R<number>
+>error : (parameter) error: string
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Err"
+>error : (property) error: string
+function or(c: boolean, r: R<number>, g: G): R<number> {
+>or : function or(c: boolean, r: R<number>, g: G): R<number>
+>c : (parameter) c: boolean
+>r : (parameter) r: R<number>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>g : (parameter) g: G
+>G : type G = {
+>       kind: "E";
+>   } | {
+>       kind: "F";
+>   }
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+    const v = (c && try r) || match (g) { E => 10, F => 20 };
+>v : const v: number
+>c : (parameter) c: boolean
+>r : (parameter) r: R<number>
+>g : (parameter) g: G
+    return { kind: "Ok", value: Number(v) };
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>Number : var Number: (value?: any) => number
+>v : const v: number
+function ternary(c: boolean, d: R<number>, e: R<number>): R<number> {
+>ternary : function ternary(c: boolean, d: R<number>, e: R<number>): R<number>
+>c : (parameter) c: boolean
+>d : (parameter) d: R<number>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>e : (parameter) e: R<number>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+    const v = (c ? try d : 0) ? 2 : try e;
+>v : const v: number
+>c : (parameter) c: boolean
+>d : (parameter) d: R<number>
+>e : (parameter) e: R<number>
+    return { kind: "Ok", value: v };
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>v : const v: number
+function nullish(c: boolean, r: R<number>, s: R<number>): R<number> {
+>nullish : function nullish(c: boolean, r: R<number>, s: R<number>): R<number>
+>c : (parameter) c: boolean
+>r : (parameter) r: R<number>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>s : (parameter) s: R<number>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+    const v = (c && try r) ?? try s;
+>v : const v: number | false
+>c : (parameter) c: boolean
+>r : (parameter) r: R<number>
+>s : (parameter) s: R<number>
+    return { kind: "Ok", value: Number(v) };
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>Number : var Number: (value?: any) => number
+>v : const v: number | false
+const show = (r: R<number>) => JSON.stringify(r);
+>show : const show: (r: R<number>) => string
+>r : (parameter) r: R<number>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>r : (parameter) r: R<number>
+console.log(show(or(true, ok(0), G.E)), show(or(true, ok(3), G.F)), show(or(false, ok(4), G.F)), show(or(true, err("x"), G.E)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>show : const show: (r: R<number>) => string
+>or : function or(c: boolean, r: R<number>, g: G): R<number>
+>ok : const ok: (value: number) => R<number>
+>G : const G: {
+>       E: {
+>           readonly kind: "E";
+>       };
+>       F: {
+>           readonly kind: "F";
+>       };
+>   }
+>E : (property) E: {
+>       readonly kind: "E";
+>   }
+>show : const show: (r: R<number>) => string
+>or : function or(c: boolean, r: R<number>, g: G): R<number>
+>ok : const ok: (value: number) => R<number>
+>G : const G: {
+>       E: {
+>           readonly kind: "E";
+>       };
+>       F: {
+>           readonly kind: "F";
+>       };
+>   }
+>F : (property) F: {
+>       readonly kind: "F";
+>   }
+>show : const show: (r: R<number>) => string
+>or : function or(c: boolean, r: R<number>, g: G): R<number>
+>ok : const ok: (value: number) => R<number>
+>G : const G: {
+>       E: {
+>           readonly kind: "E";
+>       };
+>       F: {
+>           readonly kind: "F";
+>       };
+>   }
+>F : (property) F: {
+>       readonly kind: "F";
+>   }
+>show : const show: (r: R<number>) => string
+>or : function or(c: boolean, r: R<number>, g: G): R<number>
+>err : const err: (error: string) => R<number>
+>G : const G: {
+>       E: {
+>           readonly kind: "E";
+>       };
+>       F: {
+>           readonly kind: "F";
+>       };
+>   }
+>E : (property) E: {
+>       readonly kind: "E";
+>   }
+console.log(show(ternary(true, ok(1), ok(5))), show(ternary(true, ok(0), ok(6))), show(ternary(false, ok(1), err("y"))));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>show : const show: (r: R<number>) => string
+>ternary : function ternary(c: boolean, d: R<number>, e: R<number>): R<number>
+>ok : const ok: (value: number) => R<number>
+>ok : const ok: (value: number) => R<number>
+>show : const show: (r: R<number>) => string
+>ternary : function ternary(c: boolean, d: R<number>, e: R<number>): R<number>
+>ok : const ok: (value: number) => R<number>
+>ok : const ok: (value: number) => R<number>
+>show : const show: (r: R<number>) => string
+>ternary : function ternary(c: boolean, d: R<number>, e: R<number>): R<number>
+>ok : const ok: (value: number) => R<number>
+>err : const err: (error: string) => R<number>
+console.log(show(nullish(true, ok(7), ok(8))), show(nullish(false, ok(7), err("z"))));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>show : const show: (r: R<number>) => string
+>nullish : function nullish(c: boolean, r: R<number>, s: R<number>): R<number>
+>ok : const ok: (value: number) => R<number>
+>ok : const ok: (value: number) => R<number>
+>show : const show: (r: R<number>) => string
+>nullish : function nullish(c: boolean, r: R<number>, s: R<number>): R<number>
+>ok : const ok: (value: number) => R<number>
+>err : const err: (error: string) => R<number>
+

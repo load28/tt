@@ -463,7 +463,7 @@ fn tt_only_modes_name_the_file_and_the_extensions_they_accept() {
     ] {
         let output = run(&root, &[mode, &["x.ts"]].concat());
         let err = String::from_utf8_lossy(&output.stderr);
-        assert!(!output.status.success(), "{mode:?}: {err}");
+        assert_eq!(output.status.code(), Some(1), "{mode:?}: {err}");
         assert_eq!(
             err.trim_end(),
             "ttc: x.ts: not a tt source (expected .tt, .ttx)",
@@ -504,4 +504,119 @@ fn sidecar_map_urls_percent_encode_file_names() {
         serde_json::json!(["../my%20src/a%20b%231%25.tt"])
     );
     assert_eq!(map["file"], "a b#1%.tt.d.ts");
+}
+
+#[test]
+fn watch_rebuilds_every_output_when_the_jsx_option_changes() {
+    use std::io::{BufRead, BufReader};
+    use std::process::Stdio;
+    use std::sync::mpsc;
+    use std::time::Duration;
+    let root = Workspace::new("watch-jsx-option");
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(
+        root.join("tsconfig.json"),
+        "{\"compilerOptions\":{\"jsx\":\"react-jsx\"}}",
+    )
+    .unwrap();
+    fs::write(root.join("src/c.ttx"), "export const C = () => <div/>;\n").unwrap();
+    fs::write(
+        root.join("src/m.tt"),
+        "import { C } from \"./c.ttx\";\nexport const m = C;\n",
+    )
+    .unwrap();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ttc"));
+    command
+        .current_dir(&root)
+        .args(["--watch", "-o", "out", "src"])
+        .stderr(Stdio::piped())
+        .stdout(Stdio::null());
+    root.isolate_unfinalized_child_profile(&mut command);
+    let mut child = command.spawn().unwrap();
+    let stderr = child.stderr.take().unwrap();
+    let (send, receive) = mpsc::channel();
+    let reader = std::thread::spawn(move || {
+        for line in BufReader::new(stderr).lines() {
+            let _ = send.send(line.unwrap());
+        }
+    });
+    let round = || loop {
+        let line = receive.recv_timeout(Duration::from_secs(10)).unwrap();
+        if line.contains("file(s)") {
+            return line;
+        }
+    };
+    let result = std::panic::catch_unwind(|| {
+        assert_eq!(round(), "ttc: 2 file(s) ok — watching");
+        assert!(round().contains("Ctrl-C"));
+        assert!(
+            fs::read_to_string(root.join("out/m.ts"))
+                .unwrap()
+                .contains("from \"./c.js\"")
+        );
+        fs::write(
+            root.join("tsconfig.json"),
+            "{\"compilerOptions\":{\"jsx\":\"preserve\"}}",
+        )
+        .unwrap();
+        assert_eq!(round(), "ttc: 2 file(s) ok — watching");
+        assert!(
+            fs::read_to_string(root.join("out/m.ts"))
+                .unwrap()
+                .contains("from \"./c.jsx\"")
+        );
+    });
+    let _ = child.kill();
+    let _ = child.wait();
+    reader.join().unwrap();
+    if let Err(error) = result {
+        std::panic::resume_unwind(error);
+    }
+}
+
+#[test]
+fn print_watch_never_prints_a_second_module() {
+    use std::io::{BufRead, BufReader, Read};
+    use std::process::Stdio;
+    use std::sync::mpsc;
+    use std::time::Duration;
+    let root = Workspace::new("print-watch-one-source");
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(root.join("src/a.tt"), "export const a = 1;\n").unwrap();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ttc"));
+    command
+        .current_dir(&root)
+        .args(["--watch", "-p", "--no-banner", "src"])
+        .stderr(Stdio::piped())
+        .stdout(Stdio::piped());
+    root.isolate_unfinalized_child_profile(&mut command);
+    let mut child = command.spawn().unwrap();
+    let stderr = child.stderr.take().unwrap();
+    let mut stdout = child.stdout.take().unwrap();
+    let (send, receive) = mpsc::channel();
+    let reader = std::thread::spawn(move || {
+        for line in BufReader::new(stderr).lines() {
+            let _ = send.send(line.unwrap());
+        }
+    });
+    let next = || receive.recv_timeout(Duration::from_secs(10)).unwrap();
+    let result = std::panic::catch_unwind(|| {
+        assert_eq!(next(), "ttc: 1 file(s) ok — watching");
+        assert!(next().contains("Ctrl-C"));
+        fs::write(root.join("src/b.tt"), "export const b = 1;\n").unwrap();
+        assert_eq!(next(), "ttc: --print requires exactly one source file");
+        fs::write(root.join("src/a.tt"), "export const a = 2;\n").unwrap();
+        fs::remove_file(root.join("src/b.tt")).unwrap();
+        assert_eq!(next(), "ttc: 1 file(s) ok — watching");
+    });
+    let _ = child.kill();
+    let _ = child.wait();
+    reader.join().unwrap();
+    let mut printed = String::new();
+    stdout.read_to_string(&mut printed).unwrap();
+    if let Err(error) = result {
+        std::panic::resume_unwind(error);
+    }
+    assert!(!printed.contains("export const b"), "{printed}");
+    assert!(printed.contains("export const a = 2;"), "{printed}");
 }

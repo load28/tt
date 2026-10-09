@@ -1,0 +1,46 @@
+=== completions /*second*/ tuplePatternSlotCompletion.tt:5:44 ===
+  | export const a = match (dir, sp) { (North, ) => 1, _ => 0 };
+  |                                            ^ /*second*/
+completion: 0 item(s), member false, probe no
+ttCompletions: pattern true, member null
+  North (case) "Dir.North"
+  South (case) "Dir.South"
+  Slow (case) "Speed.Slow"
+  Fast (case) "Speed.Fast"
+  Some (case) "Option.Some(value: T)"
+  None (case) "Option.None"
+  Ok (case) "Result.Ok(value: T)"
+  Err (case) "Result.Err(error: E)"
+  _ (wildcard) "wildcard arm — every remaining case (must be last)"
+patternCompletions:
+  Fast (case) "Speed.Fast"
+  Slow (case) "Speed.Slow"
+  _ (wildcard) "wildcard arm — every remaining case (must be last)"
+editor completion: 3 item(s)
+  Fast (EnumMember, 0Fast)
+  Slow (EnumMember, 0Slow)
+  _ (Keyword, 0_)
+
+=== completions /*first*/ tuplePatternSlotCompletion.tt:6:37 ===
+  | export const b = match (dir, sp) { (, Slow) => 1, _ => 0 };
+  |                                     ^ /*first*/
+completion: 0 item(s), member false, probe no
+ttCompletions: pattern true, member null
+  North (case) "Dir.North"
+  South (case) "Dir.South"
+  Slow (case) "Speed.Slow"
+  Fast (case) "Speed.Fast"
+  Some (case) "Option.Some(value: T)"
+  None (case) "Option.None"
+  Ok (case) "Result.Ok(value: T)"
+  Err (case) "Result.Err(error: E)"
+  _ (wildcard) "wildcard arm — every remaining case (must be last)"
+patternCompletions:
+  North (case) "Dir.North"
+  South (case) "Dir.South"
+  _ (wildcard) "wildcard arm — every remaining case (must be last)"
+editor completion: 3 item(s)
+  North (EnumMember, 0North)
+  South (EnumMember, 0South)
+  _ (Keyword, 0_)
+

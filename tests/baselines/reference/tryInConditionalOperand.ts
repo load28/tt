@@ -206,7 +206,7 @@ function optional(label: string, n: number): TResult<unknown, string> {
   }
   
   const scaled = $tt_v26;
-  let $tt_v32: (string) | (undefined);
+  let $tt_v33: (string) | (undefined);
   const $tt_v30 = (sink(label));
   if ($tt_v30 != null) {
     let $tt_v27: number;
@@ -215,6 +215,7 @@ function optional(label: string, n: number): TResult<unknown, string> {
       return $tt_t12;
     }
     $tt_v27 = $tt_t12.value;
+    const $tt_v32 = (($tt_v27).toFixed(1));
     let $tt_v28: number;
     const $tt_t13 = read(n);
     if (!("value" in $tt_t13)) {
@@ -227,12 +228,12 @@ function optional(label: string, n: number): TResult<unknown, string> {
       return $tt_t14;
     }
     $tt_v29 = $tt_t14.value;
-    $tt_v32 = $tt_v30(($tt_v27).toFixed(1), ($tt_v28) + ($tt_v29));
+    $tt_v33 = $tt_v30($tt_v32, ($tt_v28) + ($tt_v29));
   } else {
-    $tt_v32 = undefined;
+    $tt_v33 = undefined;
   }
   
-  const member = $tt_v32;
+  const member = $tt_v33;
   return { kind: "Ok", value: [scaled, member] };
 }
 for (const [flag, n] of [[true, 1], [false, 1], [true, -2], [false, -2]] as const) {

@@ -1,0 +1,16 @@
+import type { TResult } from "@tt/std";
+export variant /*h1*/ V /*h2*/ { A, B }
+variant /* a */ W<T> // b
+{ A(x: T), B }
+declare const v: V;
+declare function r(): TResult<number, string>;
+export const m = match /*g1*/ (v) { A => 1, B => 2 };
+export function f(p = result /*pd*/ { const q = try r(); return q; }): TResult<number, string> {
+  const a = try /*i1*/ r();
+  const b = try
+    // why
+    r();
+  const w = result /*l1*/ { const q = try r(); return q; };
+  const A() = v else { return { kind: "Err", error: "" }; } /*e7*/;
+  return { kind: "Ok", value: a + b };
+}

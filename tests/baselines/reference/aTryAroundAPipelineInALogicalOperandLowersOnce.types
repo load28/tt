@@ -1,0 +1,34 @@
+=== aTryAroundAPipelineInALogicalOperandLowersOnce.tt ===
+function r(n: number): TResult<number, string> { return Result.Ok(n); }
+>r : function r(n: number): TResult<number, string>
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>n : (parameter) n: number
+const f = (x: TResult<number, string>) => x.kind.length;
+>f : const f: (x: TResult<number, string>) => number
+>x : (parameter) x: TResult<number, string>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+>x : (parameter) x: TResult<number, string>
+>kind : (property) kind: "Err" | "Ok"
+>length : (property) String.length: number
+export function F(c: boolean): TResult<number, string> {
+>F : function F(c: boolean): TResult<number, string>
+>c : (parameter) c: boolean
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  const x = match (c && (try r(result { return try r(2); } |> f))) { _ => 0 };
+>x : const x: number
+>c : (parameter) c: boolean
+>r : function r(n: number): TResult<number, string>
+>r : function r(n: number): TResult<number, string>
+>f : const f: (x: TResult<number, string>) => number
+  return Result.Ok(x);
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>x : const x: number
+console.log(JSON.stringify(F(true)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>F : function F(c: boolean): TResult<number, string>
+

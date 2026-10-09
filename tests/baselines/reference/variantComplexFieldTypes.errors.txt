@@ -2,12 +2,12 @@
 ttc: ./variantComplexFieldTypes.tt → $DIR/out/variantComplexFieldTypes.ts
 
 ==== ttc --check-types (exit 1) ====
-error[ts2451]: Cannot redeclare block-scoped variable 'Node'. (in code ttc generated for this construct)
+error[ts2353]: Object literal may only specify known properties, and 'kind' does not exist in type 'Node'. (in code ttc generated for this construct)
  --> variantComplexFieldTypes.tt:2:9
   |
 2 | variant Node {
   |         ^^^^
-error[ts2353]: Object literal may only specify known properties, and 'kind' does not exist in type 'Node'. (in code ttc generated for this construct)
+error[ts2451]: Cannot redeclare block-scoped variable 'Node'. (in code ttc generated for this construct)
  --> variantComplexFieldTypes.tt:2:9
   |
 2 | variant Node {

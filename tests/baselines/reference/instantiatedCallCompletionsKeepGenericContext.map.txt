@@ -4,7 +4,7 @@
 2:30 -> 24:18 len 6  "number"
 2:46 -> 26:3 len 156  "\ntype Item = {kind: \"item\"; run: (x: number) => "...
 6:1 -> 49:1 len 13  "const item = "
-6:14 -> 31:17 len 7  "generic"
+6:14 -> 31:33 len 7  "generic"
 6:21 -> 32:22 len 6  "<Item>"
 6:35 -> 34:17 len 14  "State.Ready(3)"
 7:9 -> 37:15 len 5  "value"

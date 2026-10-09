@@ -16,7 +16,8 @@ pub(crate) fn translate(
     translation_class(kind, code)?;
     let said = match (kind, code) {
         // `.kind` / `.value` reached for on something that is not a Result.
-        (AnchorKind::Try, 2339 | 2551 | 2571) => {
+        (AnchorKind::Try, 2339 | 2551 | 2571)
+        | (AnchorKind::TryTest, 2322 | 2339 | 2360 | 2361 | 2551 | 2571) => {
             "`try` needs a `Result` — this expression is not one".to_string()
         }
         (AnchorKind::Result, 2339 | 2551 | 2571) => {
@@ -24,7 +25,7 @@ pub(crate) fn translate(
                 .to_string()
         }
         // The propagated `Err` reaching a return type that cannot hold it.
-        (AnchorKind::Try, 2322 | 2345) => "the `Err` this `try` propagates does not fit the \
+        (AnchorKind::TryExit, 2322 | 2345) => "the `Err` this `try` propagates does not fit the \
              enclosing function's return type — tt has no automatic conversion, so widen the \
              return type or convert the error"
             .to_string(),
@@ -66,13 +67,31 @@ pub(crate) fn translate(
     }
 }
 
+pub(crate) fn unnamed_generated_operand(
+    code: u32,
+    message: &str,
+    generated: &std::collections::HashSet<String>,
+) -> Option<(u32, &'static str)> {
+    let unnamed = match code {
+        18047 => (2531, "Object is possibly 'null'."),
+        18048 => (2532, "Object is possibly 'undefined'."),
+        18049 => (2533, "Object is possibly 'null' or 'undefined'."),
+        _ => return None,
+    };
+    let named = message.strip_prefix('\'')?;
+    let named = &named[..named.find('\'')?];
+    let root = named.split('.').next()?;
+    generated.contains(root).then_some(unnamed)
+}
+
 /// Stable meaning shared by CLI and editor translation deduplication.
 /// TypeScript may emit several incidental diagnostics for one tt mistake;
 /// the class identifies the single tt-level explanation they share.
 pub(crate) fn translation_class(kind: AnchorKind, code: u32) -> Option<&'static str> {
     match (kind, code) {
-        (AnchorKind::Try | AnchorKind::Result, 2339 | 2551 | 2571) => Some("not-result"),
-        (AnchorKind::Try, 2322 | 2345) => Some("try-error-type"),
+        (AnchorKind::Try | AnchorKind::Result, 2339 | 2551 | 2571)
+        | (AnchorKind::TryTest, 2322 | 2339 | 2360 | 2361 | 2551 | 2571) => Some("not-result"),
+        (AnchorKind::TryExit, 2322 | 2345) => Some("try-error-type"),
         (AnchorKind::LetElse | AnchorKind::IfLet | AnchorKind::Match, 2339 | 2571) => {
             Some("missing-discriminant")
         }
@@ -262,8 +281,8 @@ pub(super) fn checker_labels(
     {
         labels.push(DiagnosticLabel {
             path: None,
-            position: crate::line_col(&host.source, start),
-            end: crate::line_col(&host.source, end),
+            position: host.line_col(start),
+            end: host.line_col(end),
             message: "the piped value is produced here".to_string(),
         });
     }
@@ -281,8 +300,8 @@ pub(super) fn checker_labels(
         };
         labels.push(DiagnosticLabel {
             path: (file.source_path != host.source_path).then(|| file.source_path.clone()),
-            position: crate::line_col(&file.source, start),
-            end: crate::line_col(&file.source, end),
+            position: file.line_col(start),
+            end: file.line_col(end),
             message: related.message.clone(),
         });
     }
@@ -302,11 +321,19 @@ pub(super) fn diagnostic_span(diagnostic: &TsDiagnostic) -> (usize, usize) {
 }
 
 pub(super) fn finish_diagnostics(mut diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {
+    let code_number = |diagnostic: &Diagnostic| {
+        let code = diagnostic.code.as_deref()?;
+        match code.strip_prefix("ts") {
+            Some(number) => number.parse::<u32>().ok(),
+            None => crate::DiagnosticCode::parse(code).map(crate::DiagnosticCode::number),
+        }
+    };
     diagnostics.sort_by(|left, right| {
         (
             &left.path,
             left.position,
             left.end,
+            code_number(left),
             &left.message,
             &left.code,
         )
@@ -314,6 +341,7 @@ pub(super) fn finish_diagnostics(mut diagnostics: Vec<Diagnostic>) -> Vec<Diagno
                 &right.path,
                 right.position,
                 right.end,
+                code_number(right),
                 &right.message,
                 &right.code,
             ))
@@ -600,14 +628,19 @@ pub(super) fn string_end(bytes: &[u8], at: usize) -> usize {
 /// authoritative for project roots; explicit inputs are roots by user
 /// request. Relative tt imports then extend that set through the language's
 /// own module graph, including a source that could not be projected and
-/// therefore could never appear in TypeScript's source-file table.
+/// therefore could never appear in TypeScript's source-file table. Without
+/// TypeScript's answer, the explicit inputs are the only roots known.
 pub(super) fn typed_member_sources(
     snapshot: &Snapshot,
     answers: &Answers,
     requested: &HashSet<PathBuf>,
-) -> Option<HashSet<PathBuf>> {
-    let modules = answers.project_modules.as_ref()?;
-    let configured: HashSet<&std::path::Path> = modules.iter().map(PathBuf::as_path).collect();
+) -> HashSet<PathBuf> {
+    let configured: HashSet<&std::path::Path> = answers
+        .project_modules
+        .iter()
+        .flatten()
+        .map(PathBuf::as_path)
+        .collect();
     let mut members: HashSet<PathBuf> = snapshot
         .files()
         .iter()
@@ -645,7 +678,7 @@ pub(super) fn typed_member_sources(
         };
         let directory = source.parent().unwrap_or(std::path::Path::new("."));
         for import in imports {
-            let Ok(target) = directory.join(&import.specifier).canonicalize() else {
+            let Ok(target) = directory.join(import.path()).canonicalize() else {
                 continue;
             };
             let held = snapshot
@@ -662,7 +695,7 @@ pub(super) fn typed_member_sources(
         }
     }
 
-    Some(members)
+    members
 }
 
 pub(super) fn typescript_owned(file: &ProjectedDocument, diagnostic: &TsDiagnostic) -> bool {

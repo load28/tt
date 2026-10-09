@@ -1,0 +1,19 @@
+// @diagnostics: *
+import type { TResult } from "@tt/std";
+import * as Result from "@tt/std/result";
+declare function rr(n: number): TResult<number, string>;
+declare function takeS(s: string): void;
+export function f(): TResult<unknown, string> {
+  const s: string = try rr(1);
+  takeS(try rr(2));
+  const o: { k: string } = { k: try rr(3) };
+  return Result.Ok([s, o]);
+}
+export function g(x: string): TResult<number, string> {
+  const m = try String(x);
+  return Result.Ok(m);
+}
+export function h(): TResult<number, number> {
+  const v = try rr(4);
+  return Result.Ok(v);
+}

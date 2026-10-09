@@ -2,6 +2,16 @@
 
 use super::*;
 
+const STATEMENT_TAG_PLACEHOLDER: &str = "Tag";
+
+/// What TypeScript completes as a match's discriminant, and the repaired
+/// projection the scrutinee was found in (its code and the scrutinee's
+/// UTF-16 offset).
+type ScrutineeCandidates = (
+    Option<(crate::engine::completions::PatternFamily, Vec<Discriminant>)>,
+    Option<(String, usize)>,
+);
+
 impl Project {
     pub(super) fn complete_at(
         &mut self,
@@ -45,10 +55,15 @@ impl Project {
         let session = self.session();
         let kind = crate::SourceKind::from_path(&path).unwrap_or_default();
         let source_at = {
-            let u16 = u16_offset(&doc.source, position);
-            mapper::from_utf16(&doc.source, u16)
+            let u16 = doc.source_offset(position);
+            doc.source_utf16().to_byte(u16)
         };
-        let plain = match to_service_typed(&doc, position) {
+        let recovered = doc
+            .recovered
+            .iter()
+            .any(|&(start, end)| start <= source_at && source_at < end)
+            || in_arrowless_arm(&doc.source, source_at, kind);
+        let plain = match to_service_typed(&doc, position).filter(|_| !recovered) {
             Some(at) => {
                 let mut plain = ts_completions(
                     session,
@@ -72,7 +87,7 @@ impl Project {
                     &doc,
                     doc.projected(),
                     kind,
-                    mapper::to_utf16(&doc.code, projected_at),
+                    doc.code_utf16().to_utf16(projected_at),
                     source_at,
                 );
                 if !member || (plain.member && !plain.items.is_empty()) {
@@ -87,8 +102,17 @@ impl Project {
         // emit, and ask at its mapped position. The probe stands in for the
         // buffer only for this question — the next serve restores the real
         // text — and no diagnostic is ever computed from it.
-        let Some(probe) = build_probe(&path, &doc.source, source_at, session.probe_count + 1)
-        else {
+        let in_string = crate::lexer::lex_with_kind(&doc.source, 0, doc.source.len(), kind)
+            .iter()
+            .any(|token| {
+                matches!(token.kind, crate::lexer::TokenKind::Str)
+                    && token.span.start < source_at
+                    && source_at < token.span.end
+            });
+        let probe = (!in_string)
+            .then(|| build_probe(&path, &doc.source, source_at, session.probe_count + 1))
+            .flatten();
+        let Some(probe) = probe else {
             return Ok(if plain.member {
                 plain
             } else {
@@ -128,7 +152,7 @@ impl Project {
         path: &Path,
         position: Position,
     ) -> Result<Option<Vec<crate::engine::TtCompletion>>, String> {
-        use crate::engine::completions::{TypedSite, pattern_question};
+        use crate::engine::completions::{PatternFamily, TypedSite, pattern_question};
         let (doc, path) = self.serve(path)?;
         let Some(question) =
             pattern_question(&path, &doc.source, position, Texts::Open(&self.overlays))
@@ -142,17 +166,74 @@ impl Project {
                 family,
                 covered,
                 literals,
+                position: slot,
+                statement,
             }) => {
                 let at =
                     prefix.map_or_else(|| source_byte(&doc.source, position), |(start, _)| start);
-                let source = match prefix {
-                    Some((start, end)) => format!("{}{}", &doc.source[..start], &doc.source[end..]),
-                    None => doc.source.clone(),
-                };
-                match self.discriminant_candidates(&doc, &path, &source, at, family)? {
-                    Some((family, candidates)) => {
-                        arm_candidates(question.items, family, candidates, &covered, &literals)
+                let source = match (prefix, statement) {
+                    (prefix, true) => {
+                        let after = prefix.map_or(at, |(_, end)| end);
+                        let called = crate::lexer::lex_with_kind(
+                            &doc.source,
+                            after,
+                            doc.source.len(),
+                            crate::SourceKind::from_path(&path).unwrap_or_default(),
+                        )
+                        .first()
+                        .is_some_and(|token| {
+                            matches!(token.kind, crate::lexer::TokenKind::Punct(b'('))
+                        });
+                        let tag = if called {
+                            STATEMENT_TAG_PLACEHOLDER.to_string()
+                        } else {
+                            format!("{STATEMENT_TAG_PLACEHOLDER}()")
+                        };
+                        format!("{}{tag}{}", &doc.source[..at], &doc.source[after..])
                     }
+                    (Some((start, end)), false) => {
+                        format!("{}{}", &doc.source[..start], &doc.source[end..])
+                    }
+                    (None, false) => doc.source.clone(),
+                };
+                let (found, scrutinee) =
+                    self.discriminant_candidates(&doc, &path, &source, at, slot, family)?;
+                let found = match (found, scrutinee) {
+                    (found, Some((code, position)))
+                        if family != Some(PatternFamily::Tags)
+                            && !matches!(found, Some((PatternFamily::Tags, _))) =>
+                    {
+                        let booleans: Vec<Discriminant> = self
+                            .literal_members(&path, code, position, Vec::new())?
+                            .unwrap_or_default()
+                            .into_iter()
+                            .filter_map(|literal| match literal {
+                                crate::Literal::Boolean(value) => {
+                                    Some(Discriminant::boolean(value))
+                                }
+                                _ => None,
+                            })
+                            .collect();
+                        match found {
+                            _ if booleans.is_empty() => found,
+                            Some((_, mut candidates)) => {
+                                candidates.extend(booleans);
+                                Some((PatternFamily::Literals, candidates))
+                            }
+                            None => Some((PatternFamily::Literals, booleans)),
+                        }
+                    }
+                    (found, _) => found,
+                };
+                match found {
+                    Some((family, candidates)) => arm_candidates(
+                        question.items,
+                        family,
+                        candidates,
+                        &covered,
+                        &literals,
+                        !statement,
+                    ),
                     None => question.items,
                 }
             }
@@ -163,9 +244,93 @@ impl Project {
                 let fields = self.field_candidates(&doc, &path, position)?;
                 field_candidates(question.items, fields, &written)
             }
+            Some(TypedSite::Nested { at, prefix }) => {
+                match self.nested_candidates(&doc, &path, at, prefix)? {
+                    Some(candidates) => arm_candidates(
+                        {
+                            let tags: Vec<String> = candidates
+                                .iter()
+                                .map(|candidate| candidate.label().to_string())
+                                .collect();
+                            let mut items = question.items;
+                            items.extend(crate::engine::completions::owner_cases(
+                                &path,
+                                &doc.source,
+                                Texts::Open(&self.overlays),
+                                &tags,
+                            ));
+                            items
+                        },
+                        crate::engine::completions::PatternFamily::Tags,
+                        candidates,
+                        &[],
+                        &[],
+                        false,
+                    ),
+                    None => question.items,
+                }
+            }
             Some(TypedSite::Field { claimed: false, .. }) | None => question.items,
         };
         Ok(Some(finish.finish(items)))
+    }
+
+    /// Whether the checker's tags for the scrutinee of the match arm whose
+    /// tag is at `position` name no declaration owning that tag: the
+    /// scrutinee is a union the tag's parse-only declaration is not.
+    pub(super) fn arm_tag_unowned(
+        &mut self,
+        path: &Path,
+        position: Position,
+    ) -> Result<bool, String> {
+        use crate::engine::completions::{PatternFamily, TypedSite, pattern_question};
+        let (doc, path) = self.serve(path)?;
+        let Some(question) =
+            pattern_question(&path, &doc.source, position, Texts::Open(&self.overlays))
+        else {
+            return Ok(false);
+        };
+        let Some(TypedSite::Arm {
+            prefix: Some((start, end)),
+            position: slot,
+            statement,
+            ..
+        }) = question.typed
+        else {
+            return Ok(false);
+        };
+        let source = if statement {
+            format!(
+                "{}{STATEMENT_TAG_PLACEHOLDER}{}",
+                &doc.source[..start],
+                &doc.source[end..]
+            )
+        } else {
+            format!("{}{}", &doc.source[..start], &doc.source[end..])
+        };
+        let (Some((PatternFamily::Tags, candidates)), _) = self.discriminant_candidates(
+            &doc,
+            &path,
+            &source,
+            start,
+            slot,
+            Some(PatternFamily::Tags),
+        )?
+        else {
+            return Ok(false);
+        };
+        let tags: Vec<String> = candidates
+            .iter()
+            .map(|candidate| candidate.label().to_string())
+            .collect();
+        Ok(crate::engine::names::owned_case_symbol(
+            &path,
+            &doc.source,
+            Texts::Open(&self.overlays),
+            &tags,
+            (start, end),
+        )
+        .is_none())
     }
 
     fn discriminant_candidates(
@@ -174,34 +339,50 @@ impl Project {
         path: &Path,
         source: &str,
         at: usize,
+        position: Option<usize>,
         family: Option<crate::engine::completions::PatternFamily>,
-    ) -> Result<Option<(crate::engine::completions::PatternFamily, Vec<Discriminant>)>, String>
-    {
+    ) -> Result<ScrutineeCandidates, String> {
         use crate::engine::completions::PatternFamily;
         let kind = crate::SourceKind::from_path(path).unwrap_or_default();
+        let options = crate::Options {
+            filename: path.to_str(),
+            source_kind: kind,
+            defer_to_checker: true,
+            rewrite_imports: crate::ImportRewrite::Off,
+            ..crate::Options::default()
+        };
         let lowered = |text: &str| {
-            let (start, end) = crate::engine::declarations::scrutinee_at(text, kind, at)?;
-            let report = crate::compile_projection_report(
-                text,
-                &crate::Options {
-                    filename: path.to_str(),
-                    source_kind: kind,
-                    defer_to_checker: true,
-                    rewrite_imports: crate::ImportRewrite::Off,
-                    ..crate::Options::default()
-                },
-            );
+            let (start, end) = crate::engine::declarations::scrutinee_at(text, kind, at, position)?;
+            let report = crate::compile_projection_report(text, &options);
             let emit = report.emit.or(report.withheld)?;
             let out_start = mapper::to_output(&emit.mappings, start)?;
             let out_end = out_start + (end - start);
             (mapper::to_source_span(&emit.mappings, out_start, out_end) == Some((start, end)))
                 .then_some((emit, out_start, out_end))
         };
-        let Some((emit, out_start, out_end)) = lowered(source)
-            .or_else(|| lowered(&format!("{}{WILDCARD_ARM}{}", &source[..at], &source[at..])))
-        else {
-            return Ok(None);
+        let repair = if position.is_some() {
+            "_"
+        } else {
+            WILDCARD_ARM
         };
+        let repaired = format!("{}{repair}{}", &source[..at], &source[at..]);
+        let closed = || {
+            let end = at + repair.len();
+            crate::compile_projection_report(&repaired, &options)
+                .recovered
+                .iter()
+                .find(|&&(start, stop)| start <= at && end <= stop)
+                .and_then(|&(start, _)| closed_at(&repaired, start, end, kind))
+                .filter(|(_, closers)| closers.iter().all(|&(closer, _)| closer >= end))
+                .map(|(closed, _)| closed)
+        };
+        let Some((emit, out_start, out_end)) = lowered(source)
+            .or_else(|| lowered(&repaired))
+            .or_else(|| lowered(&closed()?))
+        else {
+            return Ok((None, None));
+        };
+        let scrutinee = Some((emit.code.clone(), mapper::to_utf16(&emit.code, out_start)));
         let families: &[PatternFamily] = match family {
             Some(PatternFamily::Tags) => &[PatternFamily::Tags],
             Some(PatternFamily::Literals) => &[PatternFamily::Literals],
@@ -242,10 +423,122 @@ impl Project {
                 .filter_map(|item| discriminant(&item.label, family))
                 .collect();
             if !candidates.is_empty() {
-                return Ok(Some((family, candidates)));
+                return Ok((Some((family, candidates)), scrutinee));
             }
         }
-        Ok(None)
+        Ok((None, scrutinee))
+    }
+
+    /// The case a nested pattern's tag names when only the checker can
+    /// identify its variant (a payload typed by a type parameter): `None`
+    /// anywhere else, where [`crate::engine::tt_symbol_at`] answers or no
+    /// tt name is written.
+    pub(super) fn pattern_symbol_at(
+        &mut self,
+        path: &Path,
+        position: Position,
+    ) -> Result<Option<crate::engine::TtSymbol>, String> {
+        use crate::engine::completions::{TypedSite, pattern_question};
+        let (doc, path) = self.serve(path)?;
+        let Some(question) =
+            pattern_question(&path, &doc.source, position, Texts::Open(&self.overlays))
+        else {
+            return Ok(None);
+        };
+        let Some(TypedSite::Nested {
+            at,
+            prefix: Some(tag),
+        }) = question.typed
+        else {
+            return Ok(None);
+        };
+        let Some(candidates) = self.nested_candidates(&doc, &path, at, Some(tag))? else {
+            return Ok(None);
+        };
+        let tags: Vec<String> = candidates
+            .iter()
+            .map(|candidate| candidate.label().to_string())
+            .collect();
+        Ok(crate::engine::names::owned_case_symbol(
+            &path,
+            &doc.source,
+            Texts::Open(&self.overlays),
+            &tags,
+            tag,
+        ))
+    }
+
+    /// The tags TypeScript admits at a nested pattern's position: the
+    /// payload's discriminant, asked where the lowered arm compares it
+    /// ([`crate::PayloadTemp::tag`]), so a generic payload is answered by
+    /// the type the scrutinee gives it.
+    fn nested_candidates(
+        &mut self,
+        doc: &Arc<ServiceDoc>,
+        path: &Path,
+        at: usize,
+        prefix: Option<(usize, usize)>,
+    ) -> Result<Option<Vec<Discriminant>>, String> {
+        let end = prefix.map_or(at, |(_, end)| end);
+        let called = crate::lexer::lex_with_kind(
+            &doc.source,
+            end,
+            doc.source.len(),
+            crate::SourceKind::from_path(path).unwrap_or_default(),
+        )
+        .first()
+        .is_some_and(|token| matches!(token.kind, crate::lexer::TokenKind::Punct(b'(')));
+        let tag = if called {
+            STATEMENT_TAG_PLACEHOLDER.to_string()
+        } else {
+            format!("{STATEMENT_TAG_PLACEHOLDER}()")
+        };
+        let source = format!("{}{tag}{}", &doc.source[..at], &doc.source[end..]);
+        let report = crate::compile_projection_report(
+            &source,
+            &crate::Options {
+                filename: path.to_str(),
+                source_kind: crate::SourceKind::from_path(path).unwrap_or_default(),
+                defer_to_checker: true,
+                rewrite_imports: crate::ImportRewrite::Off,
+                ..crate::Options::default()
+            },
+        );
+        let Some(emit) = report.emit.or(report.withheld) else {
+            return Ok(None);
+        };
+        let Some(&crate::PayloadTemp {
+            tag: (start, end), ..
+        }) = emit.payload_temps.iter().find(|temp| temp.src == at)
+        else {
+            return Ok(None);
+        };
+        let code = format!("{}{PROBE_NAME}{}", &emit.code[..start], &emit.code[end..]);
+        let session = self.session();
+        open_served(session, path, &code);
+        let answer = ts_completions(
+            session,
+            path,
+            mapper::to_utf16(&code, start),
+            ServedText {
+                code: &code,
+                mappings: &[],
+                inserted: &[],
+                source: "",
+                splice: None,
+            },
+            &emit.generated_names,
+            None,
+        );
+        let candidates: Vec<Discriminant> = restore_document(session, path, doc, answer)?
+            .items
+            .iter()
+            .filter(|item| item.kind != Some(crate::engine::CompletionItemKind::Keyword))
+            .filter_map(|item| {
+                discriminant(&item.label, crate::engine::completions::PatternFamily::Tags)
+            })
+            .collect();
+        Ok((!candidates.is_empty()).then_some(candidates))
     }
 
     fn field_candidates(
@@ -253,11 +546,11 @@ impl Project {
         doc: &Arc<ServiceDoc>,
         path: &Path,
         position: Position,
-    ) -> Result<Vec<String>, String> {
+    ) -> Result<Option<Vec<String>>, String> {
         let at = source_byte(&doc.source, position);
         let session = self.session();
         let Some(probe) = build_probe(path, &doc.source, at, session.probe_count + 1) else {
-            return Ok(Vec::new());
+            return Ok(None);
         };
         session.probe_count += 1;
         open_served(session, path, &probe.code);
@@ -269,11 +562,13 @@ impl Project {
             &probe.generated_names,
             None,
         );
-        Ok(restore_document(session, path, doc, answer)?
-            .items
-            .into_iter()
-            .map(|item| item.label)
-            .collect())
+        Ok(Some(
+            restore_document(session, path, doc, answer)?
+                .items
+                .into_iter()
+                .map(|item| item.label)
+                .collect(),
+        ))
     }
 
     pub(super) fn resolve_completion_at(
@@ -362,4 +657,17 @@ impl Project {
             ..detail
         }))
     }
+}
+
+/// Whether the cursor at `at` is in the pattern of a match arm that has no
+/// `=>` yet, read with a name typed there: the text around it is that arm,
+/// not the TypeScript it would read as unfinished.
+fn in_arrowless_arm(source: &str, at: usize, kind: crate::SourceKind) -> bool {
+    if !source.is_char_boundary(at) {
+        return false;
+    }
+    let spliced = format!("{}{PROBE_NAME}{}", &source[..at], &source[at..]);
+    let tokens = crate::lexer::lex_with_kind(&spliced, 0, spliced.len(), kind);
+    let index = tokens.partition_point(|token| token.span.start < at);
+    crate::parser::arrowless_arm_end(&spliced, &tokens, index).is_some()
 }

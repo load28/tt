@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+error[source-not-typescript]: the TypeScript here does not parse: Expected ',', got 'ident'. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> ./aMissingArmCommaIsOnlyAParseError.tt:5:3
+  |
+5 |   B => 2,
+  |   ^
+
+
+==== ttc --check-types (exit 1) ====
+error[source-not-typescript]: the TypeScript here does not parse: Expected ',', got 'ident'. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> aMissingArmCommaIsOnlyAParseError.tt:5:3
+  |
+5 |   B => 2,
+  |   ^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

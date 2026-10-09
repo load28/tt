@@ -1,0 +1,100 @@
+=== aSpreadArgumentBesideATtValueReadsItsElementsFirst.tt ===
+variant V { A, B }
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const arr: number[] = [1, 2];
+>arr : const arr: number[]
+function get(): V { arr.push(7); return V.A; }
+>get : function get(): V
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>arr : const arr: number[]
+>push : (method) Array<number>.push(...items: number[]): number
+>V : const V: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+const f = (...xs: number[]) => xs.join(",");
+>f : const f: (...xs: number[]) => string
+>xs : (parameter) xs: number[]
+>xs : (parameter) xs: number[]
+>join : (method) Array<number>.join(separator?: string): string
+class C { xs: number[]; constructor(...xs: number[]) { this.xs = xs; } }
+>C : class C
+>xs : (property) C.xs: number[]
+>xs : (parameter) xs: number[]
+>xs : (property) C.xs: number[]
+>xs : (parameter) xs: number[]
+const o: { m?: (...xs: number[]) => string } = { m: f };
+>o : const o: {
+>       m?: (...xs: number[]) => string;
+>   }
+>m : (property) m?: ((...xs: number[]) => string) | undefined
+>xs : (parameter) xs: number[]
+>m : (property) m?: ((...xs: number[]) => string) | undefined
+>f : const f: (...xs: number[]) => string
+const t: [number, string] = [1, "a"];
+>t : const t: [number, string]
+const g = (n: number, s: string, k: number) => `${n}${s}${k}`;
+>g : const g: (n: number, s: string, k: number) => string
+>n : (parameter) n: number
+>s : (parameter) s: string
+>k : (parameter) k: number
+>n : (parameter) n: number
+>s : (parameter) s: string
+>k : (parameter) k: number
+console.log(f(...arr, match (get()) { A => 1, B => 0 }));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>f : const f: (...xs: number[]) => string
+>arr : const arr: number[]
+>get : function get(): V
+console.log(new C(...arr, match (get()) { A => 1, B => 0 }).xs.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>C : class C
+>arr : const arr: number[]
+>get : function get(): V
+>xs : (property) C.xs: number[]
+>join : (method) Array<number>.join(separator?: string): string
+console.log(o.m?.(...arr, match (get()) { A => 1, B => 0 }));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>o : const o: {
+>       m?: (...xs: number[]) => string;
+>   }
+>m : (property) m?: ((...xs: number[]) => string) | undefined
+>arr : const arr: number[]
+>get : function get(): V
+console.log(g(...t, match (get()) { A => 1, B => 0 }));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>g : const g: (n: number, s: string, k: number) => string
+>t : const t: [number, string]
+>get : function get(): V
+console.log(`${arr}|${t}|${match (get()) { A => "a", B => "b" }}`);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>arr : const arr: number[]
+>t : const t: [number, string]
+>get : function get(): V
+

@@ -13,6 +13,7 @@ use super::*;
 /// into the payload, so such an arm covers exactly what it covers instead
 /// of being written off.
 pub(super) fn coverage_of(expr: &MatchExpr, table: &Table) -> (Option<Coverage>, Vec<usize>) {
+    let table = &table.visible_at(expr.keyword_off);
     let Some(rows) = match_rows(expr) else {
         return (None, Vec::new());
     };
@@ -94,6 +95,7 @@ pub(crate) fn checked_coverage(
     let mut tuples = Vec::new();
     collect_matches(&program, &mut matches, &mut tuples);
     for expr in matches {
+        let table = table.visible_at(expr.keyword_off);
         let Some((_, positions)) = members.iter().find(|(at, _)| *at == expr.keyword_off) else {
             continue;
         };
@@ -107,17 +109,10 @@ pub(crate) fn checked_coverage(
         let Some(rows) = match_rows(expr) else {
             continue;
         };
+        let arm_patterns: Vec<Span> = expr.arms.iter().map(|arm| arm.pattern_span).collect();
         let cx = Alphabets {
             table: &table,
-            payloads: payloads
-                .iter()
-                .map(|((tag, field), members)| {
-                    (
-                        (tag.clone(), field.clone()),
-                        table.entry_of_members(members),
-                    )
-                })
-                .collect(),
+            payloads: payload_columns(payloads, &arm_patterns, &table),
         };
         let types = [ColTy::Variant(&entry)];
         let subject = subject_of(&rows, &table, tags).map(|(entry, _)| entry.covered_variant());
@@ -135,6 +130,7 @@ pub(crate) fn checked_coverage(
     // product, exactly as the default path does — the only difference is
     // where each column's alphabet came from.
     for expr in tuples {
+        let table = table.visible_at(expr.keyword_off);
         let Some((_, positions)) = members.iter().find(|(at, _)| *at == expr.keyword_off) else {
             continue;
         };
@@ -173,17 +169,10 @@ pub(crate) fn checked_coverage(
             };
             rows.extend(this);
         }
+        let arm_patterns: Vec<Span> = expr.arms.iter().map(|arm| arm.pattern_span).collect();
         let cx = Alphabets {
             table: &table,
-            payloads: payloads
-                .iter()
-                .map(|((tag, field), members)| {
-                    (
-                        (tag.clone(), field.clone()),
-                        table.entry_of_members(members),
-                    )
-                })
-                .collect(),
+            payloads: payload_columns(payloads, &arm_patterns, &table),
         };
         let subjects = positions
             .iter()
@@ -233,6 +222,28 @@ pub(super) fn tuple_position_tags(expr: &TupleMatchExpr, arity: usize) -> Vec<Ve
 
 /// Every single `match` of a program, nested ones included, in source
 /// order.
+/// The payload columns one match's arms asked the checker about. A column
+/// is one `(constructor, field)` pair, but its alphabet is the payload's
+/// type at that match — `Full(item: _)` admits `Red | Green` over a
+/// `Box<Color>` and `Circle | Point` over a `Box<Shape>` — so only the
+/// answers asked at nested patterns written in this match's own arm
+/// patterns describe it.
+fn payload_columns(
+    payloads: &[PayloadAlphabet],
+    arm_patterns: &[Span],
+    table: &Table,
+) -> Vec<((String, String), Entry)> {
+    payloads
+        .iter()
+        .filter(|(_, at, _)| {
+            arm_patterns
+                .iter()
+                .any(|span| span.start <= *at && *at < span.end)
+        })
+        .map(|(column, _, members)| (column.clone(), table.entry_of_members(members)))
+        .collect()
+}
+
 pub(super) fn collect_matches<'a>(
     program: &'a Program,
     out: &mut Vec<&'a MatchExpr>,

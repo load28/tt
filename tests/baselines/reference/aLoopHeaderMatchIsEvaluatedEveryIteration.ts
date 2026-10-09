@@ -20,7 +20,7 @@ function id(v: number): number { return v; }
 const seen: number[] = [];
 while (true) {
   let $tt_v0: number;
-  const $tt_v1 = (id);
+  const $tt_v1: typeof id = (id);
   {
     const $tt_m = next();
     switch ($tt_m) {

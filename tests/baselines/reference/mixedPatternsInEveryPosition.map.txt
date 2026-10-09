@@ -1,6 +1,6 @@
 //// [mixedPatternsInEveryPosition.tt] 25 mapping(s)
 1:1 -> 19:1 len 95  "// Repro from TASK-642\ndeclare function consume("...
-4:1 -> 22:17 len 7  "consume"
+4:1 -> 22:33 len 7  "consume"
 4:16 -> 24:17 len 4  "flag"
 4:29 -> 27:14 len 1  "1"
 4:32 -> 30:19 len 5  "false"
@@ -12,7 +12,7 @@
 5:38 -> 43:16 len 1  "1"
 5:46 -> 47:16 len 1  "2"
 5:49 -> 53:21 len 30  "];\nexport const later = () => "
-6:28 -> 57:19 len 7  "consume"
+6:28 -> 57:35 len 7  "consume"
 6:35 -> 85:16 len 1  "("
 6:43 -> 59:19 len 4  "flag"
 6:56 -> 62:18 len 1  "1"

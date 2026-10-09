@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+error[unknown-case]: variant Sh has no case `Circel`
+ --> ./anOrPatternAlternativeIsNotSuggestedForItsSibling.tt:3:42
+  |
+3 | export const b = match (s) { Circle(r) | Circel(r) => r, Rect => 0 };
+  |                                          ^^^^^^
+  |
+  = help: a case with a similar name exists: `Circles`
+
+
+==== ttc --check-types (exit 1) ====
+error[unknown-case]: variant Sh has no case `Circel`
+ --> anOrPatternAlternativeIsNotSuggestedForItsSibling.tt:3:42
+  |
+3 | export const b = match (s) { Circle(r) | Circel(r) => r, Rect => 0 };
+  |                                          ^^^^^^
+  |
+  = help: a case with a similar name exists: `Circles`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

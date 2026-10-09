@@ -12,8 +12,8 @@ impl<'a> Emitter<'a> {
         let previous = self.result_failures.borrow_mut().insert(
             id,
             ResultFailure {
-                prefix: continuation.assignment_prefix(false),
-                suffix: continuation.assignment_suffix(false),
+                prefix: continuation.assignment_prefix(self.source, false),
+                suffix: continuation.assignment_suffix(self.source, false),
                 label: label.map(str::to_owned),
                 assigns: continuation.assigns(),
             },
@@ -26,6 +26,11 @@ impl<'a> Emitter<'a> {
     }
 
     pub(super) fn emit_failure_exit(&self, propagate: &Propagate, temp: &str) -> Rope<'a> {
+        let exit = self.emit_failure_exit_text(propagate, temp);
+        self.anchored_failure_exit(propagate, exit)
+    }
+
+    fn emit_failure_exit_text(&self, propagate: &Propagate, temp: &str) -> Rope<'a> {
         let mut out = Rope::new();
         match propagate.exit {
             ExitTarget::EnclosingFunction => out.push_lit(format!("return {temp};")),
@@ -47,12 +52,9 @@ impl<'a> Emitter<'a> {
     /// structured propagation value writes block structure into it.
     pub(super) fn emit_propagate(&self, propagate: &Propagate) -> Rope<'a> {
         let temp = self.temp_name(propagate.temporary);
-        let mut out = self.emit_propagate_input(propagate.value, &temp);
+        let mut out = self.emit_propagate_input(propagate, &temp);
         out.push_break(0);
-        out.push_lit(format!(
-            "if ({}) {{",
-            result_failure_test(&temp, propagate.layout)
-        ));
+        self.push_failure_test(propagate, &temp, &mut out);
         out.push_break(1);
         out.append(self.emit_failure_exit(propagate, &temp));
         out.push_break(0);
@@ -65,13 +67,52 @@ impl<'a> Emitter<'a> {
                 out.append(documentation);
             }
             out.push_lit(format!("{} ", binding_keyword(binding.mode)));
-            out.append(self.source_rope(binding.node));
-            out.push_lit(format!(" = {temp}.{};", propagate.layout.payload_field));
+            self.push_propagate_binding(binding.node, &mut out);
+            self.push_propagate_payload(propagate, temp.as_str(), &mut out);
         }
         Rope::scoped(out)
     }
 
-    pub(super) fn emit_propagate_input(&self, value: ExprId, temp: &str) -> Rope<'a> {
+    /// The success payload a propagation's binding reads, and the
+    /// statement's own `;` when its source ends with one.
+    pub(super) fn push_propagate_payload(
+        &self,
+        propagate: &Propagate,
+        temp: &str,
+        out: &mut Rope<'a>,
+    ) {
+        out.push_lit(format!("{temp}.{}", propagate.layout.payload_field));
+        let owner = self.span(propagate.owner);
+        match owner.end.checked_sub(1) {
+            Some(semi) if self.source.as_bytes().get(semi) == Some(&b';') => {
+                out.push_src(&self.source[semi..owner.end], semi);
+            }
+            _ => out.push_lit(";"),
+        }
+    }
+
+    /// A propagation's binding as written, with what the source has between
+    /// it and `=` (a comment and the line break that ends it), then `= `.
+    pub(super) fn push_propagate_binding(&self, binding: NodeId, out: &mut Rope<'a>) {
+        out.append(self.source_rope(binding));
+        let end = self.span(binding).end;
+        let (equals, _) =
+            crate::scanner::skip_trivia(self.source.as_bytes(), end, self.source.len());
+        push_gap(
+            self.source,
+            out,
+            " ",
+            Some(SourceSpan {
+                start: end,
+                end: equals,
+            }),
+            "= ",
+        );
+    }
+
+    pub(super) fn emit_propagate_input(&self, propagate: &Propagate, temp: &str) -> Rope<'a> {
+        let value = propagate.value;
+        let keyword_gap = self.keyword_gap(propagate.node, "try", value);
         let mut out = Rope::new();
         let structured = self
             .core
@@ -94,15 +135,37 @@ impl<'a> Emitter<'a> {
             // is read once into the temporary.
             out.append(prelude.trim_end());
             out.push_break(0);
-            out.push_lit(format!("const {temp} = "));
+            push_gap(
+                self.source,
+                &mut out,
+                &format!("const {temp} ="),
+                keyword_gap,
+                " ",
+            );
             push_grouped(&mut out, operand.trim(), self.source_kind);
             out.push_lit(";");
         } else {
-            out.push_lit(format!("const {temp} = "));
+            push_gap(
+                self.source,
+                &mut out,
+                &format!("const {temp} ="),
+                keyword_gap,
+                " ",
+            );
             push_grouped(&mut out, self.emit_expr(value).trim(), self.source_kind);
             out.push_lit(";");
         }
         out
+    }
+
+    fn result_keyword_gap(&self, region: &ResultRegion) -> Option<SourceSpan> {
+        let span = self.span(region.node);
+        let start = span.start + "result".len();
+        if !self.source[span.start..].starts_with("result") {
+            return None;
+        }
+        let (open, _) = crate::scanner::skip_trivia(self.source.as_bytes(), start, span.end);
+        (start < open).then_some(SourceSpan { start, end: open })
     }
 
     pub(super) fn emit_result_region(&self, expr: ExprId, region: &ResultRegion) -> Rope<'a> {
@@ -114,11 +177,21 @@ impl<'a> Emitter<'a> {
         let _failure_scope = self.enter_result_failure(region.id, &failure, None);
         let mut out = Rope::new();
         self.used_expression_boundary.set(true);
-        out.push_lit(if region.is_async {
+        let mut boundary = Rope::new();
+        let opener = if region.is_async {
             format!("(await {}(async () => {{", self.expression_boundary_name)
         } else {
             format!("{}(() => {{", self.expression_boundary_name)
-        });
+        };
+        boundary.push_lit(opener);
+        let (start, end) = self.result_bind_anchor(region);
+        out.anchored(AnchorKind::Result, start, end, end, boundary);
+        self.push_gap_comments(
+            self.result_keyword_gap(region)
+                .map(|gap| crate::hir::Span::new(gap.start, gap.end)),
+            1,
+            &mut out,
+        );
         out.push_break(1);
         for item in &region.items {
             let ResultRegionItem::Statements(body) = item;
@@ -224,15 +297,28 @@ impl<'a> Emitter<'a> {
                         &self.source[argument.start..argument.end],
                         self.source_kind,
                     );
+                    let (open, close) = if success.names_value()
+                        && self.anonymous_function(argument.start, argument.end)
+                    {
+                        ("(void 0, ", ")")
+                    } else {
+                        ("", "")
+                    };
                     edits.push(LocalSourceEdit {
                         span: SourceSpan {
                             start: exit.statement.start,
                             end: argument.start,
                         },
                         text: if starts_own_line {
-                            format!("{{\n{inner_indent}{}", success.assignment_prefix(grouped))
+                            format!(
+                                "{{\n{inner_indent}{}{open}",
+                                success.assignment_prefix(self.source, grouped)
+                            )
                         } else {
-                            format!("{{ {}", success.assignment_prefix(grouped))
+                            format!(
+                                "{{ {}{open}",
+                                success.assignment_prefix(self.source, grouped)
+                            )
                         },
                         result_return_mark: Some((argument, ResultReturnBoundary::Start)),
                     });
@@ -243,8 +329,8 @@ impl<'a> Emitter<'a> {
                         },
                         text: if starts_own_line {
                             format!(
-                                "{};{}\n{line_indent}}}",
-                                success.assignment_suffix(grouped),
+                                "{close}{};{}\n{line_indent}}}",
+                                success.assignment_suffix(self.source, grouped),
                                 if success.assigns() {
                                     format!("\n{inner_indent}{leave}")
                                 } else {
@@ -253,8 +339,8 @@ impl<'a> Emitter<'a> {
                             )
                         } else {
                             format!(
-                                "{};{} }}",
-                                success.assignment_suffix(grouped),
+                                "{close}{};{} }}",
+                                success.assignment_suffix(self.source, grouped),
                                 if success.assigns() {
                                     format!(" {leave}")
                                 } else {
@@ -269,14 +355,14 @@ impl<'a> Emitter<'a> {
                     let mut text = if starts_own_line {
                         format!(
                             "{{\n{inner_indent}{}undefined{};",
-                            success.assignment_prefix(false),
-                            success.assignment_suffix(false),
+                            success.assignment_prefix(self.source, false),
+                            success.assignment_suffix(self.source, false),
                         )
                     } else {
                         format!(
                             "{{{}undefined{};",
-                            success.assignment_prefix(false),
-                            success.assignment_suffix(false),
+                            success.assignment_prefix(self.source, false),
+                            success.assignment_suffix(self.source, false),
                         )
                     };
                     if success.assigns() {
@@ -517,6 +603,7 @@ impl<'a> Emitter<'a> {
                             adt,
                             self.source,
                             |node| self.span(node),
+                            |specifier, out| self.emit_import(specifier, out),
                             self.ambient_items.contains(&adt.node),
                             self.source_kind,
                         ),
@@ -526,7 +613,9 @@ impl<'a> Emitter<'a> {
                 Statement::Propagate(propagate) => {
                     out.append(self.emit_propagate_owner_prelude(propagate));
                     let span = self.span(propagate.node);
-                    let mut emitted = if matches!(propagate.exit, ExitTarget::ResultRegion(_)) {
+                    let mut emitted = if self.is_for_initializer_propagation(propagate.node) {
+                        self.emit_for_initializer_payload(propagate)
+                    } else if matches!(propagate.exit, ExitTarget::ResultRegion(_)) {
                         self.emit_region_propagate(propagate, context.failure, context.exit_label)
                     } else {
                         self.emit_propagate(propagate)
@@ -580,10 +669,17 @@ impl<'a> Emitter<'a> {
         });
         let exit_label = distinct_label.as_deref().or(assignment_target);
         let _failure_scope = self.enter_result_failure(region.id, continuation, exit_label);
+        let keyword_gap = self.result_keyword_gap(region);
         if let Some(label) = exit_label {
-            out.push_lit(format!("{label}: {{"));
+            push_gap(
+                self.source,
+                &mut out,
+                &format!("{label}:"),
+                keyword_gap,
+                " {",
+            );
         } else {
-            out.push_lit("{");
+            push_gap(self.source, &mut out, "", keyword_gap, "{");
         }
         out.push_break(1);
         let success = continuation.wrap_result_ok();
@@ -637,18 +733,18 @@ impl<'a> Emitter<'a> {
         exit_label: Option<&str>,
     ) -> Rope<'a> {
         let temp = self.temp_name(propagate.temporary);
-        let mut out = self.emit_propagate_input(propagate.value, &temp);
+        let mut out = self.emit_propagate_input(propagate, &temp);
         out.push_break(0);
-        out.push_lit(format!(
-            "if ({}) {{",
-            result_failure_test(&temp, propagate.layout)
-        ));
+        self.push_failure_test(propagate, &temp, &mut out);
         out.push_break(1);
         let mut value = Rope::new();
         value.push_lit(temp.clone());
         out.append(Rope::indented(
             1,
-            self.emit_value_delivery_with_exit(value, None, continuation, exit_label, Some(0)),
+            self.anchored_failure_exit(
+                propagate,
+                self.emit_value_delivery_with_exit(value, None, continuation, exit_label, Some(0)),
+            ),
         ));
         out.push_break(0);
         out.push_lit("}");
@@ -660,8 +756,8 @@ impl<'a> Emitter<'a> {
                 out.append(documentation);
             }
             out.push_lit(format!("{} ", binding_keyword(binding.mode)));
-            out.append(self.source_rope(binding.node));
-            out.push_lit(format!(" = {temp}.{};", propagate.layout.payload_field));
+            self.push_propagate_binding(binding.node, &mut out);
+            self.push_propagate_payload(propagate, temp.as_str(), &mut out);
         }
         Rope::scoped(out)
     }

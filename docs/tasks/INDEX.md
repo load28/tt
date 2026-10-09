@@ -798,6 +798,48 @@
 
 | TASK-763 | Validate editor buffers per file, lazily and cancellably | Complete | 2026-10-05 | 2026-10-05 | [TASK-763](./TASK-763-editor-validation-scheduling.md) |
 
+| TASK-764 | Fix defects found by a CLI audit | Complete | 2026-10-05 | 2026-10-05 | [TASK-764](./TASK-764-cli-audit-defects.md) |
+
+| TASK-765 | Keep valid TypeScript out of tt claims and rewrites | Complete | 2026-10-05 | 2026-10-05 | [TASK-765](./TASK-765-passthrough-claim-defects.md) |
+
+| TASK-766 | Fix defects found by a compiler audit | Complete | 2026-10-05 | 2026-10-05 | [TASK-766](./TASK-766-compiler-audit-defects.md) |
+
+| TASK-767 | Fix defects found by an editor audit | Complete | 2026-10-05 | 2026-10-06 | [TASK-767](./TASK-767-editor-audit-defects.md) |
+
+| TASK-768 | Fix defects found by the second audit | Complete | 2026-10-06 | 2026-10-06 | [TASK-768](./TASK-768-editor-audit-round-two.md) |
+
+| TASK-769 | Fix defects found by the third audit | Complete | 2026-10-06 | 2026-10-06 | [TASK-769](./TASK-769-third-audit.md) |
+
+| TASK-770 | Fix defects found by the fourth audit | Complete | 2026-10-06 | 2026-10-06 | [TASK-770](./TASK-770-fourth-audit.md) |
+| TASK-771 | Keep a logical test's narrowing and fix the fourth audit's remaining editor findings | Complete | 2026-10-06 | 2026-10-06 | [TASK-771](./TASK-771-narrowing-and-editor-cost.md) |
+| TASK-772 | Fix the deferred findings of earlier audits | Complete | 2026-10-06 | 2026-10-06 | [TASK-772](./TASK-772-deferred-findings.md) |
+| TASK-773 | Fix defects found by the fifth audit | Complete | 2026-10-06 | 2026-10-07 | [TASK-773](./TASK-773-fifth-audit.md) |
+| TASK-774 | Make the evaluation protocol linear in the tt values of an expression | Complete | 2026-10-07 | 2026-10-07 | [TASK-774](./TASK-774-linear-evaluation-protocol.md) |
+| TASK-775 | Judge a match's exhaustiveness on the typed path by the cases its value can still be | Cancelled | 2026-10-07 | 2026-10-07 | [TASK-775](./TASK-775-typed-exhaustiveness-over-narrowed-cases.md) |
+| TASK-776 | Lower an expression's tt values over one shared evaluation tree | Complete | 2026-10-07 | 2026-10-07 | [TASK-776](./TASK-776-shared-evaluation-tree.md) |
+| TASK-777 | Give a value in a nested concise arrow body its layout scope | Complete | 2026-10-07 | 2026-10-07 | [TASK-777](./TASK-777-nested-concise-arrow-layout-scope.md) |
+| TASK-778 | Pin the TypeScript-twin parity of an `@tt/std` case as a clean checkout answers it | Complete | 2026-10-07 | 2026-10-07 | [TASK-778](./TASK-778-twin-parity-without-stray-std.md) |
+| TASK-779 | Share the pattern analysis' declaration entries across the scopes it narrows | Complete | 2026-10-07 | 2026-10-07 | [TASK-779](./TASK-779-shared-pattern-table-entries.md) |
+| TASK-780 | Fix the sixth audit's command-line findings | Complete | 2026-10-07 | 2026-10-07 | [TASK-780](./TASK-780-sixth-audit-cli.md) |
+| TASK-781 | Fix the sixth audit's compiler findings | Complete | 2026-10-07 | 2026-10-07 | [TASK-781](./TASK-781-sixth-audit-compiler.md) |
+| TASK-782 | Fix the sixth audit's editor findings | Complete | 2026-10-07 | 2026-10-07 | [TASK-782](./TASK-782-sixth-audit-editor.md) |
+| TASK-783 | Fix the seventh audit's command-line findings | Complete | 2026-10-07 | 2026-10-07 | [TASK-783](./TASK-783-seventh-audit-cli.md) |
+| TASK-784 | Fix two regressions of TASK-781 found by the seventh audit | Complete | 2026-10-07 | 2026-10-07 | [TASK-784](./TASK-784-super-optional-call-reference.md) |
+| TASK-785 | Remove the entity-name set that slowed every compile | Complete | 2026-10-07 | 2026-10-07 | [TASK-785](./TASK-785-entity-name-prefilter.md) |
+| TASK-786 | Keep authored comments inside the forms a lowering rebuilds | Complete | 2026-10-07 | 2026-10-07 | [TASK-786](./TASK-786-authored-gaps-in-rebuilt-forms.md) |
+| TASK-787 | Fix the seventh audit's remaining compiler findings | Complete | 2026-10-08 | 2026-10-08 | [TASK-787](./TASK-787-seventh-audit-compiler.md) |
+| TASK-788 | Fix the seventh audit's editor findings | Complete | 2026-10-08 | 2026-10-08 | [TASK-788](./TASK-788-seventh-audit-editor.md) |
+| TASK-789 | Recover the first-snapshot time this branch lost to main | Complete | 2026-10-08 | 2026-10-08 | [TASK-789](./TASK-789-first-snapshot-regression.md) |
+| TASK-790 | Fix the round-eight compiler findings | Complete | 2026-10-08 | 2026-10-08 | [TASK-790](./TASK-790-round-eight-compiler-findings.md) |
+| TASK-791 | Fix the round-eight CLI findings | Complete | 2026-10-08 | 2026-10-08 | [TASK-791](./TASK-791-round-eight-cli-findings.md) |
+| TASK-792 | Fix the round-eight editor findings | Complete | 2026-10-08 | 2026-10-08 | [TASK-792](./TASK-792-round-eight-editor-findings.md) |
+| TASK-793 | Fix the round-nine CLI findings | Complete | 2026-10-08 | 2026-10-08 | [TASK-793](./TASK-793-round-nine-cli-findings.md) |
+| TASK-794 | Fix the round-nine compiler findings | Complete | 2026-10-08 | 2026-10-08 | [TASK-794](./TASK-794-round-nine-compiler-findings.md) |
+| TASK-795 | Fix the round-nine editor findings | Complete | 2026-10-08 | 2026-10-08 | [TASK-795](./TASK-795-round-nine-editor-findings.md) |
+| TASK-796 | Carry out the round-nine design decisions | Complete | 2026-10-08 | 2026-10-08 | [TASK-796](./TASK-796-round-nine-decisions.md) |
+| TASK-797 | Bound the checker requests of contextual storage | Complete | 2026-10-08 | 2026-10-09 | [TASK-797](./TASK-797-contextual-checker-round-trips.md) |
+| TASK-798 | Project only the candidates the program contains | Complete | 2026-10-09 | 2026-10-09 | [TASK-798](./TASK-798-project-only-program-members.md) |
+
 ## Next task number
 
-**TASK-764**
+**TASK-799**

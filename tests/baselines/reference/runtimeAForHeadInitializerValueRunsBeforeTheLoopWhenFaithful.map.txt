@@ -6,7 +6,7 @@
 8:3 -> 50:3 len 13  "for (let f = "
 8:23 -> 34:19 len 1  "o"
 8:30 -> 37:17 len 1  "n"
-8:36 -> 38:18 len 11  "() => n + 1"
+8:36 -> 38:27 len 11  "() => n + 1"
 8:54 -> 42:18 len 4  "null"
 8:60 -> 50:22 len 78  ", i = 0; i < 1; i++) out.push(\"a\" + f!() + i);\n}"...
 11:3 -> 59:3 len 13  "for (let x = "
@@ -21,13 +21,13 @@
 18:3 -> 102:3 len 45  "for (let k: ((k: number) => number) | null = "
 18:55 -> 86:19 len 1  "o"
 18:62 -> 89:17 len 1  "n"
-18:68 -> 90:18 len 20  "(k: number) => k + n"
+18:68 -> 90:27 len 20  "(k: number) => k + n"
 18:95 -> 94:18 len 4  "null"
 18:101 -> 102:54 len 56  "; k; k = null) out.push(\"f\" + k(1));\n}\nfunction "...
 21:3 -> 123:3 len 37  "for (var v: (() => unknown) | null = "
 21:47 -> 107:19 len 1  "o"
 21:54 -> 110:17 len 1  "n"
-21:60 -> 111:18 len 7  "() => v"
+21:60 -> 111:27 len 7  "() => v"
 21:74 -> 115:18 len 4  "null"
 21:80 -> 123:46 len 76  "; v; v = null) out.push(\"g\" + (v() === v));\n}\nfu"...
 25:3 -> 145:3 len 9  "for (x = "

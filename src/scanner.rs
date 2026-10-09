@@ -254,18 +254,22 @@ pub(crate) fn line_end(src: &[u8], from: usize, end: usize) -> usize {
 }
 
 /// `src[i]` is `'` or `"` — returns the index just past the closing quote.
-pub(crate) fn scan_string(src: &[u8], mut i: usize, end: usize) -> usize {
+pub(crate) fn scan_string(src: &[u8], i: usize, end: usize) -> usize {
+    string_end(src, i, end).0
+}
+
+pub(crate) fn string_end(src: &[u8], mut i: usize, end: usize) -> (usize, bool) {
     let quote = src[i];
     i += 1;
     while i < end {
         match src[i] {
             b'\\' => i += 2,
-            b'\n' => return i, // unterminated string: stop at the newline
-            b if b == quote => return i + 1,
+            b'\n' => return (i, false), // unterminated string: stop at the newline
+            b if b == quote => return (i + 1, true),
             _ => i += 1,
         }
     }
-    i.min(end)
+    (i.min(end), false)
 }
 
 /// `src[i]` is `/` where a regex literal is allowed — returns the index just

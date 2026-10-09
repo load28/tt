@@ -1,0 +1,8 @@
+variant V { A(n: number), B(m: string) }
+export function f(v: V) {
+  return match (v) { A(n) | B(n) => n };
+}
+export function g(v: V) {
+  const A(n) | B(n) = v else { return 0; };
+  return n;
+}

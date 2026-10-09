@@ -1,0 +1,81 @@
+=== aRebuiltOperandInsideACapturedOperandKeepsItsText.tt ===
+variant S { A, B }
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+function R<T>(x: T): TResult<T, string> { return Result.Ok(x); }
+>R : function R<T>(x: T): TResult<T, string>
+>T : (type parameter) T in R<T>(x: T): TResult<T, string>
+>x : (parameter) x: T
+>T : (type parameter) T in R<T>(x: T): TResult<T, string>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+>T : (type parameter) T in R<T>(x: T): TResult<T, string>
+>Ok : const Ok: <T>(value: T) => Result.TOk<T>
+>x : (parameter) x: T
+function p(): S { return S.A; }
+>p : function p(): S
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>S : const S: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+function f(x: unknown) { return x; }
+>f : function f(x: unknown): unknown
+>x : (parameter) x: unknown
+>x : (parameter) x: unknown
+const g = { mm: (x: unknown) => x };
+>g : const g: {
+>       mm: (x: unknown) => unknown;
+>   }
+>mm : (property) mm: (x: unknown) => unknown
+>x : (parameter) x: unknown
+>x : (parameter) x: unknown
+const c = true as boolean;
+>c : const c: boolean
+function t(): TResult<unknown, string> {
+>t : function t(): TResult<unknown, string>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  const call = typeof g.mm?.(f(match (p()) { A => 1, B => 2 })) + typeof (try R(3));
+>call : const call: string
+>g : const g: {
+>       mm: (x: unknown) => unknown;
+>   }
+>mm : (property) mm: (x: unknown) => unknown
+>f : function f(x: unknown): unknown
+>p : function p(): S
+>R : function R<number>(x: number): TResult<number, string>
+  const branch = typeof (c ? (try R(5)) + "x" : 1) + typeof (try R(1));
+>branch : const branch: string
+>c : const c: boolean
+>R : function R<number>(x: number): TResult<number, string>
+>R : function R<number>(x: number): TResult<number, string>
+  return Result.Ok([call, branch]);
+>Ok : const Ok: <string[]>(value: string[]) => Result.TOk<string[]>
+>call : const call: string
+>branch : const branch: string
+console.log(JSON.stringify(t()));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>t : function t(): TResult<unknown, string>
+

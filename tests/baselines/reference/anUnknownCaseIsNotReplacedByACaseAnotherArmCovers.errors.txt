@@ -1,0 +1,52 @@
+==== ttc --out-dir (exit 1) ====
+error[unknown-case]: variant S has no case `Delta`
+ --> ./anUnknownCaseIsNotReplacedByACaseAnotherArmCovers.tt:3:84
+  |
+3 | export const covered = match (s) { Alpha(x) => x, Beta(y) => y.length, Gamma => 0, Delta => 1 };
+  |                                                                                    ^^^^^
+
+error[unknown-case]: variant S has no case `Bta`
+ --> ./anUnknownCaseIsNotReplacedByACaseAnotherArmCovers.tt:4:48
+  |
+4 | export const open = match (s) { Alpha(x) => x, Bta(y) => y.length, Gamma => 0 };
+  |                                                ^^^
+  |
+  = help: a case with a similar name exists: `Beta`
+
+error[unknown-case]: variant S has no case `Bta`
+ --> ./anUnknownCaseIsNotReplacedByACaseAnotherArmCovers.tt:8:3
+  |
+8 |   Bta(y) => 2,
+  |   ^^^
+  |
+  = help: a case with a similar name exists: `Beta`
+
+
+==== ttc --check-types (exit 1) ====
+error[unknown-case]: variant S has no case `Delta`
+ --> anUnknownCaseIsNotReplacedByACaseAnotherArmCovers.tt:3:84
+  |
+3 | export const covered = match (s) { Alpha(x) => x, Beta(y) => y.length, Gamma => 0, Delta => 1 };
+  |                                                                                    ^^^^^
+error[unknown-case]: variant S has no case `Bta`
+ --> anUnknownCaseIsNotReplacedByACaseAnotherArmCovers.tt:4:48
+  |
+4 | export const open = match (s) { Alpha(x) => x, Bta(y) => y.length, Gamma => 0 };
+  |                                                ^^^
+  |
+  = help: a case with a similar name exists: `Beta`
+error[ts2339]: Property 'length' does not exist on type 'never'.
+ --> anUnknownCaseIsNotReplacedByACaseAnotherArmCovers.tt:4:60
+  |
+4 | export const open = match (s) { Alpha(x) => x, Bta(y) => y.length, Gamma => 0 };
+  |                                                            ^^^^^^
+error[unknown-case]: variant S has no case `Bta`
+ --> anUnknownCaseIsNotReplacedByACaseAnotherArmCovers.tt:8:3
+  |
+8 |   Bta(y) => 2,
+  |   ^^^
+  |
+  = help: a case with a similar name exists: `Beta`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

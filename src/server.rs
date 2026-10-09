@@ -70,6 +70,12 @@
 //! The pattern completions at a pattern position with what the scrutinee's
 //! type admits, from the project's TypeScript; null elsewhere.
 //!
+//! → { "method": "patternSymbol", "params": { "path", "position" } }
+//! ← { "result": <a ttSymbol result> | null }
+//! The case a nested pattern's tag names when only the project's TypeScript
+//! identifies its variant (a payload typed by a type parameter); null
+//! wherever `ttSymbol` answers and wherever no such tag is written.
+//!
 //! → { "id": 7, "method": "ttHints", "params": { "path", "text" } }
 //! ← { "id": 7, "result": { "hints": [{ "kind", "range", "message" }] } }
 //!
@@ -135,6 +141,7 @@ mod responses;
 use responses::{
     completion_detail_json, completion_json, labels_json, location_json, pattern_items_json,
     range_json, service_diagnostic_json, signature_help_json, suggestions_json, symbol_json,
+    tt_symbol_json,
 };
 use std::collections::{HashMap, VecDeque};
 use std::io::{BufRead, Write};
@@ -149,7 +156,7 @@ use ttc::engine::{CheckRequest, Engine, Position, Project, SignatureTrigger, Wor
 pub(crate) fn run(node: Option<PathBuf>) -> ExitCode {
     // One live project per identity, and the documents a consumer holds
     // open in them — what a server exists to keep between requests.
-    let mut workspace = Workspace::new(Engine::new(node));
+    let mut workspace = Workspace::new(Engine::new(node.clone()));
     let mut checks = Checks::default();
 
     let stdout = std::io::stdout();
@@ -223,7 +230,9 @@ pub(crate) fn run(node: Option<PathBuf>) -> ExitCode {
         // of one request, and what that work builds — a snapshot — is
         // immutable and installed whole or not at all, so the projects the
         // workspace holds are the ones the last successful request left.
-        let response = match ttc::ice::catching(|| respond(&mut workspace, &mut checks, line)) {
+        let response = match ttc::ice::catching(|| {
+            respond(&mut workspace, &mut checks, node.as_deref(), line)
+        }) {
             Ok(response) => response,
             Err(message) => serde_json::json!({
                 "id": request_id(line),
@@ -304,8 +313,70 @@ fn request_id(line: &str) -> serde_json::Value {
         .unwrap_or(serde_json::Value::Null)
 }
 
+fn bool_param(
+    value: &serde_json::Value,
+    method: &str,
+    key: &str,
+    default: bool,
+) -> Result<bool, String> {
+    match value {
+        serde_json::Value::Null => Ok(default),
+        serde_json::Value::Bool(value) => Ok(*value),
+        other => Err(format!(
+            "{method}: \"{key}\" expects true or false (got {other})"
+        )),
+    }
+}
+
+fn position_param(value: &serde_json::Value, method: &str) -> Result<Position, String> {
+    let part = |key: &str| {
+        match &value[key] {
+        serde_json::Value::Null => Ok(0),
+        part => part
+            .as_u64()
+            .and_then(|part| u32::try_from(part).ok())
+            .ok_or_else(|| {
+                format!("{method}: \"position.{key}\" expects a non-negative integer below 2^32 (got {part})")
+            }),
+    }
+    };
+    match value {
+        serde_json::Value::Null => Ok(Position {
+            line: 0,
+            character: 0,
+        }),
+        serde_json::Value::Object(_) => Ok(Position {
+            line: part("line")?,
+            character: part("character")?,
+        }),
+        other => Err(format!(
+            "{method}: \"position\" expects an object with \"line\" and \"character\" (got {other})"
+        )),
+    }
+}
+
+fn string_param<'a>(
+    value: &'a serde_json::Value,
+    method: &str,
+    key: &str,
+    default: &'a str,
+) -> Result<&'a str, String> {
+    match value {
+        serde_json::Value::Null => Ok(default),
+        serde_json::Value::String(value) => Ok(value),
+        other => Err(format!(
+            "{method}: \"{key}\" expects a string (got {other})"
+        )),
+    }
+}
+
 /// One request, one answer — errors included, so the session survives them.
-fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_json::Value {
+fn respond(
+    workspace: &mut Workspace,
+    checks: &mut Checks,
+    node: Option<&Path>,
+    line: &str,
+) -> serde_json::Value {
     use serde_json::json;
     ttc::ice::panic_for_test("server");
     let request: serde_json::Value = match serde_json::from_str(line) {
@@ -316,9 +387,18 @@ fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_
     };
     let id = request["id"].clone();
     let params = &request["params"];
-    let result = match request["method"].as_str().unwrap_or_default() {
+    let Some(method) = request
+        .as_object()
+        .and_then(|members| members.get("method")?.as_str())
+    else {
+        return json!({
+            "id": id,
+            "error": "malformed request: a request is an object with a \"method\" string",
+        });
+    };
+    let result = match method {
         "check" => check(params),
-        "print" => print(params),
+        "print" => print(params, node),
         "dependencies" => dependencies(workspace, checks, params),
         "emitMap" => emit_map(params),
         "typedCheck" => typed_check(workspace, params),
@@ -338,7 +418,7 @@ fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_
             workspace.reload();
             Ok(json!({}))
         }
-        "hover" => semantic(workspace, params, |project, path, position| {
+        "hover" => semantic(workspace, method, params, |project, path, position| {
             Ok(match project.hover(path, position)? {
                 None => serde_json::Value::Null,
                 Some(info) => json!({
@@ -348,7 +428,7 @@ fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_
                 }),
             })
         }),
-        "definition" => semantic(workspace, params, |project, path, position| {
+        "definition" => semantic(workspace, method, params, |project, path, position| {
             let locations: Vec<_> = project
                 .definition(path, position)?
                 .into_iter()
@@ -356,7 +436,7 @@ fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_
                 .collect();
             Ok(json!({ "locations": locations }))
         }),
-        "references" => spanning(workspace, params, |workspace, path, position| {
+        "references" => spanning(workspace, method, params, |workspace, path, position| {
             let locations: Vec<_> = workspace
                 .references(path, position)?
                 .into_iter()
@@ -368,20 +448,20 @@ fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_
                 .collect();
             Ok(json!({ "locations": locations }))
         }),
-        "completion" => semantic(workspace, params, |project, path, position| {
-            let member = params["member"].as_bool().unwrap_or(false);
+        "completion" => semantic(workspace, method, params, |project, path, position| {
+            let member = bool_param(&params["member"], "completion", "member", false)?;
             let trigger = params["triggerCharacter"].as_str();
             let answer = project.triggered_completion(path, position, member, trigger)?;
             Ok(completion_json(answer))
         }),
-        "completionResolve" => semantic(workspace, params, |project, path, position| {
+        "completionResolve" => semantic(workspace, method, params, |project, path, position| {
             let label = params["label"].as_str().unwrap_or_default();
             let source = params["source"].as_str();
             let probe = params["probe"].as_u64();
             let detail = project.completion_resolve(path, position, label, source, probe)?;
             Ok(completion_detail_json(detail))
         }),
-        "rename" => spanning(workspace, params, |workspace, path, position| {
+        "rename" => spanning(workspace, method, params, |workspace, path, position| {
             Ok(match workspace.rename(path, position)? {
                 None => json!({ "edits": serde_json::Value::Null }),
                 Some(edits) => json!({
@@ -396,7 +476,7 @@ fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_
                 }),
             })
         }),
-        "prepareRename" => spanning(workspace, params, |workspace, path, position| {
+        "prepareRename" => spanning(workspace, method, params, |workspace, path, position| {
             Ok(match workspace.prepare_rename(path, position)? {
                 ttc::engine::PrepareRename::Range(range) => json!({ "range": range_json(range) }),
                 ttc::engine::PrepareRename::Refused(reason) => {
@@ -404,12 +484,12 @@ fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_
                 }
             })
         }),
-        "documentSymbols" => semantic(workspace, params, |project, path, _position| {
+        "documentSymbols" => semantic(workspace, method, params, |project, path, _position| {
             Ok(
                 json!({ "symbols": project.document_symbols(path)?.iter().map(symbol_json).collect::<Vec<_>>() }),
             )
         }),
-        "signatureHelp" => semantic(workspace, params, |project, path, position| {
+        "signatureHelp" => semantic(workspace, method, params, |project, path, position| {
             let trigger = match (
                 params["triggerKind"].as_u64(),
                 params["triggerCharacter"].as_str(),
@@ -418,36 +498,48 @@ fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_
                 (Some(3), _) => SignatureTrigger::ContentChange,
                 _ => SignatureTrigger::Invoked,
             };
-            let retrigger = params["isRetrigger"].as_bool().unwrap_or(false);
+            let retrigger = bool_param(
+                &params["isRetrigger"],
+                "signatureHelp",
+                "isRetrigger",
+                false,
+            )?;
             let help = project.triggered_signature_help(path, position, &trigger, retrigger)?;
             Ok(signature_help_json(help))
         }),
         "semanticTokens" => semantic_tokens(params),
-        "patternCompletions" => semantic(workspace, params, |project, path, position| {
+        "patternCompletions" => semantic(workspace, method, params, |project, path, position| {
             Ok(match project.pattern_completions(path, position)? {
                 None => serde_json::Value::Null,
                 Some(items) => json!({ "items": pattern_items_json(&items) }),
             })
         }),
-        "documentSemanticTokens" => semantic(workspace, params, |project, path, _position| {
-            let tokens: Vec<_> = project
-                .semantic_tokens(path)?
-                .into_iter()
-                .map(|token| {
-                    json!({
-                        "range": range_json(token.range),
-                        "type": token.token_type,
-                        "modifiers": token.modifiers,
-                    })
-                })
-                .collect();
-            Ok(json!({ "tokens": tokens }))
+        "patternSymbol" => semantic(workspace, method, params, |project, path, position| {
+            Ok(project
+                .pattern_symbol(path, position)?
+                .map_or(serde_json::Value::Null, tt_symbol_json))
         }),
+        "documentSemanticTokens" => {
+            semantic(workspace, method, params, |project, path, _position| {
+                let tokens: Vec<_> = project
+                    .semantic_tokens(path)?
+                    .into_iter()
+                    .map(|token| {
+                        json!({
+                            "range": range_json(token.range),
+                            "type": token.token_type,
+                            "modifiers": token.modifiers,
+                        })
+                    })
+                    .collect();
+                Ok(json!({ "tokens": tokens }))
+            })
+        }
         "declarations" => declarations(workspace, params),
-        "ttSymbol" => tt_symbol(workspace, params),
-        "ttCompletions" => tt_completions(workspace, params),
+        "ttSymbol" => tt_symbol(workspace, method, params),
+        "ttCompletions" => tt_completions(workspace, method, params),
         "ttHints" => tt_hints(workspace, params),
-        "tsDiagnostics" => semantic(workspace, params, |project, path, _position| {
+        "tsDiagnostics" => semantic(workspace, method, params, |project, path, _position| {
             let diagnostics: Vec<_> = project
                 .service_diagnostics(path)?
                 .into_iter()
@@ -477,10 +569,11 @@ fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_
 /// position defaults to 0:0 for the requests that do not carry one.
 fn semantic(
     workspace: &mut Workspace,
+    method: &str,
     params: &serde_json::Value,
     handle: impl FnOnce(&mut Project, &Path, Position) -> Result<serde_json::Value, String>,
 ) -> Result<serde_json::Value, String> {
-    spanning(workspace, params, |workspace, path, position| {
+    spanning(workspace, method, params, |workspace, path, position| {
         handle(workspace.project_for(path)?, path, position)
     })
 }
@@ -488,16 +581,14 @@ fn semantic(
 /// Hands a request whose answer can span projects to the workspace.
 fn spanning(
     workspace: &mut Workspace,
+    method: &str,
     params: &serde_json::Value,
     handle: impl FnOnce(&mut Workspace, &Path, Position) -> Result<serde_json::Value, String>,
 ) -> Result<serde_json::Value, String> {
     let path = params["path"]
         .as_str()
         .ok_or_else(|| "the request needs a \"path\"".to_string())?;
-    let position = Position {
-        line: params["position"]["line"].as_u64().unwrap_or(0) as u32,
-        character: params["position"]["character"].as_u64().unwrap_or(0) as u32,
-    };
+    let position = position_param(&params["position"], method)?;
     handle(workspace, Path::new(path), position)
 }
 
@@ -530,13 +621,13 @@ fn close_document(
 fn check(params: &serde_json::Value) -> Result<serde_json::Value, String> {
     use serde_json::json;
     let text = text_param(params)?;
-    let filename = params["filename"].as_str();
+    let filename = filename_param(params, "check")?;
     let options = ttc::Options {
         filename,
         source_kind: filename
             .and_then(|name| ttc::SourceKind::from_path(std::path::Path::new(name)))
             .unwrap_or_default(),
-        verify: params["verify"].as_bool().unwrap_or(true),
+        verify: bool_param(&params["verify"], "check", "verify", true)?,
         ..ttc::Options::default()
     };
     // Every tt-level diagnostic of the buffer, in source order (TASK-120).
@@ -683,53 +774,30 @@ fn declarations(
 /// holds them open.
 fn tt_symbol(
     workspace: &Workspace,
+    method: &str,
     params: &serde_json::Value,
 ) -> Result<serde_json::Value, String> {
-    use serde_json::json;
     let path = params["path"]
         .as_str()
         .ok_or_else(|| "the request needs a \"path\"".to_string())?;
-    let position = Position {
-        line: params["position"]["line"].as_u64().unwrap_or(0) as u32,
-        character: params["position"]["character"].as_u64().unwrap_or(0) as u32,
-    };
-    let Some(symbol) = workspace.tt_symbol_at(Path::new(path), text_param(params)?, position)
-    else {
-        return Ok(serde_json::Value::Null);
-    };
-    Ok(json!({
-        "kind": match symbol.kind {
-            ttc::engine::TtSymbolKind::Variant => "variant",
-            ttc::engine::TtSymbolKind::Case => "case",
-            ttc::engine::TtSymbolKind::Field => "field",
-        },
-        "range": range_json(symbol.range),
-        "name": symbol.name,
-        "variantName": symbol.variant_name,
-        "signature": symbol.signature,
-        "detail": symbol.detail,
-        "definition": symbol.definition.map(|location| json!({
-            "path": location.path.to_string_lossy(),
-            "range": range_json(location.range),
-        })),
-        "binds": symbol.binds,
-    }))
+    let position = position_param(&params["position"], method)?;
+    Ok(workspace
+        .tt_symbol_at(Path::new(path), text_param(params)?, position)
+        .map_or(serde_json::Value::Null, tt_symbol_json))
 }
 
 /// What can be written at a pattern position — case tags, payload field
 /// names. Text-only, for the same reason [`tt_symbol`] is.
 fn tt_completions(
     workspace: &Workspace,
+    method: &str,
     params: &serde_json::Value,
 ) -> Result<serde_json::Value, String> {
     use serde_json::json;
     let path = params["path"]
         .as_str()
         .ok_or_else(|| "the request needs a \"path\"".to_string())?;
-    let position = Position {
-        line: params["position"]["line"].as_u64().unwrap_or(0) as u32,
-        character: params["position"]["character"].as_u64().unwrap_or(0) as u32,
-    };
+    let position = position_param(&params["position"], method)?;
     let member = ttc::engine::member_access_at(Path::new(path), text_param(params)?, position)
         .map(|access| json!({ "receiver": access.receiver }));
     let items = pattern_items_json(&workspace.tt_completions_at(
@@ -776,8 +844,7 @@ fn tt_hints(
 
 fn semantic_tokens(params: &serde_json::Value) -> Result<serde_json::Value, String> {
     use serde_json::json;
-    let source_kind = params["filename"]
-        .as_str()
+    let source_kind = filename_param(params, "semanticTokens")?
         .and_then(|name| ttc::SourceKind::from_path(std::path::Path::new(name)))
         .unwrap_or_default();
     let tokens: Vec<_> = ttc::engine::semantic_tokens_with_kind(text_param(params)?, source_kind)
@@ -798,11 +865,11 @@ fn semantic_tokens(params: &serde_json::Value) -> Result<serde_json::Value, Stri
 /// ([`crate::build::print_input`]), so the bytes are the same; what a
 /// session adds is that the TypeScript project refining the output's
 /// storage annotations stays open between requests.
-fn print(params: &serde_json::Value) -> Result<serde_json::Value, String> {
+fn print(params: &serde_json::Value, node: Option<&Path>) -> Result<serde_json::Value, String> {
     let path = params["path"]
         .as_str()
         .ok_or_else(|| "print needs a \"path\"".to_string())?;
-    let source_map = match params["sourceMap"].as_str().unwrap_or("off") {
+    let source_map = match string_param(&params["sourceMap"], "print", "sourceMap", "off")? {
         "off" => crate::build::SourceMapMode::Off,
         "inline" => crate::build::SourceMapMode::Inline,
         other => {
@@ -811,34 +878,36 @@ fn print(params: &serde_json::Value) -> Result<serde_json::Value, String> {
             ));
         }
     };
-    let rewrite_imports = match params["rewriteImports"].as_str().unwrap_or("js") {
-        "js" => ttc::ImportRewrite::Js,
-        "ts" => ttc::ImportRewrite::Ts,
-        "off" => ttc::ImportRewrite::Off,
-        other => {
-            return Err(format!(
-                "print: \"rewriteImports\" expects js, ts, or off (got {other})"
-            ));
-        }
-    };
+    let rewrite_imports =
+        match string_param(&params["rewriteImports"], "print", "rewriteImports", "js")? {
+            "js" => ttc::ImportRewrite::Js,
+            "ts" => ttc::ImportRewrite::Ts,
+            "off" => ttc::ImportRewrite::Off,
+            other => {
+                return Err(format!(
+                    "print: \"rewriteImports\" expects js, ts, or off (got {other})"
+                ));
+            }
+        };
     let jsx_preserve = crate::build::project_jsx_preserve(
         rewrite_imports,
         &[std::path::PathBuf::from(path)],
         None,
     )
-    .map_err(|error| format!("print: {error}"))?;
+    .map_err(|error| format!("print: {error} (choose \"rewriteImports\": \"ts\" or \"off\")"))?;
     let printed = crate::build::print_input(
         path,
         &crate::build::BuildOptions {
-            banner: params["banner"].as_bool().unwrap_or(true),
+            banner: bool_param(&params["banner"], "print", "banner", true)?,
             print: true,
             check: false,
-            verify: params["verify"].as_bool().unwrap_or(true),
+            verify: bool_param(&params["verify"], "print", "verify", true)?,
             rewrite_imports,
             jsx_preserve,
             source_map,
             out_dir: None,
             jobs: None,
+            node: node.map(Path::to_path_buf),
         },
     );
     Ok(serde_json::json!({ "code": printed.code, "messages": printed.messages }))
@@ -924,8 +993,7 @@ fn dependencies(
 /// `--emit-map` for a buffer: the emitted TypeScript and its byte mappings.
 fn emit_map(params: &serde_json::Value) -> Result<serde_json::Value, String> {
     use serde_json::json;
-    let source_kind = params["filename"]
-        .as_str()
+    let source_kind = filename_param(params, "emitMap")?
         .and_then(|name| ttc::SourceKind::from_path(std::path::Path::new(name)))
         .unwrap_or_default();
     let emit = ttc::emit_mapped_with_kind(text_param(params)?, source_kind);
@@ -951,7 +1019,16 @@ fn typed_check(
         .to_string();
     let buffer = text_param(params)?;
     let text = buffer.to_string();
-    let include_types = params["includeTypes"].as_bool().unwrap_or(false);
+    let include_types = bool_param(&params["includeTypes"], "typedCheck", "includeTypes", false)?;
+    let scoped = match string_param(&params["scope"], "typedCheck", "scope", "project")? {
+        "file" => true,
+        "project" => false,
+        other => {
+            return Err(format!(
+                "typedCheck: \"scope\" expects \"file\" or \"project\" (got \"{other}\")"
+            ));
+        }
+    };
     let canonical = ttc::engine::normalize_document_path(Path::new(&path))?;
     // A document the consumer holds open keeps its overlay after the check;
     // a one-off buffer's overlay is scoped to this request, so the answer
@@ -962,12 +1039,13 @@ fn typed_check(
     project.open_document(canonical.clone(), text);
     let files = {
         let mut scanned = project.scan().map_err(|e| e.to_string())?;
-        scanned.push(canonical.clone());
+        if ttc::SourceKind::from_tt_path(&canonical).is_some() {
+            scanned.push(canonical.clone());
+        }
         scanned.sort();
         scanned.dedup();
         scanned
     };
-    let scoped = params["scope"].as_str() == Some("file");
     let outcome = project.update_scoped(&files, scoped.then_some(canonical.as_path()));
     let response = match outcome {
         Err(blocked) => {
@@ -1074,9 +1152,24 @@ fn typed_check(
 }
 
 fn text_param(params: &serde_json::Value) -> Result<&str, String> {
-    params["text"]
-        .as_str()
-        .ok_or_else(|| "the request needs a \"text\"".to_string())
+    match &params["text"] {
+        serde_json::Value::String(text) => Ok(text),
+        serde_json::Value::Null => Err("the request needs a \"text\"".to_string()),
+        other => Err(format!("\"text\" expects a string (got {other})")),
+    }
+}
+
+fn filename_param<'a>(
+    params: &'a serde_json::Value,
+    method: &str,
+) -> Result<Option<&'a str>, String> {
+    match &params["filename"] {
+        serde_json::Value::Null => Ok(None),
+        serde_json::Value::String(name) => Ok(Some(name)),
+        other => Err(format!(
+            "{method}: \"filename\" expects a string (got {other})"
+        )),
+    }
 }
 
 #[cfg(test)]
@@ -1088,6 +1181,46 @@ mod tests {
             .iter()
             .map(|line| line.to_string().into_bytes())
             .collect()
+    }
+
+    #[test]
+    fn a_request_without_a_method_or_with_a_wrongly_typed_option_is_refused() {
+        use serde_json::json;
+        let mut workspace = Workspace::new(Engine::new(None));
+        let mut checks = Checks::default();
+        let mut ask = |line: String| respond(&mut workspace, &mut checks, None, &line);
+        for line in ["{\"id\":1}", "[1,2]", "\"str\""] {
+            let answer = ask(line.to_string());
+            assert!(
+                answer["error"]
+                    .as_str()
+                    .is_some_and(|error| error.starts_with("malformed request")),
+                "{line}: {answer}"
+            );
+        }
+        for (method, params, key) in [
+            ("print", json!({"path": "a.tt", "banner": "no"}), "banner"),
+            (
+                "print",
+                json!({"path": "a.tt", "sourceMap": true}),
+                "sourceMap",
+            ),
+            ("check", json!({"text": 5}), "text"),
+            ("emitMap", json!({"text": "x", "filename": 7}), "filename"),
+            (
+                "typedCheck",
+                json!({"path": "/a.tt", "text": "x", "scope": "bogus"}),
+                "scope",
+            ),
+        ] {
+            let answer = ask(json!({"id": 2, "method": method, "params": params}).to_string());
+            assert!(
+                answer["error"]
+                    .as_str()
+                    .is_some_and(|error| error.contains(&format!("\"{key}\" expects"))),
+                "{answer}"
+            );
+        }
     }
 
     #[test]

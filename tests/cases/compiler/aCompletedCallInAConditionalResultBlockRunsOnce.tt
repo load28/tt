@@ -1,0 +1,14 @@
+// @run: aCompletedCallInAConditionalResultBlockRunsOnce.tt
+import * as Result from "@tt/std/result";
+import type { TResult } from "@tt/std";
+const calls: unknown[] = [];
+const g = (n: number) => { calls.push(n); return n * 10; };
+function r(n: number): TResult<number, string> { calls.push(n); return Result.Ok(n); }
+variant V { A(n: number), B }
+export function called(c: boolean, v: V) {
+  return c ? result { const z = g(match (v) { A(n) => n, B => -1 }); return z + (try r(7)); } : null;
+}
+export function tried(c: boolean, v: V) {
+  return c ? result { const z = try r(match (v) { A(n) => n, B => -1 }); return z + (try r(7)); } : null;
+}
+console.log(JSON.stringify(called(true, V.B)), JSON.stringify(tried(true, V.A(2))), JSON.stringify(calls));

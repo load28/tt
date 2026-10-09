@@ -116,7 +116,7 @@ fn a_misspelled_field_carries_its_replacement_as_an_edit() {
     assert_eq!(d.code, ttc::DiagnosticCode::UnknownField);
     let edit = d.suggestions[0].edit.as_ref().expect("an applicable edit");
     assert_eq!(&src[edit.start..edit.end], "radiuz");
-    assert_eq!(edit.replacement, "radius");
+    assert_eq!(edit.replacement, "radius: radiuz");
 }
 
 #[test]

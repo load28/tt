@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use super::backend::{ContextualSlotQuery, Failure, FailureKind, Module, Query, TypeScriptBackend};
-use super::mapper;
+
 use crate::MappedEmit;
 use crate::codegen::contextual::{SlotRefinement, refine};
 
@@ -52,10 +52,11 @@ pub(crate) fn materialize(
                 path: path.clone(),
                 text: emit.code.clone(),
             });
+            let utf16 = crate::lines::Utf16Map::new(&emit.code);
             let at = |position: usize, settled: bool, operand: bool, asserted: bool| {
                 ContextualSlotQuery {
                     module: path.clone(),
-                    declaration_end: mapper::to_utf16(&emit.code, position),
+                    declaration_end: utf16.to_utf16(position),
                     settled,
                     operand,
                     asserted,
@@ -98,6 +99,10 @@ pub(crate) fn materialize(
         }
         crate::work::tick("contextual checker asks");
         let answers = backend.ask(config, root, &query)?;
+        crate::work::tick_by(
+            "contextual round trips",
+            usize::try_from(answers.contextual_round_trips).unwrap_or(usize::MAX),
+        );
         if answers.contextual_slots.is_empty() {
             if infer_joins {
                 return Ok(slots);
@@ -228,14 +233,16 @@ pub(crate) fn standalone(
         .to_path_buf();
     let inferred_config = root.join(format!(".tt-contextual-{}.json", std::process::id()));
     let configuration = config.clone().unwrap_or_else(|| inferred_config.clone());
-    let session = ProjectSession::of(&root);
+    let session = ProjectSession::of(&root, options.node);
     // Availability is decided before reading project inputs: a backend is
     // available once its toolchain resolves and its host is running. From
     // then on, project and backend failures must reach the caller unchanged.
     let available = {
         let mut session = ProjectSession::lock(&session);
         if session.backend.is_none() {
-            let Ok(backend) = super::native::NativeBackend::new(None, &cwd) else {
+            let Ok(backend) =
+                super::native::NativeBackend::new(options.node.map(Path::to_path_buf), &cwd)
+            else {
                 return Ok(emit);
             };
             session.backend = Some(backend);
@@ -243,7 +250,9 @@ pub(crate) fn standalone(
         let backend = session.backend.as_ref().expect("backend initialized above");
         match backend.open(Some(&configuration), &root) {
             Ok(()) => true,
-            Err(failure) if failure.kind == FailureKind::Unavailable => false,
+            Err(failure) if failure.kind == FailureKind::Unavailable && options.node.is_none() => {
+                false
+            }
             Err(failure) => return Err(failure.into()),
         }
     };
@@ -355,6 +364,7 @@ pub(crate) fn standalone(
                 modules.sort_by(|left, right| left.0.cmp(&right.0));
                 let asked_modules = modules.clone();
                 backend.observe_generations();
+                let roots: Vec<PathBuf> = file.iter().map(|_| path.clone()).collect();
                 let types = materialize(
                     backend,
                     Some(configuration),
@@ -362,7 +372,7 @@ pub(crate) fn standalone(
                     &mut modules,
                     &asked.support,
                     &[],
-                    &[],
+                    &roots,
                 )?;
                 let requested = modules
                     .iter()
@@ -382,6 +392,10 @@ pub(crate) fn standalone(
             }
         }
     };
+    let std_imports = match options.std_imports.commonjs {
+        Some(commonjs) if emit.commonjs => *commonjs,
+        _ => options.std_imports,
+    };
     let mut refinements = Vec::with_capacity(types.len());
     for slot in types {
         let annotation = match slot.annotation {
@@ -393,7 +407,7 @@ pub(crate) fn standalone(
                     &wrapper,
                     &crate::Options {
                         rewrite_imports: options.rewrite_imports,
-                        std_imports: options.std_imports,
+                        std_imports,
                         defer_to_checker: true,
                         ..crate::Options::default()
                     },
@@ -428,15 +442,16 @@ impl ProjectSession {
     /// The session for the project at `root`. The most recently used
     /// sessions are kept, one per core — as many as one per worker thread
     /// would hold — and an evicted one ends its host once no caller holds it.
-    fn of(root: &Path) -> Arc<Mutex<ProjectSession>> {
-        type Sessions = Vec<(PathBuf, Arc<Mutex<ProjectSession>>)>;
+    fn of(root: &Path, node: Option<&Path>) -> Arc<Mutex<ProjectSession>> {
+        type Sessions = Vec<((PathBuf, Option<PathBuf>), Arc<Mutex<ProjectSession>>)>;
         static SESSIONS: Mutex<Sessions> = Mutex::new(Vec::new());
         let mut sessions = SESSIONS.lock().unwrap_or_else(PoisonError::into_inner);
-        let session = match sessions.iter().position(|(project, _)| project == root) {
+        let key = (root.to_path_buf(), node.map(Path::to_path_buf));
+        let session = match sessions.iter().position(|(project, _)| *project == key) {
             Some(index) => sessions.remove(index).1,
             None => Arc::default(),
         };
-        sessions.push((root.to_path_buf(), session.clone()));
+        sessions.push((key, session.clone()));
         let kept = std::thread::available_parallelism().map_or(1, usize::from);
         let evicted = sessions.len().saturating_sub(kept);
         sessions.drain(..evicted);

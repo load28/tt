@@ -93,6 +93,7 @@ pub(crate) struct HostCandidates {
     /// declaration. Only these spans require ownership proof from the
     /// TypeScript AST.
     pub matches: Vec<Span>,
+    pub malformed_matches: Vec<Span>,
     /// Parameter-shaped `val` modifiers this region lifted before the host
     /// grammar confirmed them: each span runs from the keyword to the start
     /// of the binding it modifies. The host parse keeps only the ones whose
@@ -105,6 +106,12 @@ impl Program {
         self.host_candidates
             .as_deref()
             .map_or(&[], |candidates| &candidates.matches)
+    }
+
+    pub(crate) fn host_malformed_match_candidates(&self) -> &[Span] {
+        self.host_candidates
+            .as_deref()
+            .map_or(&[], |candidates| &candidates.malformed_matches)
     }
 
     pub(crate) fn host_val_candidates(&self) -> &[Span] {
@@ -514,6 +521,8 @@ pub(crate) struct VariantDecl {
     /// there is none).
     pub generics_off: usize,
     pub cases: Vec<VariantCase>,
+    pub scope: Option<Span>,
+    pub module_level: bool,
 }
 
 /// One case of a tt variant.
@@ -560,6 +569,7 @@ pub(crate) struct Field {
     pub ty: String,
     /// Byte offset of the type annotation, for error reporting.
     pub ty_off: usize,
+    pub imports: Vec<TtImportDecl>,
     pub comments: Comments,
 }
 
@@ -659,6 +669,7 @@ pub(crate) struct TupleArm {
     /// [`Arm::diverges`].
     pub diverges: bool,
     pub missing: bool,
+    pub end: usize,
 }
 
 /// A tuple arm's pattern.
@@ -696,6 +707,7 @@ pub(crate) struct Arm {
     /// `undefined` can never run. False for an expression body.
     pub diverges: bool,
     pub missing: bool,
+    pub end: usize,
 }
 
 /// The `if <cond>` guard of a match arm.

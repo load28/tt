@@ -1,0 +1,5 @@
+// @completions: field, nested
+interface Point2 { x: number }
+const localValue = 1;
+export variant Pair { Two(left: number, right: Map<string, Poi/*nested*/>) }
+export variant Shape { Circle(radius: number), Tri(p: Poi/*field*/

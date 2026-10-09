@@ -1,0 +1,87 @@
+=== commentsInsideARebuiltFormStayWhereTheyWereWritten.tt ===
+variant O { A(n: number), B }
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => O
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+declare const obj: { m(a: number, b: number): number } | undefined;
+>obj : const obj: {
+>       m(a: number, b: number): number;
+>   } | undefined
+>m : (method) m(a: number, b: number): number
+>a : (parameter) a: number
+>b : (parameter) b: number
+declare function g(a: number, b: number): number;
+>g : function g(a: number, b: number): number
+>a : (parameter) a: number
+>b : (parameter) b: number
+export function f(o: O, c: boolean) {
+>f : function f(o: O, c: boolean): (number | false | number[] | O | undefined)[]
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>c : (parameter) c: boolean
+  const a = obj?.m(/*C1*/ 1, match (o) { A(n) => n, B => 0 });
+>a : const a: number | undefined
+>obj : const obj: {
+>       m(a: number, b: number): number;
+>   } | undefined
+>m : (method) m(a: number, b: number): number
+>o : (parameter) o: O
+>n : const n: number
+>n : const n: number
+  const b = new Array(/*C2*/ 1, match (o) { A(n) => n, B => 0 });
+>b : const b: number[]
+>Array : var Array: ArrayConstructor
+>o : (parameter) o: O
+>n : const n: number
+>n : const n: number
+  const d = c ? /*C3*/ 1 : match (o) { A(n) => n, B => 0 };
+>d : const d: number
+>c : (parameter) c: boolean
+>o : (parameter) o: O
+>n : const n: number
+>n : const n: number
+  const e = c /*C4*/ && match (o) { A(n) => n, B => 0 };
+>e : const e: number | false
+>c : (parameter) c: boolean
+>o : (parameter) o: O
+>n : const n: number
+>n : const n: number
+  const h = [/*C5*/ match (o) { A(n) => n, B => 0 } /*C6*/];
+>h : const h: number[]
+>o : (parameter) o: O
+>n : const n: number
+>n : const n: number
+  const i = o /*C7*/ |> /*C8*/ (v => v) /*C9*/;
+>i : const i: O
+>o : (parameter) o: O
+>v : (parameter) v: O
+>v : (parameter) v: O
+  const j = g(1, /*C10*/ match (o) { A(n) => /*C11*/ n /*C12*/, B => 0 } /*C13*/);
+>j : const j: number
+>g : function g(a: number, b: number): number
+>match : const n: number
+>o : (parameter) o: O
+>n : const n: number
+>n : const n: number
+  return [a, b, d, e, h, i, j];
+>a : const a: number | undefined
+>b : const b: number[]
+>d : const d: number
+>e : const e: number | false
+>h : const h: number[]
+>i : const i: O
+>j : const j: number
+

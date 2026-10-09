@@ -36,6 +36,7 @@ pub(crate) fn lex_and_parse_with_kind(
             host_rejected_vals: host_rejected_vals.to_vec(),
             flow_queries: crate::flow::FlowBodyQueries::default(),
             passed_results: RefCell::default(),
+            function_bodies: RefCell::default(),
         }
         .parse_tokens(&tokens, 0, src.len())
     };
@@ -71,6 +72,89 @@ pub(crate) struct PipelineShape {
     pub head: Option<Span>,
     pub span: Span,
     pub first_call: Option<Span>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ArmScope {
+    pub span: Span,
+    pub bindings: Vec<Span>,
+}
+
+pub(crate) fn arm_scopes(program: &Program) -> Vec<ArmScope> {
+    let mut scopes = Vec::new();
+    visit_programs(program, &mut |region| {
+        for segment in &region.segments {
+            match segment {
+                Segment::Match(expr) => {
+                    for arm in &expr.arms {
+                        let mut bindings = Vec::new();
+                        pattern_bindings(&arm.pattern, &mut bindings);
+                        scopes.push(ArmScope {
+                            span: Span {
+                                start: arm.pattern_span.end,
+                                end: arm.body_span.end,
+                            },
+                            bindings,
+                        });
+                    }
+                }
+                Segment::TupleMatch(expr) => {
+                    for arm in &expr.arms {
+                        let mut bindings = Vec::new();
+                        if let TuplePattern::Elems(elements) = &arm.pattern {
+                            for element in elements {
+                                pattern_bindings(element, &mut bindings);
+                            }
+                        }
+                        scopes.push(ArmScope {
+                            span: Span {
+                                start: arm.pattern_span.end,
+                                end: arm.body_span.end,
+                            },
+                            bindings,
+                        });
+                    }
+                }
+                _ => {}
+            }
+        }
+    });
+    scopes
+}
+
+fn pattern_bindings(pattern: &Pattern, out: &mut Vec<Span>) {
+    match pattern {
+        Pattern::Tags(alternatives) => {
+            if let Some(first) = alternatives.first() {
+                tag_bindings(first, out);
+            }
+        }
+        Pattern::Instances(alternatives) => {
+            for binding in alternatives
+                .iter()
+                .filter_map(|alternative| alternative.bindings.as_ref())
+                .flatten()
+            {
+                binding_names(binding, out);
+            }
+        }
+        Pattern::Wildcard | Pattern::Literals(_) => {}
+    }
+}
+
+fn tag_bindings(pattern: &TagPattern, out: &mut Vec<Span>) {
+    crate::stack::grow(|| {
+        for binding in pattern.bindings.iter().flatten() {
+            binding_names(binding, out);
+        }
+    });
+}
+
+fn binding_names(binding: &Binding, out: &mut Vec<Span>) {
+    match &binding.nested {
+        Some(nested) => tag_bindings(nested, out),
+        None => out.push(binding.alias_span.unwrap_or(binding.name_span)),
+    }
 }
 
 pub(crate) fn pipeline_shapes(program: &Program) -> Vec<PipelineShape> {
@@ -206,6 +290,20 @@ pub(crate) fn projection_recoveries(program: &Program) -> Vec<RecoveryNode> {
 /// Collects structurally recognized, rolled-back tt candidates from every
 /// nested source region. Output verification uses these facts to explain a
 /// passthrough parse failure without scanning source text for keywords.
+/// The spans of every `result` block the parser claimed, at any depth.
+pub(crate) fn claimed_result_blocks(program: &Program) -> Vec<Span> {
+    let mut out = Vec::new();
+    visit_programs(program, &mut |program| {
+        for segment in &program.segments {
+            if let Segment::ResultBlock(block) = segment {
+                out.push(block.span);
+            }
+        }
+    });
+    out.sort_by_key(|span| (span.start, span.end));
+    out
+}
+
 pub(crate) fn unclaimed_candidates(program: &Program) -> Vec<UnclaimedTtCandidate> {
     let mut out = Vec::new();
     visit_programs(program, &mut |program| {
@@ -230,9 +328,18 @@ pub(crate) struct Parser<'a> {
     host_rejected_vals: Vec<usize>,
     flow_queries: crate::flow::FlowBodyQueries,
     passed_results: RefCell<HashSet<usize>>,
+    function_bodies: RefCell<HashMap<(usize, usize), crate::flow::FunctionBodies>>,
 }
 
 impl<'a> Parser<'a> {
+    fn in_function_body(&self, tokens: &[Token], at: usize) -> bool {
+        self.function_bodies
+            .borrow_mut()
+            .entry((tokens.as_ptr() as usize, tokens.len()))
+            .or_default()
+            .inside(tokens, at)
+    }
+
     pub(super) fn new(src: &'a str) -> Self {
         Parser {
             src,
@@ -242,6 +349,7 @@ impl<'a> Parser<'a> {
             host_rejected_vals: Vec::new(),
             flow_queries: crate::flow::FlowBodyQueries::default(),
             passed_results: RefCell::default(),
+            function_bodies: RefCell::default(),
         }
     }
 }
@@ -292,7 +400,37 @@ enum ExprFrame {
     ForHeader(bool),
 }
 
-fn flush_verbatim(segments: &mut Vec<Segment>, start: usize, end: usize) {
+/// The token loop's claims so far. A pipeline holds an empty slot at its
+/// head until the loop ends: a later pipeline whose head contains it
+/// rewinds it, and only a claim that survives is parsed.
+#[derive(Default)]
+struct Lifted {
+    segments: Vec<Segment>,
+    pipes: Vec<(usize, pipes::PipeScan)>,
+}
+
+impl Lifted {
+    fn push(&mut self, segment: Segment) {
+        self.segments.push(segment);
+    }
+
+    fn push_pipe(&mut self, scan: pipes::PipeScan) {
+        let at = scan.head_span.start;
+        self.pipes.push((self.segments.len(), scan));
+        self.segments
+            .push(Segment::Verbatim(Span { start: at, end: at }));
+    }
+
+    fn finish(self, parser: &Parser, tokens: &[Token]) -> Vec<Segment> {
+        let mut segments = self.segments;
+        for (slot, scan) in self.pipes {
+            segments[slot] = Segment::Pipe(scan.parse(parser, tokens));
+        }
+        segments
+    }
+}
+
+fn flush_verbatim(segments: &mut Lifted, start: usize, end: usize) {
     if start < end {
         segments.push(Segment::Verbatim(Span { start, end }));
     }
@@ -327,8 +465,9 @@ fn segment_start(seg: &Segment) -> usize {
 /// head). Segments are contiguous, so the returned byte — the new "flushed
 /// up to here" position — is the start of the last popped segment, or
 /// `boundary` when a verbatim segment crossing it was truncated.
-fn rewind_segments(segments: &mut Vec<Segment>, boundary: usize, seg_start: usize) -> usize {
+fn rewind_segments(lifted: &mut Lifted, boundary: usize, seg_start: usize) -> usize {
     let mut cover = seg_start;
+    let segments = &mut lifted.segments;
     while let Some(last) = segments.last_mut() {
         match last {
             Segment::Verbatim(span) => {
@@ -353,6 +492,10 @@ fn rewind_segments(segments: &mut Vec<Segment>, boundary: usize, seg_start: usiz
                 }
             }
         }
+    }
+    let kept = segments.len();
+    while lifted.pipes.last().is_some_and(|(slot, _)| *slot >= kept) {
+        lifted.pipes.pop();
     }
     cover
 }
@@ -398,23 +541,21 @@ fn recovery_expression_span(
     }
 }
 
-/// A spread operand begins with three adjacent dot tokens. The last dot is
-/// not member access, even though the generic property-name test sees it
-/// immediately before the operand keyword.
 /// Whether the token at `k` is a `match` keyword that may start a tt match:
-/// undotted, or the operand of a spread, whose third dot is punctuation.
+/// undotted, which includes the operand of a spread.
 pub(super) fn match_keyword_at(src: &str, tokens: &[Token], k: usize) -> bool {
     let token = &tokens[k];
     matches!(token.kind, TokenKind::Ident)
         && &src[token.span.start..token.span.end] == "match"
-        && (!cursor::dotted_at(tokens, 0, k) || follows_spread_operator(tokens, k))
+        && !cursor::dotted_at(tokens, 0, k)
+        && !continues_an_expression(tokens, k)
 }
 
-fn follows_spread_operator(tokens: &[Token], idx: usize) -> bool {
-    idx >= 3
-        && tokens[idx - 3..idx]
-            .iter()
-            .all(|token| matches!(token.kind, TokenKind::Punct(b'.')))
+fn continues_an_expression(tokens: &[Token], k: usize) -> bool {
+    k > 0
+        && !tokens[k].facts.line_break_before()
+        && !matches!(tokens[k - 1].kind, TokenKind::JsxRaw)
+        && tokens[k - 1].facts.ends_expression()
 }
 
 /// Whether a parsed `match (...) { ... }` still overlaps a possible host
@@ -457,6 +598,7 @@ impl Parser<'_> {
         end: usize,
         expression_root: bool,
     ) -> Program {
+        crate::work::tick("token range parses");
         crate::stack::grow(|| self.parse_token_range(tokens, start, end, expression_root))
     }
 
@@ -467,7 +609,7 @@ impl Parser<'_> {
         end: usize,
         expression_root: bool,
     ) -> Program {
-        let mut segments: Vec<Segment> = Vec::new();
+        let mut segments = Lifted::default();
         let mut unclaimed: Vec<UnclaimedTtCandidate> = Vec::new();
         let mut recoveries: Vec<RecoveryNode> = Vec::new();
         let mut malformed = Vec::new();
@@ -488,7 +630,7 @@ impl Parser<'_> {
 
         while i < tokens.len() {
             let tok = &tokens[i];
-            if tok.facts.boundary_before() {
+            if tok.facts.boundary_before() && !continues_an_expression(tokens, i) {
                 expr = (i, false);
             }
             let word = match tok.kind {
@@ -543,10 +685,10 @@ impl Parser<'_> {
                         // segments (a template, a match) — rewind them and
                         // let the head's sub-program own those bytes.
                         let head_start = pipe.head_span.start;
-                        let pipe_end = pipe.steps.last().map(|s| s.span.end).unwrap_or(end);
+                        let pipe_end = pipe.end().unwrap_or(end);
                         seg_start = rewind_segments(&mut segments, head_start, seg_start);
                         flush_verbatim(&mut segments, seg_start, head_start);
-                        segments.push(Segment::Pipe(pipe));
+                        segments.push_pipe(pipe);
                         seg_start = pipe_end;
                         i = next_i;
                         if !pipes::asserted(self.src, tokens, expr.0, i) {
@@ -690,9 +832,7 @@ impl Parser<'_> {
                         continue;
                     }
                     Claim::Malformed { error, recovery } => {
-                        if host_ambiguous {
-                            host_candidates.matches.push(recovery.span);
-                        }
+                        host_candidates.malformed_matches.push(recovery.span);
                         malformed.push(error);
                         recoveries.push(recovery);
                     }
@@ -704,7 +844,7 @@ impl Parser<'_> {
             // `try <expr>;` — never valid TypeScript in expression
             // position (`try { ... }` blocks and member names are
             // structurally excluded by the sub-parser).
-            if (!dotted || follows_spread_operator(tokens, i)) && word == "try" {
+            if !dotted && word == "try" {
                 let misplaced = !tok.facts.member() && !tok.facts.statement_start();
                 if misplaced
                     && let Some((next_i, parsed)) =
@@ -719,7 +859,7 @@ impl Parser<'_> {
                 }
                 match tries::parse_try_stmt(Cursor::new(self, tokens, i + 1, end), tok.span) {
                     Claim::Parsed((cur, byte_end, mut stmt)) => {
-                        stmt.in_function = crate::flow::in_function_body(tokens, i);
+                        stmt.in_function = self.in_function_body(tokens, i);
                         flush_verbatim(&mut segments, seg_start, tok.span.start);
                         segments.push(Segment::Try(stmt));
                         seg_start = byte_end;
@@ -743,7 +883,7 @@ impl Parser<'_> {
                 if let Some((cur, byte_end, mut stmt)) =
                     tries::parse_try_decl(Cursor::new(self, tokens, i + 1, end), tok.span)
                 {
-                    stmt.in_function = crate::flow::in_function_body(tokens, i);
+                    stmt.in_function = self.in_function_body(tokens, i);
                     let mut first = i;
                     while first > 0
                         && tokens[first - 1].span.start >= seg_start
@@ -768,7 +908,7 @@ impl Parser<'_> {
                     && let Some((cur, byte_end, mut stmt)) =
                         lets::parse_let_else(Cursor::new(self, tokens, i + 1, end), tok.span)
                 {
-                    stmt.in_function = crate::flow::in_function_body(tokens, i);
+                    stmt.in_function = self.in_function_body(tokens, i);
                     if !stmt.in_function
                         && i > 0
                         && tokens[i - 1].span.start >= seg_start
@@ -794,7 +934,7 @@ impl Parser<'_> {
             if iflets::if_let_pattern(self.src, tokens, i).is_some() {
                 let parsed = iflets::parse_if_let(Cursor::new(self, tokens, i + 1, end), tok.span);
                 if let Ok((cur, byte_end, mut stmt)) = parsed {
-                    stmt.in_function = crate::flow::in_function_body(tokens, i);
+                    stmt.in_function = self.in_function_body(tokens, i);
                     stmt.expression_position = !tok.facts.statement_start();
                     if stmt.expression_position {
                         recoveries.push(RecoveryNode {
@@ -881,8 +1021,9 @@ impl Parser<'_> {
         Program {
             span: Span { start, end },
             expression_root,
-            segments,
+            segments: segments.finish(self, tokens),
             host_candidates: (!host_candidates.matches.is_empty()
+                || !host_candidates.malformed_matches.is_empty()
                 || !host_candidates.vals.is_empty())
             .then(|| Box::new(host_candidates)),
             unclaimed: (!unclaimed.is_empty()).then(|| Box::new(UnclaimedTtCandidates(unclaimed))),
@@ -944,6 +1085,9 @@ impl Parser<'_> {
                 *expr = (i + 1, false);
             }
             TokenKind::Punct(b',') => *expr = (i + 1, false),
+            TokenKind::Punct(b'.') if cursor::spread_ends_at(tokens, i) => {
+                *expr = (i + 1, false);
+            }
             TokenKind::Punct(b'=') if pipes::is_assignment_eq(self.bytes, tok.span) => {
                 *expr = (i + 1, false);
             }

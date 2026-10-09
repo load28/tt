@@ -1,0 +1,14 @@
+// @run: anOuterTryRunsItsOperandsInOrderAroundAnInnerTry.tt
+import * as Result from "@tt/std/result";
+import type { TResult } from "@tt/std";
+const seen: string[] = [];
+function half(n: number): TResult<number, string> {
+  seen.push(`half(${n})`);
+  return n % 2 === 0 ? Result.Ok(n / 2) : Result.Err(`odd ${n}`);
+}
+const abs = (n: number) => { seen.push(`abs(${n})`); return Math.abs(n); };
+function f(k: number): TResult<number, string> {
+  const x = try half((k |> abs) + (try half(k)));
+  return Result.Ok(x);
+}
+console.log(JSON.stringify(f(-4)), seen.join(" "));

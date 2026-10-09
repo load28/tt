@@ -11,11 +11,6 @@ error[val-mutation]: cannot mutate through val binding `b` (the binding is decla
 
 
 ==== ttc --check-types (exit 1) ====
-error[ts18048]: 'b' is possibly 'undefined'.
- --> aTypeArgumentListDoesNotDeclareAValBinding2.tt:2:1
-  |
-2 | b.x = 1;
-  | ^
 error[val-mutation]: cannot mutate through val binding `b` (the binding is declared with `val`, so every access path from it is read-only)
  --> aTypeArgumentListDoesNotDeclareAValBinding2.tt:2:1
   |
@@ -25,6 +20,11 @@ error[val-mutation]: cannot mutate through val binding `b` (the binding is decla
   | ^
   |
   = help: remove `val` if this binding is intended to be mutable
+error[ts18048]: 'b' is possibly 'undefined'.
+ --> aTypeArgumentListDoesNotDeclareAValBinding2.tt:2:1
+  |
+2 | b.x = 1;
+  | ^
 
 ==== tsc on the emitted TypeScript ====
 nothing was emitted

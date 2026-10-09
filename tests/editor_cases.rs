@@ -600,6 +600,10 @@ fn questions(case: &Case, project: &Path) -> Vec<Question> {
                         method: "ttSymbol",
                         params: with_text,
                     },
+                    Request {
+                        method: "patternSymbol",
+                        params: located.clone(),
+                    },
                 ],
                 Verb::Completions => vec![
                     Request {
@@ -706,25 +710,13 @@ fn engine_answer(workspace: &mut ttc::engine::Workspace, request: &Request) -> V
                 }),
             })
         }),
-        "ttSymbol" => Ok(match workspace.tt_symbol_at(path, text, position) {
-            None => Value::Null,
-            Some(symbol) => json!({
-                "kind": match symbol.kind {
-                    TtSymbolKind::Variant => "variant",
-                    TtSymbolKind::Case => "case",
-                    TtSymbolKind::Field => "field",
-                },
-                "range": range_json(symbol.range),
-                "name": symbol.name,
-                "variantName": symbol.variant_name,
-                "signature": symbol.signature,
-                "detail": symbol.detail,
-                "definition": symbol.definition.map(|location| json!({
-                    "path": location.path.to_string_lossy(),
-                    "range": range_json(location.range),
-                })),
-                "binds": symbol.binds,
-            }),
+        "ttSymbol" => Ok(workspace
+            .tt_symbol_at(path, text, position)
+            .map_or(Value::Null, symbol_json)),
+        "patternSymbol" => workspace.project_for(path).and_then(|project| {
+            Ok(project
+                .pattern_symbol(path, position)?
+                .map_or(Value::Null, symbol_json))
         }),
         "definition" => workspace.project_for(path).and_then(|project| {
             let locations: Vec<_> = project
@@ -1415,6 +1407,26 @@ fn percent_decoded(text: &str) -> String {
     String::from_utf8(out).unwrap_or_else(|_| text.to_string())
 }
 
+fn symbol_json(symbol: ttc::engine::TtSymbol) -> Value {
+    json!({
+        "kind": match symbol.kind {
+            TtSymbolKind::Variant => "variant",
+            TtSymbolKind::Case => "case",
+            TtSymbolKind::Field => "field",
+        },
+        "range": range_json(symbol.range),
+        "name": symbol.name,
+        "variantName": symbol.variant_name,
+        "signature": symbol.signature,
+        "detail": symbol.detail,
+        "definition": symbol.definition.map(|location| json!({
+            "path": location.path.to_string_lossy(),
+            "range": range_json(location.range),
+        })),
+        "binds": symbol.binds,
+    })
+}
+
 fn indent(text: &str) -> String {
     text.lines()
         .map(|line| format!("    {line}"))
@@ -1431,6 +1443,9 @@ fn render(files: &Files<'_>, method: &str, answer: &Value, out: &mut String) {
         return;
     }
     let result = &answer["result"];
+    if result.is_null() && method == "patternSymbol" {
+        return;
+    }
     if result.is_null() {
         out.push_str(&format!("{method}: null\n"));
         return;
@@ -1447,9 +1462,9 @@ fn render(files: &Files<'_>, method: &str, answer: &Value, out: &mut String) {
                 out.push_str(&format!("  documentation:\n{}\n", indent(docs)));
             }
         }
-        "ttSymbol" => {
+        "ttSymbol" | "patternSymbol" => {
             out.push_str(&format!(
-                "ttSymbol: {} {} of {} at {}{}\n",
+                "{method}: {} {} of {} at {}{}\n",
                 result["kind"].as_str().unwrap_or_default(),
                 result["name"].as_str().unwrap_or_default(),
                 result["variantName"].as_str().unwrap_or_default(),

@@ -67,7 +67,7 @@ class ConstructorBox {
         $tt_v1 = $tt_t1;
         break $tt_v1;
       }
-      const value = $tt_t1.value; { const $tt_a0 = { value: { kind: "Ok" as const, value: value } }; $tt_v1 = $tt_a0.value; break $tt_v1; }
+      const value = $tt_t1.value; { $tt_v1 = { kind: "Ok" as const, value: value }; break $tt_v1; }
     }
     this.outcome = $tt_v1;
   }
@@ -95,7 +95,7 @@ function* values() {
       $tt_v3 = $tt_t3;
       break $tt_v3;
     }
-    const item = $tt_t3.value; { const $tt_a1 = { value: { kind: "Ok" as const, value: item } }; $tt_v3 = $tt_a1.value; break $tt_v3; }
+    const item = $tt_t3.value; { $tt_v3 = { kind: "Ok" as const, value: item }; break $tt_v3; }
   }
   yield $tt_v3;
   yield "after";
@@ -113,7 +113,7 @@ $tt_v4: {
     $tt_v4 = $tt_t4;
     break $tt_v4;
   }
-  const item = $tt_t4.value; { const $tt_a2 = { value: { kind: "Ok" as const, value: item } }; $tt_v4 = $tt_a2.value; break $tt_v4; }
+  const item = $tt_t4.value; { $tt_v4 = { kind: "Ok" as const, value: item }; break $tt_v4; }
 }
 const text = `value=${$tt_v4}`;
 

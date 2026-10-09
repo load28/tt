@@ -49,8 +49,12 @@ TypeScript 7.1은 정확히 이 부류의 도구(Vue·Svelte·Astro의 템플릿
   진단)을 `diagnosticSource: "tt"`로 반환한다. 코드는
   `DiagnosticCode::number`(append-only 표)의 안정 번호 — `match-not-exhaustive`는
   `tt27`로 렌더된다. 타입 오류는 TypeScript의 것 — 에러 계층 계약(§2)이
-  프로토콜 위에서 그대로 성립한다. 한 파일에 tt 진단이 있으면 TypeScript는
-  그 파일을 구문 오류가 있는 파일처럼 다루어 의미 검사를 건너뛴다(실측).
+  프로토콜 위에서 그대로 성립한다. A mapper's diagnostics are syntactic
+  diagnostics, and `tsc` reports semantic diagnostics only when the whole
+  program has no syntactic one (`compiler.GetDiagnosticsOfAnyProgram` in
+  tsgo, `emitFilesAndReportErrors` in TypeScript 6): one tt error in any
+  file hides every file's type errors until it is fixed. `ttc --check-types`
+  reports both layers in one run.
 - **exhaustiveness**: CLI와 같은 1-hop 수집 — 직접 상대 import를 디스크에서
   읽어 [`ttc::exported_variants_with_kind`]로 모은다. 캐시하지 않는다:
   프로세스가 `--watch` 아래에서 편집보다 오래 살기 때문이다.

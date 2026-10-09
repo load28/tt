@@ -16,28 +16,32 @@ pub(super) fn symbols_mode(jobs: &[Job]) -> ExitCode {
                 continue;
             }
         };
+        let kind = ttc::SourceKind::from_path(&job.file).unwrap_or_default();
         let mut entry = format!("{{\"file\":{}", json_str(&filename));
         entry.push_str(",\"variants\":");
-        entry.push_str(&variants_json(&source, &ttc::variant_symbols(&source)));
+        entry.push_str(&variants_json(
+            &source,
+            &ttc::variant_symbols_with_kind(&source, kind),
+        ));
         entry.push_str(",\"imports\":[");
         let dir = job.file.parent().unwrap_or(Path::new("."));
-        let imports = ttc::tt_imports(&source)
+        let imports = ttc::tt_imports_with_kind(&source, kind)
             .iter()
             .map(|import| {
                 let mut o = format!("{{\"specifier\":{}", json_str(&import.specifier));
                 o.push_str(",\"names\":");
                 o.push_str(&names_json(&import.names));
-                let target = lexically_joined(dir, &import.specifier);
+                let target = lexically_joined(dir, &import.path());
                 match fs::read_to_string(&target) {
                     Ok(imported_src) => {
                         o.push_str(&format!(
                             ",\"resolved\":{}",
                             json_str(&target.display().to_string())
                         ));
-                        let exported: Vec<VariantSymbol> = ttc::variant_symbols(&imported_src)
-                            .into_iter()
-                            .filter(|e| e.exported)
-                            .collect();
+                        let exported = ttc::exported_variant_symbols_with_kind(
+                            &imported_src,
+                            ttc::SourceKind::from_path(&target).unwrap_or_default(),
+                        );
                         o.push_str(",\"variants\":");
                         o.push_str(&variants_json(&imported_src, &exported));
                     }
@@ -59,7 +63,7 @@ pub(super) fn symbols_mode(jobs: &[Job]) -> ExitCode {
     }
 }
 
-fn lexically_joined(dir: &Path, specifier: &str) -> PathBuf {
+fn lexically_joined(dir: &Path, specifier: &Path) -> PathBuf {
     use std::path::Component;
     let mut joined = PathBuf::new();
     for component in dir.join(specifier).components() {
@@ -197,7 +201,7 @@ pub(super) fn sidecar_mode(jobs: &[Job], decl_dir: &Path, inputs: &[String]) -> 
         let dts_path = job.out_path.with_file_name(format!("{file_name}.d.ts"));
         let map_path = job.out_path.with_file_name(format!("{file_name}.d.ts.map"));
         let dir = dts_path.parent().unwrap_or(Path::new(".")).to_path_buf();
-        if let Err(e) = fs::create_dir_all(&dir) {
+        if let Err(e) = super::output::create_dir_all(&dir) {
             eprintln!("ttc: {}: {e}", dir.display());
             failed = true;
             continue;
@@ -206,13 +210,14 @@ pub(super) fn sidecar_mode(jobs: &[Job], decl_dir: &Path, inputs: &[String]) -> 
         // The map's `sources` is read relative to the map itself, so it has
         // to point back across whatever distance `-o` introduced.
         let sidecar = ttc::build_sidecar(&source, &declarations, &relative_path(&dir, &job.file));
-        if let Err(e) = fs::write(&dts_path, &sidecar.declarations) {
-            eprintln!("ttc: {}: {e}", dts_path.display());
-            failed = true;
-            continue;
-        }
-        if let Err(e) = fs::write(&map_path, &sidecar.map) {
-            eprintln!("ttc: {}: {e}", map_path.display());
+        if let Err(error) = write_owned_output(
+            &dts_path,
+            OutputOwner::Source(&job.file),
+            &sidecar.declarations,
+        )
+        .and_then(|()| write_owned_output(&map_path, OutputOwner::Source(&job.file), &sidecar.map))
+        {
+            eprintln!("ttc: {error}");
             failed = true;
             continue;
         }
@@ -241,7 +246,7 @@ pub(super) fn relative_path(from_dir: &Path, to_file: &Path) -> String {
     // and mixing an absolute path with a relative one yields nonsense.
     let (from, to) = match (from_dir.canonicalize(), to_file.canonicalize()) {
         (Ok(from), Ok(to)) => (from, to),
-        _ => (from_dir.to_path_buf(), to_file.to_path_buf()),
+        _ => (normalized_absolute(from_dir), normalized_absolute(to_file)),
     };
 
     let from_parts: Vec<_> = from.components().collect();

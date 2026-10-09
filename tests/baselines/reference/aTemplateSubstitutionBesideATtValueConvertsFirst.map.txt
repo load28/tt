@@ -1,0 +1,10 @@
+//// [aTemplateSubstitutionBesideATtValueConvertsFirst.tt] 8 mapping(s)
+1:19 -> 25:3 len 92  "\nconst arr = [1, 2];\nfunction get(): V { arr.pus"...
+5:3 -> 39:3 len 10  "return `${"
+5:13 -> 30:22 len 3  "arr"
+5:16 -> 39:19 len 4  "}|${"
+5:27 -> 32:19 len 5  "get()"
+5:41 -> 39:39 len 3  "\"a\""
+5:51 -> 39:45 len 3  "\"b\""
+5:56 -> 39:49 len 24  "}`;\n}\nconsole.log(f());\n"
+

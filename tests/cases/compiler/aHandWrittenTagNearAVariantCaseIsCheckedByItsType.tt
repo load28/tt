@@ -1,0 +1,6 @@
+variant O { Alpha, Beta }
+type H = { kind: "Alpha" } | { kind: "Betta" };
+declare const h: H;
+declare const o: O;
+export const r = match (h) { Alpha => 1, Betta => 2 };
+export const t = match (o) { Alpha => 1, Betta => 2 };

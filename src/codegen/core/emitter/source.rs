@@ -82,9 +82,8 @@ impl<'a> Emitter<'a> {
         start: usize,
         end: usize,
     ) -> impl Iterator<Item = &SourceReplacement> {
-        self.replacement_index
-            .covering(start, end)
-            .into_iter()
+        self.replacement_order
+            .containing(start, end, false)
             .map(|index| &self.source_replacements[index])
     }
 
@@ -106,20 +105,44 @@ impl<'a> Emitter<'a> {
     // operation also contains its separately evaluated condition value.
     pub(super) fn replacement_contains_active_value(&self, source: SourceSpan) -> bool {
         self.active_structured_exprs
-            .exprs
-            .borrow()
-            .iter()
-            .any(|expr| {
-                let (_, start, _, end) = self.value_anchor(*expr);
-                source.start <= start && end <= source.end
-            })
+            .any_anchor_within(source.start, source.end)
     }
 
-    fn capture_is_active(&self, replacement: SourceSpan) -> bool {
+    pub(super) fn enter_active(&self, expr: ExprId) -> ActiveExprGuard<'_> {
+        let anchor = self.anchorable(expr).then(|| {
+            let (_, start, _, end) = self.value_anchor(expr);
+            (start, end)
+        });
+        self.active_structured_exprs.enter_anchored(expr, anchor)
+    }
+
+    fn anchorable(&self, expr: ExprId) -> bool {
+        match &self.core.exprs[expr.index()] {
+            Expr::Opaque(_) => false,
+            Expr::Sequence(body) => self
+                .core
+                .body_tail_expr(*body)
+                .is_some_and(|value| self.anchorable(value)),
+            Expr::Template(template) => template.parts.iter().any(|part| {
+                matches!(part, TemplatePart::Interpolation(inner) if self.core.has_statement_form(*inner))
+            }),
+            Expr::Decision(_) | Expr::Propagate(_) | Expr::ResultRegion(_) | Expr::Apply(_) => {
+                true
+            }
+        }
+    }
+
+    pub(super) fn capture_is_active(&self, replacement: SourceSpan) -> bool {
         self.active_capture_sources
             .borrow()
             .iter()
             .any(|active| replacement.start <= active.start && active.end <= replacement.end)
+    }
+
+    fn rebuilds_inside(&self, replaced: SourceSpan) -> bool {
+        self.rebuilt_sources.borrow().last().is_some_and(|rebuilt| {
+            *rebuilt != replaced && replaced.start <= rebuilt.start && rebuilt.end <= replaced.end
+        })
     }
 
     pub(super) fn source_range_rope(&self, span: hir::Span) -> Rope<'a> {
@@ -160,7 +183,7 @@ impl<'a> Emitter<'a> {
                     })
             })
             .peekable();
-        let mut compose_endings = self
+        let mut compose_endings: Vec<_> = self
             .compose_index
             .ending_in(span.start, span.end.saturating_add(1))
             .into_iter()
@@ -174,6 +197,11 @@ impl<'a> Emitter<'a> {
                 rewrite.owner_kind == HostOwnerKind::ArrowExpression
                     && span.start <= rewrite.owner.end
                     && rewrite.owner.end <= span.end
+                    && !self
+                        .active_capture_sources
+                        .borrow()
+                        .last()
+                        .is_some_and(|capture| rewrite.owner.start < capture.start)
                     && !rewrite.actions.iter().any(|action| match action {
                         ComposeAction::Value(value) => {
                             self.active_structured_exprs.contains(value.expr)
@@ -184,7 +212,9 @@ impl<'a> Emitter<'a> {
                             .any(|expr| self.active_structured_exprs.contains(*expr)),
                     })
             })
-            .peekable();
+            .collect();
+        compose_endings.sort_by_key(|rewrite| rewrite.owner.end);
+        let mut compose_endings = compose_endings.into_iter().peekable();
         let mut loop_endings: Vec<_> = self
             .loop_body_index
             .ending_in(span.start.saturating_add(1), span.end.saturating_add(1))
@@ -195,6 +225,27 @@ impl<'a> Emitter<'a> {
         let mut loop_endings = loop_endings.into_iter().peekable();
         let mut cursor = span.start;
         while cursor < span.end {
+            while insertions
+                .next_if(|rewrite| rewrite.owner.start < cursor)
+                .is_some()
+            {}
+            while propagation_insertions
+                .next_if(|rewrite| rewrite.owner.start < cursor)
+                .is_some()
+            {}
+            while compose_insertions
+                .next_if(|rewrite| rewrite.owner.start < cursor)
+                .is_some()
+            {}
+            while compose_endings
+                .next_if(|rewrite| rewrite.owner.end < cursor)
+                .is_some()
+            {}
+            while loop_endings
+                .next_if(|rewrite| rewrite.body.end < cursor)
+                .is_some()
+            {}
+            self.emit_if_test_closings(cursor, &mut rope);
             self.close_owner_blocks_at(cursor, &mut rope);
             while let Some(_rewrite) = loop_endings.next_if(|rewrite| rewrite.body.end == cursor) {
                 rope.push_lit("}");
@@ -272,7 +323,12 @@ impl<'a> Emitter<'a> {
                 if cursor == rewrite.owner.start {
                     rope.append(self.emit_loop_test_prefix(rewrite));
                 }
-                cursor = rewrite.test.start.min(span.end);
+                cursor = if self.guarded_test_operation(rewrite).is_some() {
+                    rewrite.test.end
+                } else {
+                    rewrite.test.start
+                }
+                .min(span.end);
                 continue;
             }
             if let Some(rewrite) = self
@@ -282,6 +338,10 @@ impl<'a> Emitter<'a> {
                 && self.emitted_loop_tests.claim(rewrite.owner)
             {
                 rope.append(self.emit_loop_test_prefix(rewrite));
+                if self.guarded_test_operation(rewrite).is_some() {
+                    cursor = rewrite.test.end.min(span.end);
+                    continue;
+                }
             }
             if self.loop_region_depth.get() == 0
                 && let Some(operation) = self
@@ -304,25 +364,39 @@ impl<'a> Emitter<'a> {
                 .iter()
                 .find(|rewrite| rewrite.test.end <= cursor && cursor < rewrite.body.start)
             {
-                if cursor == rewrite.test.end {
+                if cursor == rewrite.test.end && self.guarded_test_operation(rewrite).is_none() {
                     rope.push_lit(")) break; ");
                 }
                 cursor = rewrite.body.start.min(span.end);
                 continue;
             }
             if let Some(replacement) = self
-                .replacement_index
-                .containing(cursor)
-                .into_iter()
+                .replacement_order
+                .containing_within(
+                    cursor,
+                    cursor.saturating_add(1),
+                    self.rebuilt_sources
+                        .borrow()
+                        .last()
+                        .map_or(usize::MAX, |rebuilt| rebuilt.end)
+                        .min(
+                            self.active_structured_exprs
+                                .innermost_anchor_end(cursor)
+                                .unwrap_or(usize::MAX),
+                        ),
+                    false,
+                )
                 .map(|index| &self.source_replacements[index])
                 .find(|replacement| {
                     if replacement.anchor.is_some() {
                         !replacement
                             .anchor
                             .is_some_and(|expr| self.active_structured_exprs.contains(expr))
-                            && self.conditional_region_depth.get() == 0
-                            && self.loop_region_depth.get() == 0
+                            && ((self.conditional_region_depth.get() == 0
+                                && self.loop_region_depth.get() == 0)
+                                || self.completed_call_emitted(replacement))
                             && !self.replacement_contains_active_value(replacement.source)
+                            && !self.rebuilds_inside(replacement.source)
                             && replacement.source.start <= cursor
                             && cursor < replacement.source.end
                     } else {
@@ -330,6 +404,7 @@ impl<'a> Emitter<'a> {
                             && replacement.source.start <= cursor
                             && cursor < replacement.source.end
                             && !self.replacement_contains_active_value(replacement.source)
+                            && !self.rebuilds_inside(replacement.source)
                             && !self.inside_captured_value(replacement.source, span.start, span.end)
                     }
                 })
@@ -338,14 +413,22 @@ impl<'a> Emitter<'a> {
                     if replacement.jsx_child {
                         rope.push_lit("{");
                     }
+                    let mut name = Rope::new();
+                    if replacement.rewrite.is_none() {
+                        name.push_relocated_operand(
+                            replacement.slot.clone(),
+                            replacement.source.start,
+                            replacement.source.end,
+                        );
+                    } else {
+                        name.push_lit(replacement.written().to_owned());
+                    }
                     match replacement.anchor {
                         Some(expr) => {
                             let (kind, start, end, extent) = self.value_anchor(expr);
-                            let mut name = Rope::new();
-                            name.push_lit(replacement.written().to_owned());
                             rope.anchored(kind, start, end, extent, name);
                         }
-                        None => rope.push_lit(replacement.written().to_owned()),
+                        None => rope.append(name),
                     }
                     if replacement.jsx_child {
                         rope.push_lit("}");
@@ -388,8 +471,9 @@ impl<'a> Emitter<'a> {
                 .take_while(|replacement| replacement.source.start < span.end)
                 .find(|replacement| {
                     replacement.anchor.is_none()
-                        || (self.conditional_region_depth.get() == 0
-                            && self.loop_region_depth.get() == 0
+                        || (((self.conditional_region_depth.get() == 0
+                            && self.loop_region_depth.get() == 0)
+                            || self.completed_call_emitted(replacement))
                             && !self.replacement_contains_active_value(replacement.source))
                 })
                 .map_or(span.end, |replacement| replacement.source.start);
@@ -414,7 +498,15 @@ impl<'a> Emitter<'a> {
                 .range(cursor.saturating_add(1)..span.end.max(cursor.saturating_add(1)))
                 .next()
                 .map_or(span.end, |(start, _)| *start);
+            let next_if_test = self
+                .guarded_if_tests
+                .values()
+                .flat_map(|facts| [facts.consequent.start, facts.consequent.end])
+                .filter(|boundary| cursor < *boundary && *boundary < span.end)
+                .min()
+                .unwrap_or(span.end);
             let next = next_insertion
+                .min(next_if_test)
                 .min(next_documentation)
                 .min(next_split)
                 .min(next_owner_end)
@@ -429,6 +521,7 @@ impl<'a> Emitter<'a> {
                 cursor = next;
             }
         }
+        self.emit_if_test_closings(span.end, &mut rope);
         self.close_owner_blocks_at(span.end, &mut rope);
         while let Some(rewrite) = compose_endings.next_if(|rewrite| rewrite.owner.end == span.end) {
             rope.append(self.emit_compose_suffix(rewrite));
@@ -541,6 +634,13 @@ impl<'a> Emitter<'a> {
                 Some(argument) => {
                     let grouped =
                         grouping_required(self.source[argument.start..argument.end].trim(), self.source_kind);
+                    let (open, close) = if continuation.names_value()
+                        && self.anonymous_function(argument.start, argument.end)
+                    {
+                        ("(void 0, ", ")")
+                    } else {
+                        ("", "")
+                    };
                     edits.push(LocalSourceEdit {
                         span: SourceSpan {
                             start: exit.statement.start,
@@ -554,8 +654,8 @@ impl<'a> Emitter<'a> {
                                 ""
                             },
                             if exit.requires_block { "{ " } else { "" },
-                            continuation.assignment_prefix(grouped)
-                        ),
+                            continuation.assignment_prefix(self.source, grouped)
+                        ) + open,
                         result_return_mark: None,
                     });
                     edits.push(LocalSourceEdit {
@@ -565,13 +665,13 @@ impl<'a> Emitter<'a> {
                         },
                         text: if starts_own_line {
                             format!(
-                                "{};\n{line_indent}{generated_indent}{leave}",
-                                continuation.assignment_suffix(grouped),
+                                "{close}{};\n{line_indent}{generated_indent}{leave}",
+                                continuation.assignment_suffix(self.source, grouped),
                             )
                         } else {
                             format!(
-                                "{}; {leave}{}",
-                                continuation.assignment_suffix(grouped),
+                                "{close}{}; {leave}{}",
+                                continuation.assignment_suffix(self.source, grouped),
                                 if exit.requires_block { " }" } else { "" }
                             )
                         },
@@ -583,15 +683,15 @@ impl<'a> Emitter<'a> {
                     text: if starts_own_line {
                         format!(
                             "{generated_indent}{}undefined{};\n{line_indent}{generated_indent}{leave}",
-                            continuation.assignment_prefix(false),
-                            continuation.assignment_suffix(false)
+                            continuation.assignment_prefix(self.source, false),
+                            continuation.assignment_suffix(self.source, false)
                         )
                     } else {
                         format!(
                             "{}{}undefined{}; {leave}{}",
                             if exit.requires_block { "{ " } else { "" },
-                            continuation.assignment_prefix(false),
-                            continuation.assignment_suffix(false),
+                            continuation.assignment_prefix(self.source, false),
+                            continuation.assignment_suffix(self.source, false),
                             if exit.requires_block { " }" } else { "" }
                         )
                     },
@@ -726,6 +826,10 @@ impl<'a> Emitter<'a> {
     }
 
     fn statement_end(&self, statement: &Statement) -> Option<usize> {
+        self.statement_span(statement).map(|span| span.end)
+    }
+
+    fn statement_span(&self, statement: &Statement) -> Option<SourceSpan> {
         match statement {
             Statement::Expr(expr) => structured_expr_span(self.semantic, self.core, *expr),
             Statement::Decision(decision) => Some(self.span(decision.extent).into()),
@@ -734,7 +838,6 @@ impl<'a> Emitter<'a> {
             Statement::Opaque(node) => Some(self.span(*node).into()),
             Statement::Import(_) => None,
         }
-        .map(|span: SourceSpan| span.end)
     }
 
     pub(super) fn emit_statement_with_edits(
@@ -772,6 +875,7 @@ impl<'a> Emitter<'a> {
                                 .anchor
                                 .is_some_and(|expr| self.active_structured_exprs.contains(expr))
                     })
+                    || self.claimed_by_completed_call(span.start, span.end)
                 {
                     return false;
                 }
@@ -792,6 +896,7 @@ impl<'a> Emitter<'a> {
                             adt,
                             self.source,
                             |node| self.span(node),
+                            |specifier, out| self.emit_import(specifier, out),
                             self.ambient_items.contains(&adt.node),
                             self.source_kind,
                         ),
@@ -828,6 +933,36 @@ impl<'a> Emitter<'a> {
         true
     }
 
+    fn completed_call_emitted(&self, replacement: &SourceReplacement) -> bool {
+        let Some(expr) = replacement.anchor.filter(|_| replacement.claim) else {
+            return false;
+        };
+        self.compose_rewrites.iter().any(|rewrite| {
+            self.emitted_compose_rewrites.contains(rewrite.owner)
+                && rewrite.actions.iter().any(|action| {
+                    matches!(action, ComposeAction::Value(value)
+                        if value.expr == expr && value.call_completion.is_some())
+                })
+        })
+    }
+
+    fn claimed_by_completed_call(&self, start: usize, end: usize) -> bool {
+        self.claim_order
+            .0
+            .containing(start, end, true)
+            .map(|index| &self.source_replacements[self.claim_order.1[index]])
+            .any(|frame| {
+                frame.claim
+                    && frame.source.start <= start
+                    && end <= frame.source.end
+                    && !frame
+                        .anchor
+                        .is_some_and(|value| self.active_structured_exprs.contains(value))
+                    && !self.capture_is_active(frame.source)
+                    && !self.replacement_contains_active_value(frame.source)
+            })
+    }
+
     pub(super) fn edits_after_statement(
         &self,
         statements: &[Statement],
@@ -841,12 +976,28 @@ impl<'a> Emitter<'a> {
         let Some(end) = self.statement_end(&statements[index]) else {
             return out;
         };
-        let held = statements.iter().any(|statement| {
+        let holds = |statement: &Statement| {
+            crate::work::tick("statements beside an edit");
             matches!(statement, Statement::Opaque(node) if {
                 let span = self.span(*node);
                 span.start <= end && end <= span.end
             })
-        });
+        };
+        let held = statements[index + 1..]
+            .iter()
+            .take_while(|statement| {
+                self.statement_span(statement)
+                    .is_none_or(|span| span.start <= end)
+            })
+            .any(holds)
+            || statements[..index]
+                .iter()
+                .rev()
+                .take_while(|statement| {
+                    self.statement_span(statement)
+                        .is_none_or(|span| end <= span.end)
+                })
+                .any(holds);
         if held {
             return out;
         }
@@ -974,7 +1125,13 @@ impl<'a> Emitter<'a> {
     ) -> Option<(Rope<'a>, Rope<'a>)> {
         let mut nested = Vec::new();
         self.collect_operand_values(body, &mut nested);
-        self.emit_operand(self.body_extent(body), &nested, continuation)
+        let mut templates = Vec::new();
+        for statement in &self.core.bodies[body.index()].statements {
+            if let Statement::Expr(inner) = statement {
+                self.collect_operand_templates(*inner, &mut templates);
+            }
+        }
+        self.emit_operand(self.body_extent(body), &nested, &templates, continuation)
     }
 
     pub(super) fn emit_template_operand(
@@ -997,25 +1154,135 @@ impl<'a> Emitter<'a> {
         }
         let span = structured_expr_span(self.semantic, self.core, expr)
             .unwrap_or_else(|| crate::ice::bug!("a template has no source extent"));
-        self.emit_operand(span, &nested, continuation)
+        let mut templates = Vec::new();
+        self.collect_operand_templates(expr, &mut templates);
+        self.emit_operand(span, &nested, &templates, continuation)
+    }
+
+    fn collect_operand_templates(&self, expr: ExprId, out: &mut Vec<ExprId>) {
+        crate::stack::grow(|| self.collect_operand_templates_grown(expr, out));
+    }
+
+    fn collect_operand_templates_grown(&self, expr: ExprId, out: &mut Vec<ExprId>) {
+        if !self.core.has_statement_form(expr) || self.slot_exprs.contains_key(&expr) {
+            return;
+        }
+        match &self.core.exprs[expr.index()] {
+            Expr::Sequence(body) => {
+                for statement in &self.core.bodies[body.index()].statements {
+                    if let Statement::Expr(inner) = statement {
+                        self.collect_operand_templates(*inner, out);
+                    }
+                }
+            }
+            Expr::Template(template) => {
+                out.push(expr);
+                for part in &template.parts {
+                    if let TemplatePart::Interpolation(inner) = part {
+                        self.collect_operand_templates(*inner, out);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn template_substitution_captures(
+        &self,
+        operand: SourceSpan,
+        templates: &[ExprId],
+    ) -> Vec<(SourceSpan, ExprId, bool, String)> {
+        let mut captures = Vec::new();
+        for expr in templates {
+            let Expr::Template(template) = &self.core.exprs[expr.index()] else {
+                continue;
+            };
+            let lowered: Vec<bool> = template
+                .parts
+                .iter()
+                .map(|part| match part {
+                    TemplatePart::Interpolation(inner) => {
+                        let mut values = Vec::new();
+                        self.collect_operand_value(*inner, &mut values);
+                        !values.is_empty()
+                    }
+                    TemplatePart::Raw(_) => false,
+                })
+                .collect();
+            let Some(last) = lowered.iter().rposition(|lowered| *lowered) else {
+                continue;
+            };
+            let Some(start) =
+                structured_expr_span(self.semantic, self.core, *expr).map(|span| span.start)
+            else {
+                continue;
+            };
+            let tagged = operand.start < start
+                && crate::lexer::lex_with_kind(self.source, operand.start, start, self.source_kind)
+                    .last()
+                    .is_some_and(|token| token.facts.ends_expression());
+            for (part, lowered) in template.parts[..last].iter().zip(&lowered) {
+                let TemplatePart::Interpolation(inner) = part else {
+                    continue;
+                };
+                if *lowered {
+                    continue;
+                }
+                let Some(source) = structured_expr_span(self.semantic, self.core, *inner) else {
+                    continue;
+                };
+                let text = self.source[source.start..source.end].trim_start();
+                let inert = crate::program_syntax::source_expression_effects(
+                    self.source,
+                    hir::Span::new(source.start, source.end),
+                    self.source_kind,
+                )
+                .is_inert()
+                    && (tagged || !text.starts_with(['{', '[', '(']));
+                if !inert {
+                    captures.push((source, *inner, tagged, self.generated_name("$tt_v")));
+                }
+            }
+        }
+        captures.sort_by_key(|(source, ..)| source.start);
+        captures
     }
 
     fn emit_operand(
         &self,
         span: SourceSpan,
         nested: &[(ExprId, String)],
+        templates: &[ExprId],
         continuation: &ValueContinuation<'_>,
     ) -> Option<(Rope<'a>, Rope<'a>)> {
         if nested.is_empty() {
             return None;
         }
         let mut out = Rope::new();
-        let mut captured = HashSet::new();
+        let mut captured = CapturedSlots::default();
         let mut scheduled = Vec::new();
         let mut operations: Vec<&PlannedConditionalOperation> = Vec::new();
+        let substitutions = self.template_substitution_captures(span, templates);
+        let mut pending = substitutions.iter().peekable();
         for (inner, slot) in nested {
             if self.emitted_owner_rewrites.contains(*inner) {
                 continue;
+            }
+            let start = structured_expr_span(self.semantic, self.core, *inner)
+                .map_or(span.end, |source| source.start);
+            while let Some((_, substitution, tagged, name)) =
+                pending.next_if(|(source, ..)| source.end <= start)
+            {
+                out.push_lit(format!("const {name} = ("));
+                if !*tagged {
+                    out.push_lit("`${");
+                }
+                out.append(self.emit_expr(*substitution).trim());
+                if !*tagged {
+                    out.push_lit("}`");
+                }
+                out.push_lit(");");
+                out.push_break(0);
             }
             if let Some(operation) = self
                 .nested_operations
@@ -1053,9 +1320,19 @@ impl<'a> Emitter<'a> {
             out.push_break(0);
         }
         let values: Vec<_> = nested.iter().map(|(inner, _)| *inner).collect();
+        let parts: Vec<(SourceSpan, String)> = substitutions
+            .into_iter()
+            .map(|(source, .., name)| (source, name))
+            .collect();
         Some((
             out,
-            self.source_range_with_scheduled_values(span, &values, &scheduled, &operations),
+            self.source_range_with_scheduled_values_and(
+                span,
+                &values,
+                &scheduled,
+                &operations,
+                &parts,
+            ),
         ))
     }
 
@@ -1118,6 +1395,21 @@ impl<'a> Emitter<'a> {
         }
     }
 
+    pub(super) fn defers_arm_values(&self, expr: ExprId) -> bool {
+        self.deferred_arm_values
+            .get_or_init(|| {
+                self.compose_rewrites
+                    .iter()
+                    .flat_map(|rewrite| &rewrite.actions)
+                    .filter_map(|action| match action {
+                        ComposeAction::Value(value) if value.defer_arm_values => Some(value.expr),
+                        _ => None,
+                    })
+                    .collect()
+            })
+            .contains(&expr)
+    }
+
     pub(super) fn emit_expr(&self, expr: ExprId) -> Rope<'a> {
         crate::stack::grow(|| self.emit_expr_grown(expr))
     }
@@ -1127,6 +1419,10 @@ impl<'a> Emitter<'a> {
         // Enter that region before substituting any captured source inside it,
         // just as the opaque-source traversal does at the same boundary.
         if let Some(span) = structured_expr_span(self.semantic, self.core, expr)
+            && !matches!(
+                &self.core.exprs[expr.index()],
+                Expr::Sequence(body) if self.body_extent(*body).start < span.start
+            )
             && let Some(rewrite) = self.compose_rewrites.iter().find(|rewrite| {
                 rewrite.owner.start == span.start
                     && !self.emitted_compose_rewrites.contains(rewrite.owner)
@@ -1156,18 +1452,7 @@ impl<'a> Emitter<'a> {
         // their capture sites, not again beside the completed call's result.
         if !self.active_structured_exprs.contains(expr)
             && let Some(span) = structured_expr_span(self.semantic, self.core, expr)
-            && self
-                .replacements_covering(span.start, span.end)
-                .any(|frame| {
-                    frame.claim
-                        && frame.source.start <= span.start
-                        && span.end <= frame.source.end
-                        && !frame
-                            .anchor
-                            .is_some_and(|value| self.active_structured_exprs.contains(value))
-                        && !self.capture_is_active(frame.source)
-                        && !self.replacement_contains_active_value(frame.source)
-                })
+            && self.claimed_by_completed_call(span.start, span.end)
         {
             return Rope::new();
         }
@@ -1232,7 +1517,7 @@ impl<'a> Emitter<'a> {
             })
         {
             self.emitted_compose_rewrites.claim(rewrite.owner);
-            let _active = self.active_structured_exprs.enter(expr);
+            let _active = self.enter_active(expr);
             let mut out = self.emit_compose_rewrite(rewrite);
             if value.defer_arm_values {
                 out.append(self.emit_selected_arm_values(value.expr, &value.slot));
@@ -1279,17 +1564,32 @@ impl<'a> Emitter<'a> {
                 out.anchored(kind, start, end, extent, self.emit_inline_match(expr));
                 return out;
             }
-            if self.compose_rewrites.iter().flat_map(|rewrite| &rewrite.actions).any(|action| {
-                matches!(action, ComposeAction::Value(value) if value.expr == expr && value.defer_arm_values)
-            }) {
+            if self.defers_arm_values(expr) {
                 let (kind, start, end, extent) = self.value_anchor(expr);
                 let mut out = Rope::new();
-                out.anchored(kind, start, end, extent, self.emit_selected_arm_values(expr, slot));
+                out.anchored(
+                    kind,
+                    start,
+                    end,
+                    extent,
+                    self.emit_selected_arm_values(expr, slot),
+                );
                 return out;
             }
             let (kind, start, end, extent) = self.value_anchor(expr);
             let mut out = Rope::new();
             let mut rendered_slot = slot.as_str();
+            if self.discarded_values.contains(&expr) {
+                rendered_slot = "";
+            }
+            if self.loop_test_rewrites.iter().any(|rewrite| {
+                self.guarded_test_operation(rewrite)
+                    .is_some_and(|operation| {
+                        operation.parent.start <= start && extent <= operation.parent.end
+                    })
+            }) {
+                rendered_slot = "";
+            }
             if let Some(rewrite) = self.loop_test_rewrites.iter().find(|rewrite| {
                 rewrite.first_expr == expr && rewrite.first_source.start == rewrite.test.start
             }) {
@@ -1304,24 +1604,33 @@ impl<'a> Emitter<'a> {
                     }
                     ComposeAction::Operation(_) | ComposeAction::Value(_) => None,
                 }) {
-                    rendered_slot = self.value_slot_name(operation.result);
+                    rendered_slot = if self.guarded_test_operation(rewrite).is_some() {
+                        ""
+                    } else {
+                        self.value_slot_name(operation.result)
+                    };
                 }
             }
             let mut generated = Rope::new();
-            generated.push_lit(rendered_slot.to_owned());
+            if rendered_slot.is_empty() {
+                generated.push_lit(rendered_slot.to_owned());
+            } else {
+                generated.push_relocated_operand(rendered_slot.to_owned(), start, extent);
+            }
             out.anchored(kind, start, end, extent, generated);
             return out;
         }
         if self.nested_values.contains(&expr)
-            && matches!(
-                self.core.exprs[expr.index()],
-                Expr::Decision(_) | Expr::ResultRegion(_) | Expr::Propagate(_)
-            )
+            && match self.core.exprs[expr.index()] {
+                Expr::Decision(_) | Expr::ResultRegion(_) | Expr::Propagate(_) => true,
+                Expr::Apply(_) => self.core.has_statement_form(expr),
+                _ => false,
+            }
             && let Some(slot) = self.value_slots.get(&expr)
         {
             let (kind, start, end, extent) = self.value_anchor(expr);
             let mut generated = Rope::new();
-            generated.push_lit(slot.clone());
+            generated.push_relocated_operand(slot.clone(), start, extent);
             let mut out = Rope::new();
             out.anchored(kind, start, end, extent, generated);
             return out;

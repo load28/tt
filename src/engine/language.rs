@@ -507,6 +507,18 @@ pub(crate) struct ServiceSession {
     /// resolving one of its items can install it again.
     last_probe: Option<ProbeDoc>,
     probe_count: u64,
+    /// The documents read while one answer's targets are mapped back: the
+    /// texts cannot change within an answer, so each is compared once.
+    answering: Option<HashMap<PathBuf, Arc<ServiceDoc>>>,
+}
+
+/// Where a location is, as a set can hold it.
+fn location_key(location: &Location) -> (PathBuf, [u32; 4]) {
+    let Range { start, end } = location.range;
+    (
+        location.path.clone(),
+        [start.line, start.character, end.line, end.character],
+    )
 }
 
 type CompletionKey = (PathBuf, usize, String, Option<String>);
@@ -523,6 +535,8 @@ enum CoordinateSpace {
 
 #[derive(Debug)]
 pub(crate) struct ServiceDoc {
+    source_utf16: std::sync::OnceLock<crate::lines::Utf16Map>,
+    code_utf16: std::sync::OnceLock<crate::lines::Utf16Map>,
     coordinates: CoordinateSpace,
     identity_mapping: EmitMapping,
     source: String,
@@ -534,6 +548,7 @@ pub(crate) struct ServiceDoc {
     declared_names: Vec<crate::DeclaredName>,
     shared_bindings: Vec<crate::SharedBinding>,
     destructured_lists: Vec<crate::DestructuredList>,
+    relocated_operands: Vec<crate::RelocatedOperand>,
     /// What TypeScript's completion rules say at each construct's place
     /// in the source, which lowering moves its code away from.
     completion_scopes: Vec<crate::program_syntax::CompletionScope>,
@@ -546,6 +561,7 @@ pub(crate) struct ServiceDoc {
     /// a provisional consequence.
     tt_diagnostics: Vec<crate::Diagnostic>,
     generated_names: HashSet<String>,
+    restatements: Vec<(usize, usize)>,
     /// Glue written at a source point, for edits that land in it.
     inserted: Vec<crate::InsertedGlue>,
     /// Whether what TypeScript says about `code` is what it says about the
@@ -553,6 +569,8 @@ pub(crate) struct ServiceDoc {
     /// a claimed construct, or a placeholder in `recovered`, so no tt text
     /// stands in it as written. Its syntax errors are then the user's own.
     faithful: bool,
+    source_lines: std::sync::OnceLock<crate::lines::LineIndex>,
+    code_lines: std::sync::OnceLock<crate::lines::LineIndex>,
 }
 
 /// A compiled completion probe: the buffer with `$tt_probe` spliced in at
@@ -585,6 +603,67 @@ pub(super) struct ServedText<'a> {
 }
 
 impl ServiceDoc {
+    /// The source's byte and UTF-16 offsets, measured once.
+    pub(crate) fn source_utf16(&self) -> &crate::lines::Utf16Map {
+        self.source_utf16
+            .get_or_init(|| crate::lines::Utf16Map::new(&self.source))
+    }
+
+    /// The served code's byte and UTF-16 offsets, measured once.
+    pub(crate) fn code_utf16(&self) -> &crate::lines::Utf16Map {
+        self.code_utf16
+            .get_or_init(|| crate::lines::Utf16Map::new(&self.code))
+    }
+
+    fn source_lines(&self) -> crate::lines::LineMap<'_> {
+        crate::lines::LineMap::indexed(
+            &self.source,
+            self.source_lines
+                .get_or_init(|| crate::lines::LineMap::lsp(&self.source).index()),
+        )
+    }
+
+    /// [`service::source_range`] over the source, with its measurements
+    /// taken once.
+    pub(super) fn source_range(&self, start: usize, end: usize) -> Range {
+        let lines = self.source_lines();
+        let position =
+            |offset: usize| service::byte_position(&lines, self.source_utf16().to_byte(offset));
+        Range {
+            start: position(start),
+            end: position(end),
+        }
+    }
+
+    /// [`service::u16_offset`] over the served code, with its measurements
+    /// taken once.
+    pub(super) fn code_offset(&self, position: Position) -> usize {
+        self.code_utf16()
+            .to_utf16(service::byte_at(&self.code_lines(), position))
+    }
+
+    /// [`service::u16_offset`] over the source, with its measurements
+    /// taken once.
+    pub(super) fn source_offset(&self, position: Position) -> usize {
+        self.source_utf16()
+            .to_utf16(service::byte_at(&self.source_lines(), position))
+    }
+
+    fn code_lines(&self) -> crate::lines::LineMap<'_> {
+        crate::lines::LineMap::indexed(
+            &self.code,
+            self.code_lines
+                .get_or_init(|| crate::lines::LineMap::lsp(&self.code).index()),
+        )
+    }
+
+    fn service_lines(&self) -> crate::lines::LineMap<'_> {
+        match self.coordinates {
+            CoordinateSpace::Authored => self.source_lines(),
+            CoordinateSpace::Projected => self.code_lines(),
+        }
+    }
+
     fn service_code(&self) -> &str {
         match self.coordinates {
             CoordinateSpace::Authored => &self.source,

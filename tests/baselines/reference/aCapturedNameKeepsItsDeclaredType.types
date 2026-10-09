@@ -1,0 +1,105 @@
+=== aCapturedNameKeepsItsDeclaredType.tt ===
+variant V { A(n: number), B }
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => V
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+function assertPos(n: number): asserts n {
+>assertPos : function assertPos(n: number): asserts n
+>n : (parameter) n: number
+>n : (parameter) n: number
+  if (n <= 0) throw new Error("not positive");
+>n : (parameter) n: number
+>Error : var Error: new (message?: string, options?: ErrorOptions) => Error
+const checks: { assertPos: typeof assertPos } = { assertPos };
+>checks : const checks: {
+>       assertPos: typeof assertPos;
+>   }
+>assertPos : (property) assertPos: (n: number) => asserts n
+>assertPos : function assertPos(n: number): asserts n
+>assertPos : (property) assertPos: (n: number) => asserts n
+export function asserted(v: V) {
+>asserted : function asserted(v: V): string
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  assertPos(match (v) { A(n) => n, B => 1 });
+>assertPos : function assertPos(n: number): asserts n
+>v : (parameter) v: V
+>n : const n: number
+>n : const n: number
+  checks.assertPos(match (v) { A(n) => n, B => 1 });
+>v : (parameter) v: V
+>n : const n: number
+>n : const n: number
+export function keyed(v: V) {
+>keyed : function keyed(v: V): number[]
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  const sym: unique symbol = Symbol();
+>sym : const sym: unique symbol
+>Symbol : var Symbol: (description?: string | number) => symbol
+  const d = { [sym]: match (v) { A(n) => n, B => 0 } };
+>d : const d: {
+>       [sym]: number;
+>   }
+>sym : const sym: unique symbol
+>v : (parameter) v: V
+>n : const n: number
+>n : const n: number
+  const it = { [Symbol.iterator]: match (v) { A => function* () { yield 1; }, B => function* () { yield 2; } } };
+>it : const it: {
+>       [Symbol.iterator]: () => Generator<number, void, unknown>;
+>   }
+>Symbol : var Symbol: SymbolConstructor
+>iterator : (property) SymbolConstructor.iterator: typeof Symbol.iterator
+>v : (parameter) v: V
+  return [d[sym], ...it];
+>d : const d: {
+>       [sym]: number;
+>   }
+>sym : const sym: unique symbol
+>it : const it: {
+>       [Symbol.iterator]: () => Generator<number, void, unknown>;
+>   }
+console.log(asserted(V.A(2)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>asserted : function asserted(v: V): string
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => V
+console.log(JSON.stringify(keyed(V.A(5))));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>keyed : function keyed(v: V): number[]
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => V
+

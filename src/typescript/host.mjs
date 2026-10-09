@@ -35,7 +35,9 @@
  *            tagMembers: [{ index, tags }],
  *            symbols: [{ index, id, name, builtin }],
  *            resultShapes: [{ index }],
- *            declarations: [{ path, text }] }
+ *            declarations: [{ path, text }],
+ *            contextualRoundTrips }      // checker requests the
+ *                                        // contextual pass sent
  *
  * An `ask` may also answer `{ error: "..." }`, which fails that request
  * without ending the session. EOF on stdin ends it.
@@ -117,6 +119,7 @@ function jsoncTree(text) {
     try { key = JSON.parse(quote === '"' ? raw : `"${raw.slice(1, -1).replaceAll('"', '\\"')}"`); } catch { key = raw; }
     return { kind: "string", start, end: at, key };
   };
+  const startsElement = () => at < text.length && !/[,:}\]]/.test(text[at]);
   const value = () => {
     if (!skip()) return null;
     const start = at;
@@ -130,6 +133,7 @@ function jsoncTree(text) {
       for (;;) {
         if (!skip()) return null;
         if (text[at] === close) { at += 1; node.end = at; return node; }
+        if (at >= text.length) { node.end = at; return node; }
         let entry;
         if (open === "{") {
           const name = text[at] === '"' || text[at] === "'" ? string() : null;
@@ -149,7 +153,9 @@ function jsoncTree(text) {
           entry.comma = at;
           previousComma = at;
           at += 1;
-        } else if (text[at] !== close) return null;
+        } else if (open === "{" && text[at] === ";") {
+          at += 1;
+        } else if (text[at] !== close && at < text.length && !startsElement()) return null;
       }
     }
     while (at < text.length && !/[\s,:{}[\]"'/]/.test(text[at])) at += 1;
@@ -191,10 +197,11 @@ function originalSpan(spans, start, end) {
 }
 
 const CANNOT_READ_FILE = 5083;
+const RECORD = "\u001e";
+const CIRCULAR_CONFIGURATION = 18000;
 const CANNOT_FIND_MODULE = 2307;
 const LOWERED = /\.(?:tt\.ts|ttx\.tsx)$/;
 const TT_SOURCE = /\.ttx?$/;
-const MAPPED_DECLARATION = /\.d\.(ttx?)\.ts$/;
 const IDENTITY_MAPPER = `
 let pending = Buffer.alloc(0);
 process.stdin.on("data", (chunk) => {
@@ -236,7 +243,7 @@ process.stdin.on("data", (chunk) => {
  * retried until every byte is out.
  */
 function writeLine(text) {
-  const buffer = Buffer.from(text + "\n", "utf8");
+  const buffer = Buffer.from(RECORD + text + "\n", "utf8");
   let pos = 0;
   while (pos < buffer.length) {
     try {
@@ -307,15 +314,38 @@ function layeredFileSystem(files, aliases, dirs, configFiles, dependencies, list
     return root === undefined ? undefined : { root, real };
   };
   const writtenByTtc = (name) => /\.ttx?\.d\.ts(\.map)?$/.test(name);
+  const realDirectories = new Map();
+  const served = (f) => {
+    if (files.has(f)) return f;
+    const dir = path.dirname(f);
+    if (!realDirectories.has(dir)) {
+      let real = null;
+      try { real = fs.realpathSync(dir).replaceAll("\\", "/"); } catch {}
+      realDirectories.set(dir, real);
+    }
+    const realDir = realDirectories.get(dir);
+    if (realDir !== null && realDir !== dir) {
+      const real = path.join(realDir, path.basename(f));
+      if (files.has(real)) return real;
+    }
+    if (!LOWERED.test(f)) return undefined;
+    const extension = path.extname(f);
+    const source = f.slice(0, -extension.length);
+    let realSource;
+    try { realSource = fs.realpathSync(source).replaceAll("\\", "/"); } catch { return undefined; }
+    const real = realSource + extension;
+    return realSource !== source && files.has(real) ? real : undefined;
+  };
   return {
     // A `.tt` source the engine did not serve does not exist for TypeScript:
     // its text is tt, not the lowered module.
-    fileExists: (f) => (files.has(f) ? true : TT_SOURCE.test(f) ? false : undefined),
+    fileExists: (f) => (served(f) !== undefined ? true : TT_SOURCE.test(f) ? false : undefined),
     // `undefined` falls back to the real disk; `null` would mean "absent".
     readFile: (f) => {
-      if (!files.has(f) && !dependencies.has(f) && !published(f)) dependencies.set(f, diskVersion(f));
+      const real = served(f);
+      if (real === undefined && !dependencies.has(f) && !published(f)) dependencies.set(f, diskVersion(f));
       if (configFiles.has(f)) return configFiles.get(f);
-      if (files.has(f)) return files.get(f);
+      if (real !== undefined) return files.get(real);
       return TT_SOURCE.test(f) ? null : undefined;
     },
     directoryExists: (d) => (dirs.has(d) ? true : undefined),
@@ -323,7 +353,7 @@ function layeredFileSystem(files, aliases, dirs, configFiles, dependencies, list
       for (const [link, target] of links) {
         if (p === link || p.startsWith(link + "/")) return target + p.slice(link.length);
       }
-      return undefined;
+      return served(p);
     },
     getAccessibleEntries: (d) => {
       const inOutput = outputRoot(d);
@@ -378,6 +408,7 @@ async function main() {
   let SymbolFlags;
   let TypeFlags;
   let NodeBuilderFlags;
+  let ObjectFlags;
   let isExpression;
   let isIdentifier;
   let isVariableDeclaration;
@@ -385,7 +416,7 @@ async function main() {
   let isStatement;
   let SyntaxKind;
   try {
-    ({ API, SymbolFlags, TypeFlags, NodeBuilderFlags } = await import(open.apiModule));
+    ({ API, SymbolFlags, TypeFlags, NodeBuilderFlags, ObjectFlags } = await import(open.apiModule));
     ({
       isExpression,
       isIdentifier,
@@ -436,6 +467,12 @@ async function main() {
 
   let opened = false;
   const openRoots = new Set();
+  const snapshots = [];
+  const updateSnapshot = (params) => {
+    const snapshot = api.updateSnapshot(params);
+    snapshots.push(snapshot);
+    return snapshot;
+  };
   try {
     while (true) {
       const line = readLine();
@@ -451,7 +488,12 @@ async function main() {
         } else if (job.configuredMappers) {
           answer = configuredMappers();
         } else {
-          answer = handle(job);
+          try {
+            answer = handle(job);
+          } catch (e) {
+            reconnect();
+            throw e;
+          }
         }
       } catch (e) {
         // The Rust boundary classifies this as an internal compiler error.
@@ -460,6 +502,13 @@ async function main() {
         answer = { error: e instanceof Error ? e.message : String(e) };
       }
       writeLine(JSON.stringify(answer));
+      try {
+        const latest = snapshots.pop();
+        for (const snapshot of snapshots.splice(0)) snapshot.dispose();
+        if (latest) snapshots.push(latest);
+      } catch {
+        reconnect();
+      }
     }
   } finally {
     api.close();
@@ -553,9 +602,6 @@ async function main() {
       }
     }
     out.projectModules = out.projectModules.map(moduleName);
-    for (const declaration of out.declarations) {
-      if (mapped) declaration.path = declaration.path.replace(MAPPED_DECLARATION, ".$1.d.ts");
-    }
     return out;
   }
 
@@ -569,7 +615,10 @@ async function main() {
 
   /** Switches the arrangement: a fresh compiler, the project not yet open. */
   function reconnect() {
-    api.close();
+    snapshots.length = 0;
+    try {
+      api.close();
+    } catch {}
     links.clear();
     if (mapped) {
       const link = path.join(path.dirname(open.tsconfig), "node_modules", MAPPER_PACKAGE);
@@ -603,6 +652,7 @@ async function main() {
       resultShapes: [],
       declarations: [],
       contextualSlots: [],
+      contextualRoundTrips: 0,
     };
     let changes = serve(files, dirs, servedModules(job.modules ?? []));
     detectDisk();
@@ -629,7 +679,18 @@ async function main() {
         out.directories = [...listings.keys()];
         return engineAnswer(out);
       }
-      const wanted = !foreignMappers(api.parseConfigFile(open.tsconfig));
+      const parsed = api.parseConfigFile(open.tsconfig);
+      const circular = (parsed?.errors ?? []).filter((d) => d.code === CIRCULAR_CONFIGURATION);
+      if (circular.length > 0) {
+        if (opened) reconnect();
+        for (const d of circular) {
+          out.projectDiagnostics.push({ file: open.tsconfig, code: d.code, message: messageText(d) });
+        }
+        out.dependencies = [...dependencies.keys()];
+        out.directories = [...listings.keys()];
+        return engineAnswer(out);
+      }
+      const wanted = !foreignMappers(parsed);
       if (wanted !== mapped) {
         mapped = wanted;
         reconnect();
@@ -638,8 +699,8 @@ async function main() {
       }
       for (const file of new Set([open.tsconfig, ...dependencies.keys()])) {
         if (!file.endsWith(".json") || !(files.has(file) || fs.existsSync(file))) continue;
-        const { config, error } = api.readConfigFile(file);
-        if (error || !config || typeof config !== "object") continue;
+        const { config } = api.readConfigFile(file);
+        if (!config || typeof config !== "object") continue;
         const text = files.has(file) ? files.get(file) : fs.readFileSync(file, "utf8");
         const tree = jsoncTree(text);
         if (tree?.kind !== "object" && tree?.kind !== "empty") continue;
@@ -718,7 +779,7 @@ async function main() {
       : open.tsconfig
         ? { openProjects: [open.tsconfig] }
         : { openFiles: [...paths, ...(job.sources ?? [])] };
-    let snapshot = api.updateSnapshot(params);
+    let snapshot = updateSnapshot(params);
     let project = open.tsconfig
       ? snapshot.getProject(open.tsconfig)
       : paths.map((p) => snapshot.getDefaultProjectForFile(p)).find(Boolean);
@@ -743,7 +804,7 @@ async function main() {
     const opening = outside.filter((root) => !openRoots.has(root));
     const closing = [...openRoots].filter((root) => !outside.includes(root));
     if (opening.length > 0 || closing.length > 0) {
-      snapshot = api.updateSnapshot({ openFiles: opening, closeFiles: closing });
+      snapshot = updateSnapshot({ openFiles: opening, closeFiles: closing });
       for (const root of closing) openRoots.delete(root);
       for (const root of opening) openRoots.add(root);
       project = snapshot.getProject(open.tsconfig);
@@ -809,7 +870,9 @@ async function main() {
     }
 
     const contextual = ({ project, members }) => {
-      const checker = project.checker;
+      const checker = memoizedChecker(countedChecker(project.checker, () => {
+        out.contextualRoundTrips += 1;
+      }));
       // Declaration handles use the API's canonical spelling, while input
       // modules retain their authored spelling. Membership is file identity,
       // including when a dependency is followed through another declaration.
@@ -828,12 +891,15 @@ async function main() {
           .filter((slot) => slot.module === module)
           .map((slot) => slot.declarationEnd));
         symbols = new Set();
+        const names = [];
         walkTree(source, (node) => {
           if (isVariableDeclaration(node) && isIdentifier(node.name) && ends.has(node.name.end)) {
-            const declared = checker.getSymbolAtLocation(node.name);
-            if (declared) symbols.add(declared.id);
+            names.push(node.name);
           }
         });
+        for (const declared of checker.getSymbolAtLocation(names)) {
+          if (declared) symbols.add(declared.id);
+        }
         storage.set(module, symbols);
         return symbols;
       };
@@ -856,12 +922,15 @@ async function main() {
         for (const [module, declared] of ends) {
           const source = project.program.getSourceFile(module);
           if (!source) continue;
+          const names = [];
           walkTree(source, (node) => {
             if (isVariableDeclaration(node) && isIdentifier(node.name) && declared.has(node.name.end)) {
-              const symbol = checker.getSymbolAtLocation(node.name);
-              if (symbol) pending.add(symbol.id);
+              names.push(node.name);
             }
           });
+          for (const symbol of checker.getSymbolAtLocation(names)) {
+            if (symbol) pending.add(symbol.id);
+          }
         }
         return pending;
       };
@@ -914,6 +983,24 @@ async function main() {
         return syntax;
       };
       const entries = [...(job.contextualSlots ?? []).entries()];
+      const names = [];
+      const reads = [];
+      for (const [, slot] of entries) {
+        if (slot.settled || !ownsModule(slot.module)) continue;
+        const source = project.program.getSourceFile(slot.module);
+        if (!source) continue;
+        const syntax = syntaxOf(slot.module, source);
+        const declaration = syntax.declarations.get(slot.declarationEnd);
+        if (!declaration) continue;
+        names.push(...(syntax.identifiers.get(declaration.name.text) ?? []));
+        for (const assignment of syntax.assignments.get(declaration.name.text) ?? []) {
+          names.push(assignment.left);
+          reads.push(assignment.right);
+        }
+        if (declaration.initializer) reads.push(declaration.name, declaration.initializer);
+      }
+      checker.getSymbolAtLocation(names);
+      checker.getTypeAtLocation(reads);
       let operandsSettling = false;
       for (const [index, slot] of [...entries.filter(([, slot]) => slot.operand), ...entries.filter(([, slot]) => !slot.operand)]) {
         if (slot.settled || !ownsModule(slot.module)) continue;
@@ -950,6 +1037,15 @@ async function main() {
           index !== otherIndex && checker.isTypeAssignableTo(type, other) &&
           (!checker.isTypeAssignableTo(other, type) || otherIndex < index)) ? [] : [index]);
         const indefinite = (type) => (type.flags & (TypeFlags.Any | TypeFlags.Unknown)) || type.isErrorType();
+        if (declaration.initializer && !declaration.type) {
+          const captured = checker.getTypeAtLocation(declaration.initializer);
+          const node = (captured.flags & TypeFlags.UniqueESSymbol) && declaredType && captured.id !== declaredType.id
+            ? annotation(captured) : undefined;
+          if (node) {
+            out.contextualSlots.push({ index, inferred: true, annotation: project.emitter.printNode(node) });
+            continue;
+          }
+        }
         if (slot.asserted) {
           if (!job.inferJoinTypes || operandsSettling || !declaration.type || declaration.initializer) continue;
           const context = checker.getTypeFromTypeNode(declaration.type);
@@ -982,6 +1078,7 @@ async function main() {
         }
         let expected;
         let ambiguous = false;
+        let deferred = false;
         let provisional = true;
         for (const identifier of identifiers) {
           if (identifier === declaration.name || identifier.text !== declaration.name.text) continue;
@@ -990,19 +1087,26 @@ async function main() {
           // type: doing so would reject the initializer's other constituents.
           if (declaredType && checker.getTypeAtLocation(identifier).id !== declaredType.id) continue;
           if (impliedByBindingPattern(identifier, SyntaxKind)) continue;
+          if (namesJsxTag(identifier, SyntaxKind)) continue;
+          if (spreadsProperties(identifier, SyntaxKind)) continue;
+          const logical = logicalLeftOperand(identifier, SyntaxKind);
+          if (logical && readsPending(logical, symbol.id)) { deferred = true; break; }
+          if (logical && (checker.getTypeAtLocation(logical).flags & TypeFlags.Never)) continue;
           const context = checker.getContextualType(identifier);
           if (!context || (context.flags & (TypeFlags.Any | TypeFlags.Unknown)) || context.isErrorType()) continue;
           if (expected && expected.id !== context.id) { ambiguous = true; break; }
           expected = context;
           provisional &&= assertionOperand(identifier, SyntaxKind);
         }
+        if (deferred) continue;
         if (job.inferJoinTypes && !operandsSettling && !expected && !ambiguous && !declaration.initializer) {
           // A statement join must have the union of its incoming value types.
           // In particular, TS's evolving-array inference at assignment sites is
           // not expression inference. Ask for each RHS type in its branch scope
           // and serialize it at the declaration; never infer from diagnostic text.
           const incoming = incomingOf();
-          const types = incoming.flatMap(assignment =>
+          const join = objectLiteralJoin(checker, incoming, identifiers, declaration, symbol, TypeFlags, ObjectFlags);
+          const types = join ? [join] : incoming.flatMap(assignment =>
             widenedAtMutable(checker, checker.getTypeAtLocation(assignment.right),
               freshLiterals(checker, assignment.right, SyntaxKind, TypeFlags)));
           if (!types.length || types.some(type => (type.flags & (TypeFlags.Any | TypeFlags.Unknown)) || type.isErrorType())) continue;
@@ -1307,11 +1411,19 @@ async function main() {
         process.exitCode = 5;
         fail(5, "ttc host: the resolved TypeScript has no declaration emit API");
       }
-      const emitted = project.program.getDeclarationEmit(
-        (job.modules ?? []).map((m) => served(m.path)).filter((module) => projectModules.has(module)),
-      );
-      for (const [path, file] of emitted.outputFiles) {
-        out.declarations.push({ path, text: file.text });
+      const requested = (job.modules ?? []).map((m) => m.path);
+      for (const group of groups) {
+        const modules = requested
+          .map((path) => (group.members.has(path) ? path : served(path)))
+          .filter((module) => group.members.has(module));
+        if (modules.length === 0) continue;
+        for (const module of modules) {
+          const emitted = group.project.program.getDeclarationEmit([module]);
+          for (const [path, file] of emitted.outputFiles) {
+            if (path.endsWith(".map")) continue;
+            out.declarations.push({ module: moduleName(module), text: file.text });
+          }
+        }
       }
     }
     out.dependencies = [...dependencies.keys()];
@@ -1383,6 +1495,34 @@ function referenceClosure(project, root, canonical) {
  * question about the same type, which tells that answer apart from a
  * session that stopped answering; a session failure propagates.
  */
+function logicalLeftOperand(node, SyntaxKind) {
+  let operand = node;
+  while (operand.parent?.kind === SyntaxKind.ParenthesizedExpression) operand = operand.parent;
+  const parent = operand.parent;
+  if (parent?.kind !== SyntaxKind.BinaryExpression || parent.right !== operand) return undefined;
+  const operator = parent.operatorToken.kind;
+  return operator === SyntaxKind.BarBarToken || operator === SyntaxKind.AmpersandAmpersandToken ||
+    operator === SyntaxKind.QuestionQuestionToken ? parent.left : undefined;
+}
+
+function namesJsxTag(node, SyntaxKind) {
+  const parent = node.parent;
+  return !!parent
+    && (parent.kind === SyntaxKind.JsxOpeningElement || parent.kind === SyntaxKind.JsxSelfClosingElement)
+    && parent.tagName === node;
+}
+
+function spreadsProperties(node, SyntaxKind) {
+  let current = node;
+  while (current.parent && current.parent.kind === SyntaxKind.ParenthesizedExpression) {
+    current = current.parent;
+  }
+  const parent = current.parent;
+  return !!parent
+    && (parent.kind === SyntaxKind.SpreadAssignment || parent.kind === SyntaxKind.JsxSpreadAttribute)
+    && parent.expression === current;
+}
+
 function impliedByBindingPattern(node, SyntaxKind) {
   for (let current = node; ;) {
     const parent = current.parent;
@@ -1522,6 +1662,25 @@ function freshLiterals(checker, node, SyntaxKind, TypeFlags) {
   return fresh;
 }
 
+function objectLiteralJoin(checker, incoming, identifiers, declaration, symbol, TypeFlags, ObjectFlags) {
+  const constituents = (type) => type.isUnionType() ? type.getTypes() : [type];
+  const objectLiteral = (type) => !!(type.flags & TypeFlags.Object) && !!(type.objectFlags & ObjectFlags.ObjectLiteral);
+  const assigned = incoming.flatMap((assignment) => constituents(checker.getTypeAtLocation(assignment.right)));
+  if (assigned.filter(objectLiteral).length < 2) return undefined;
+  const same = (a, b) => a.id === b.id || (checker.isTypeAssignableTo(a, b) && checker.isTypeAssignableTo(b, a));
+  const writes = new Set(incoming.map((assignment) => assignment.left));
+  for (const identifier of identifiers) {
+    if (identifier === declaration.name || writes.has(identifier)) continue;
+    if (checker.getSymbolAtLocation(identifier)?.id !== symbol.id) continue;
+    const read = constituents(checker.getTypeAtLocation(identifier));
+    if (read.every((type) => assigned.some((other) => same(type, other)))
+      && assigned.every((type) => read.some((other) => same(type, other)))) {
+      return checker.getWidenedType(checker.getTypeAtLocation(identifier));
+    }
+  }
+  return undefined;
+}
+
 function widenedAtMutable(checker, type, fresh) {
   const holdsFresh = (candidate) => candidate.isUnionType()
     ? candidate.getTypes().some(holdsFresh) : fresh.has(candidate.id);
@@ -1569,7 +1728,9 @@ function denotes(checker, node, type, location, excluded, { SyntaxKind, SymbolFl
     let symbol = checker.resolveName(name.text, members.length ? SymbolFlags.Namespace | SymbolFlags.Value : meaning, location);
     if (!symbol || excluded.has(symbol.id)) return undefined;
     for (const member of members) {
-      symbol = aliased(symbol).getExports().get(member.startsWith("__") ? "_" + member : member);
+      const owner = aliased(symbol);
+      symbol = owner.getExports().get(member.startsWith("__") ? "_" + member : member) ??
+        (meaning === SymbolFlags.Value ? checker.getPropertyOfType(checker.getTypeOfSymbol(owner), member) : undefined);
       if (!symbol) return undefined;
     }
     return aliased(symbol);
@@ -1777,8 +1938,7 @@ function contextualMismatch(project, checker, diagnostic, isExpression, SyntaxKi
   const K = SyntaxKind;
 
   const starting = [];
-  walkTree(sourceFile, (node) => {
-    if (node.pos > diagnostic.pos || node.end < diagnostic.end) return false;
+  walkContaining(sourceFile, diagnostic.pos, diagnostic.end, (node) => {
     if (node.getStart(sourceFile) === diagnostic.pos) starting.push(node);
   });
 
@@ -1862,8 +2022,7 @@ function lookupReceiver(project, diagnostic, SyntaxKind) {
   if (!sourceFile) return null;
   const K = SyntaxKind;
   let name;
-  walkTree(sourceFile, (node) => {
-    if (node.pos > diagnostic.pos || node.end < diagnostic.end) return false;
+  walkContaining(sourceFile, diagnostic.pos, diagnostic.end, (node) => {
     if (node.getStart(sourceFile) === diagnostic.pos && node.end === diagnostic.end) name = node;
   });
   const parent = name?.parent;
@@ -1881,11 +2040,59 @@ function lookupReceiver(project, diagnostic, SyntaxKind) {
 /** The innermost expression whose source range contains the emitted value. */
 function smallestExpressionCovering(sourceFile, start, end, isExpression) {
   let found = null;
-  walkTree(sourceFile, (node) => {
-    if (node.getStart(sourceFile) > start || node.end < end) return false;
+  walkContaining(sourceFile, start, end, (node) => {
+    if (node.getStart(sourceFile) > start) return false;
     if (isExpression(node)) found = node;
   });
   return found;
+}
+
+/**
+ * The nodes whose range holds `pos..end`, outermost first and in source
+ * order — what `walkTree` visits when its callback prunes every node that
+ * does not hold the range, without visiting the siblings it prunes. A
+ * node's children are in source order and do not overlap, so their ends do
+ * not decrease and the first child that can hold the range is found by
+ * binary search, as `getTokenAtPosition` finds the child holding a
+ * position. The callback's `true` stops the walk and `false` skips the
+ * node's children.
+ */
+function walkContaining(root, pos, end, enter) {
+  const pending = [root];
+  while (pending.length > 0) {
+    const node = pending.pop();
+    if (node.pos > pos || node.end < end) continue;
+    const entered = enter(node);
+    if (entered === true) return true;
+    if (entered === false) continue;
+    const children = childrenOf(node);
+    let first = 0;
+    let past = children.length;
+    while (first < past) {
+      const middle = (first + past) >>> 1;
+      if (children[middle].end < end) first = middle + 1;
+      else past = middle;
+    }
+    let last = first;
+    while (last < children.length && children[last].pos <= pos) last++;
+    for (let index = last - 1; index >= first; index--) pending.push(children[index]);
+  }
+  return false;
+}
+
+const childLists = new WeakMap();
+
+/** A node's children in source order, listed once per node. */
+function childrenOf(node) {
+  let children = childLists.get(node);
+  if (!children) {
+    children = [];
+    node.forEachChild((child) => {
+      children.push(child);
+    });
+    childLists.set(node, children);
+  }
+  return children;
 }
 
 function walkTree(root, enter) {
@@ -2243,6 +2450,68 @@ function perModule(entries, ask) {
     group.forEach((at, i) => (answers[at] = batch[i]));
   }
   return answers;
+}
+
+/** `checker`, calling `called` once per request it sends to the compiler. */
+function countedChecker(checker, called) {
+  return new Proxy(checker, {
+    get(target, key) {
+      const value = target[key];
+      if (typeof value !== "function") return value;
+      return (...args) => {
+        called();
+        return value.apply(target, args);
+      };
+    },
+  });
+}
+
+/**
+ * `checker`, with the answers that depend only on their arguments kept for
+ * the life of one ask: a node's symbol and type, and the relations and
+ * conversions of types, keyed by type id (snapshot-scoped). A node list
+ * asks for the nodes not yet answered in one batch. The answers are the
+ * checker's own; only the number of round trips changes.
+ */
+function memoizedChecker(checker) {
+  const memo = (cache, key, compute) => {
+    if (!cache.has(key)) cache.set(key, compute());
+    return cache.get(key);
+  };
+  const perNode = (name, method) => {
+    const cache = new Map();
+    return (arg) => {
+      if (!Array.isArray(arg)) return memo(cache, arg, () => checker[method](arg));
+      const missing = [...new Set(arg.filter((node) => !cache.has(node)))];
+      if (missing.length > 0) {
+        const answers = batched(
+          name,
+          () => checker[method](missing),
+          () => missing.map((node) => checker[method](node)),
+        );
+        missing.forEach((node, index) => cache.set(node, answers[index]));
+      }
+      return arg.map((node) => cache.get(node));
+    };
+  };
+  const assignable = new Map();
+  const widened = new Map();
+  const base = new Map();
+  const own = {
+    getSymbolAtLocation: perNode("symbolsAtLocation", "getSymbolAtLocation"),
+    getTypeAtLocation: perNode("typesAtLocation", "getTypeAtLocation"),
+    isTypeAssignableTo: (source, target) =>
+      memo(assignable, `${source.id}:${target.id}`, () => checker.isTypeAssignableTo(source, target)),
+    getWidenedType: (type) => memo(widened, type.id, () => checker.getWidenedType(type)),
+    getBaseTypeOfLiteralType: (type) => memo(base, type.id, () => checker.getBaseTypeOfLiteralType(type)),
+  };
+  return new Proxy(checker, {
+    get(target, key) {
+      if (Object.hasOwn(own, key)) return own[key];
+      const value = target[key];
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
 }
 
 /**

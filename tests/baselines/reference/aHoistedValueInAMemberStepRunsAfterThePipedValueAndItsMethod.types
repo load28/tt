@@ -197,6 +197,7 @@ report(mark("head", new Box(1) as Box | undefined) |> ?.add(match (subject("arg"
 >mark : const mark: <Box | undefined>(name: string, value: Box | undefined) => Box | undefined
 >Box : constructor Box(n: number): Box
 >Box : class Box
+>add : (accessor) Box.add: (amount: number) => Box
 >subject : const subject: (name: string) => E
 >value : const value: number
 >value : const value: number
@@ -205,6 +206,7 @@ report(mark("head", undefined as Box | undefined) |> ?.add(match (subject("skipp
 >report : const report: (value: unknown) => void
 >mark : const mark: <Box | undefined>(name: string, value: Box | undefined) => Box | undefined
 >Box : class Box
+>add : (accessor) Box.add: (amount: number) => Box
 >subject : const subject: (name: string) => E
 >value : const value: number
 >value : const value: number

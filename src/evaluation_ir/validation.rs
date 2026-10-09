@@ -168,7 +168,12 @@ impl EvaluationFile {
             // emission order (the target dedups later occurrences), and the
             // target writes a value's steps outermost first because each
             // step wraps the accumulated action.
-            let mut materialized: Vec<SourceSpan> = Vec::new();
+            let mut materialized: HashSet<SourceSpan> = HashSet::new();
+            let mut roots: Vec<SourceSpan> = Vec::new();
+            let mut read_checked: HashMap<usize, usize> = HashMap::new();
+            let mut read_segments: HashSet<usize> = HashSet::new();
+            let mut captured: HashMap<usize, (usize, bool)> = HashMap::new();
+            let mut captured_segments: HashSet<usize> = HashSet::new();
             for value in &rewrite.values {
                 let subject =
                     LoweringSubject::owner(rewrite.owner).with_root(CoreRoot::Expr(value.expr));
@@ -211,8 +216,14 @@ impl EvaluationFile {
                 }
                 last_start = Some(value.source.start);
                 let steps = value.schedule.steps();
-                for step in steps {
-                    for input in &step.inputs {
+                for (link, left, step) in steps.links() {
+                    if read_checked
+                        .get(&link)
+                        .is_some_and(|checked| *checked >= left)
+                    {
+                        break;
+                    }
+                    for input in step.inputs.fresh(&mut read_segments) {
                         if let PlannedEvaluationInput::Slot { slot, .. } = input
                             && !produced.contains(slot)
                         {
@@ -224,13 +235,26 @@ impl EvaluationFile {
                             .at(value.source));
                         }
                     }
+                    read_checked.insert(link, left);
                 }
-                for index in (0..steps.len()).rev() {
-                    let step = &steps[index];
-                    let conditional_after = steps[index + 1..].iter().any(|later| {
-                        matches!(later.operation, HostEvaluationOperation::Conditional(_))
-                    });
-                    for input in &step.inputs {
+                let mut pending = Vec::new();
+                let mut conditional_after = false;
+                for (link, left, step) in steps.links() {
+                    if let Some((done, conditional)) = captured.get(&link)
+                        && *done >= left
+                    {
+                        conditional_after = *conditional;
+                        break;
+                    }
+                    pending.push((link, left, step));
+                }
+                let mut complete = true;
+                let mut suffix_conditional = conditional_after;
+                for (link, left, step) in pending.into_iter().rev() {
+                    let conditional =
+                        matches!(step.operation, HostEvaluationOperation::Conditional(_));
+                    let (segments, inputs) = step.inputs.unseen(&captured_segments);
+                    for input in inputs {
                         let PlannedEvaluationInput::Source { source, target, .. } = input else {
                             continue;
                         };
@@ -239,6 +263,7 @@ impl EvaluationFile {
                         }
                         if conditional_after {
                             if operation_of.contains_key(&value.expr) {
+                                complete = false;
                                 continue;
                             }
                             return Err(InternalCompilerError::new(
@@ -248,13 +273,25 @@ impl EvaluationFile {
                             )
                             .at(*source));
                         }
-                        for span in &self.tt_spans {
-                            if overlaps(*source, *span)
-                                && !(span.start <= value.source.start
-                                    && value.source.end <= span.end)
-                                && !(span.end <= value.source.start
-                                    && source.start <= span.start
-                                    && span.end <= source.end)
+                        let encloses_value = |span: &SourceSpan| {
+                            span.start <= value.source.start && value.source.end <= span.end
+                        };
+                        let mut violations: Vec<(usize, SourceSpan)> = self
+                            .tt_spans
+                            .straddling(*source)
+                            .into_iter()
+                            .filter(|(_, span)| !encloses_value(span))
+                            .collect();
+                        if source.end > value.source.start {
+                            violations.extend(self.tt_spans.within(*source).into_iter().filter(
+                                |(_, span)| {
+                                    overlaps(*source, *span)
+                                        && span.end > value.source.start
+                                        && !encloses_value(span)
+                                },
+                            ));
+                        }
+                        if let Some(&(_, span)) = violations.iter().min_by_key(|(at, _)| *at) {
                             {
                                 return Err(InternalCompilerError::new(
                                     stage,
@@ -262,41 +299,45 @@ impl EvaluationFile {
                                     subject.with_slot(*target),
                                 )
                                 .at(*source)
-                                .with_origin(vec![*span]));
+                                .with_origin(vec![span]));
                             }
                         }
-                        for earlier in &materialized {
+                        while let Some(earlier) = roots.last().copied()
+                            && earlier.end > source.start
+                        {
                             // A completed child capture is a dependency of a later
                             // enclosing capture: emission reads its slot, not its source.
-                            if plan
-                                .capture_dependencies
-                                .get(target)
-                                .is_some_and(|dependencies| {
-                                    dependencies.iter().any(|(span, _)| span == earlier)
-                                })
-                            {
+                            if plan.capture_depends_on(*target, earlier) {
+                                roots.pop();
                                 continue;
                             }
-                            if overlaps(*source, *earlier) {
+                            if overlaps(*source, earlier) {
                                 return Err(InternalCompilerError::new(
                                     stage,
                                     Invariant::EvaluationCountChanged,
                                     subject.with_slot(*target),
                                 )
                                 .at(*source)
-                                .with_origin(vec![*earlier]));
+                                .with_origin(vec![earlier]));
                             }
-                            if source.end <= earlier.start {
-                                return Err(InternalCompilerError::new(
-                                    stage,
-                                    Invariant::EvaluationOrderChanged,
-                                    subject.with_slot(*target),
-                                )
-                                .at(*source)
-                                .with_origin(vec![*earlier]));
-                            }
+                            return Err(InternalCompilerError::new(
+                                stage,
+                                Invariant::EvaluationOrderChanged,
+                                subject.with_slot(*target),
+                            )
+                            .at(*source)
+                            .with_origin(vec![earlier]));
                         }
-                        materialized.push(*source);
+                        materialized.insert(*source);
+                        roots.push(*source);
+                    }
+                    if complete {
+                        captured_segments.extend(segments);
+                    }
+                    conditional_after |= conditional;
+                    suffix_conditional |= conditional;
+                    if complete {
+                        captured.insert(link, (left, suffix_conditional));
                     }
                 }
                 let ValueTarget::Slot(slot) = value.target;
@@ -322,20 +363,31 @@ impl EvaluationFile {
                 .iter()
                 .flat_map(|operation| operation.values.iter().copied())
                 .collect();
+            let mut checked: [HashMap<usize, usize>; 2] = [HashMap::new(), HashMap::new()];
+            let mut checked_segments: [HashSet<usize>; 4] = Default::default();
             for value in &rewrite.values {
                 if value.capability != TargetCapability::StatementRegion {
                     continue;
                 }
                 let subject =
                     LoweringSubject::owner(rewrite.owner).with_root(CoreRoot::Expr(value.expr));
-                for step in value.schedule.steps() {
+                let in_operation = operation_values.contains(&value.expr);
+                for (link, left, step) in value.schedule.steps().links() {
+                    if checked[usize::from(in_operation)]
+                        .get(&link)
+                        .is_some_and(|done| *done >= left)
+                    {
+                        break;
+                    }
                     let optional_argument = matches!(
                         step.operation,
                         HostEvaluationOperation::Conditional(
                             ConditionalBranch::OptionalCallArgument(_)
                         )
                     );
-                    for input in &step.inputs {
+                    let segments = &mut checked_segments
+                        [usize::from(in_operation) * 2 + usize::from(optional_argument)];
+                    for input in step.inputs.fresh(segments) {
                         match input {
                             PlannedEvaluationInput::Source {
                                 mode: EvaluationInputMode::MemberReference,
@@ -355,7 +407,7 @@ impl EvaluationFile {
                                 // A member callee of an optional call keeps
                                 // its receiver only when the whole operation
                                 // is a planned region making the call.
-                                if optional_argument && !operation_values.contains(&value.expr) {
+                                if optional_argument && !in_operation {
                                     return Err(InternalCompilerError::new(
                                         stage,
                                         Invariant::ReferenceModeUnsupported,
@@ -380,6 +432,7 @@ impl EvaluationFile {
                             | PlannedEvaluationInput::Stable { .. } => {}
                         }
                     }
+                    checked[usize::from(in_operation)].insert(link, left);
                 }
             }
         }

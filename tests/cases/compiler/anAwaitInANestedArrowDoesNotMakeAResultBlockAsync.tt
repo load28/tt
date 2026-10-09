@@ -1,0 +1,15 @@
+// @run: anAwaitInANestedArrowDoesNotMakeAResultBlockAsync.tt
+import * as Result from "@tt/std/result";
+import type { TResult } from "@tt/std";
+function r(f: () => Promise<number>): TResult<() => Promise<number>, string> { return Result.Ok(f); }
+const o = { z: 5 };
+const F = (k = result { const z = try r(async () => await Promise.resolve(o.z)); return z; }) => k;
+const G = (k = result { const z = try r(async function () { return await Promise.resolve(o.z); }); return z; }) => k;
+const H = (k = result { const z = try r(async () => { const w = await Promise.resolve(o.z); return w; }); return z; }) => k;
+async function main() {
+  for (const make of [F, G, H]) {
+    const made = make();
+    console.log(made.kind, made.kind === "Ok" ? await made.value() : made.error);
+  }
+}
+main();

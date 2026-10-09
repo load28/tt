@@ -86,7 +86,8 @@ pub(in super::super) enum ComposeAction {
 pub(in super::super) struct CallCompletionPlan {
     /// The text each arm calls through, up to and excluding the argument:
     /// the captured (possibly instantiated) callee plus `(`.
-    pub(in super::super) invoke: String,
+    pub(in super::super) invoke: AuthoredText,
+    pub(in super::super) close: AuthoredText,
     /// A capture emitted once before the dispatch, binding the instantiated
     /// callee: generated name, authored type-argument span, callee slot.
     pub(in super::super) instantiation: Option<(String, SourceSpan, String)>,
@@ -118,7 +119,7 @@ pub(in super::super) struct ComposeValue {
     pub(in super::super) expr: ExprId,
     pub(in super::super) source: SourceSpan,
     pub(in super::super) slot: String,
-    pub(in super::super) steps: Vec<PlannedEvaluationStep>,
+    pub(in super::super) steps: crate::chain::ChainSlice<PlannedEvaluationStep>,
     /// Select an expression arm in the prelude, but evaluate its value in
     /// the authored host so TypeScript can apply contextual typing.
     pub(in super::super) defer_arm_values: bool,
@@ -190,8 +191,9 @@ pub(super) fn discarded_operand_commas<'s>(
     source: &str,
     steps: impl Iterator<Item = &'s PlannedEvaluationStep>,
 ) -> Vec<SourceSpan> {
+    let mut read = std::collections::HashSet::new();
     steps
-        .flat_map(|step| &step.inputs)
+        .flat_map(|step| step.inputs.fresh(&mut read))
         .filter_map(|input| match input {
             PlannedEvaluationInput::Source {
                 source: operand,
@@ -211,8 +213,9 @@ pub(super) fn compound_assignment_frames<'s>(
     source: &str,
     steps: impl Iterator<Item = &'s PlannedEvaluationStep>,
 ) -> Vec<SourceSpan> {
+    let mut read = std::collections::HashSet::new();
     steps
-        .flat_map(|step| &step.inputs)
+        .flat_map(|step| step.inputs.fresh(&mut read))
         .filter_map(|input| match input {
             PlannedEvaluationInput::Source {
                 source: target,
@@ -239,4 +242,27 @@ pub(in super::super) struct LocalSourceEdit {
 pub(in super::super) enum ResultReturnBoundary {
     Start,
     End,
+}
+
+pub(in super::super) fn jsx_closing_name(source: &str, element: SourceSpan) -> Option<SourceSpan> {
+    let text = &source[element.start..element.end];
+    if text.trim_end().ends_with("/>") {
+        return None;
+    }
+    let open = text.rfind("</")? + 2;
+    let bytes = text.as_bytes();
+    let start = open
+        + bytes[open..]
+            .iter()
+            .take_while(|byte| byte.is_ascii_whitespace())
+            .count();
+    let end = start
+        + bytes[start..]
+            .iter()
+            .take_while(|byte| !byte.is_ascii_whitespace() && **byte != b'>')
+            .count();
+    (start < end).then_some(SourceSpan {
+        start: element.start + start,
+        end: element.start + end,
+    })
 }

@@ -56,7 +56,7 @@ declare const state: State;
 declare function consume(item: {kind: "item"; run: (x: number) => number}): void;
 declare function consumeAll(items: ((x: number) => number)[]): void;
 declare function nested(outer: {inner: {run: (x: number) => number}}): void;
-const $tt_v2 = (consume);
+const $tt_v2: typeof consume = (consume);
 {
   const $tt_m = state;
   switch ($tt_m.kind) {
@@ -75,7 +75,7 @@ const $tt_v2 = (consume);
   }
 }
 
-const $tt_v4 = (consumeAll);
+const $tt_v4: typeof consumeAll = (consumeAll);
 {
   const $tt_m = state;
   switch ($tt_m.kind) {
@@ -94,7 +94,7 @@ const $tt_v4 = (consumeAll);
   }
 }
 
-const $tt_v6 = (nested);
+const $tt_v6: typeof nested = (nested);
 {
   const $tt_m = state;
   switch ($tt_m.kind) {
@@ -114,7 +114,7 @@ const $tt_v6 = (nested);
 }
 
 let $tt_v7: void;
-const $tt_v9 = (consume);
+const $tt_v9: typeof consume = (consume);
 {
   const $tt_m = state;
   switch ($tt_m.kind) {

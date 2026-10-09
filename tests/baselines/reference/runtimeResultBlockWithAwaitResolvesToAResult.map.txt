@@ -10,10 +10,10 @@
 2:50 -> 8:3 len 164  "\n\nconst fetchNum = async (n: number): Promise<Re"...
 8:9 -> 21:11 len 1  "x"
 8:17 -> 16:20 len 17  "await fetchNum(a)"
-8:35 -> 21:28 len 3  "\n  "
+8:34 -> 21:27 len 4  ";\n  "
 9:9 -> 27:9 len 1  "y"
 9:17 -> 22:18 len 17  "await fetchNum(b)"
-9:35 -> 27:26 len 3  "\n  "
+9:34 -> 27:25 len 4  ";\n  "
 10:10 -> 29:44 len 5  "x + y"
 11:2 -> 34:2 len 130  ";\n\ntotal(2, 3).then((r) => console.log(JSON.stri"...
 

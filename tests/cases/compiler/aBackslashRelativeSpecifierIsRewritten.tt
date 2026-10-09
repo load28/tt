@@ -1,0 +1,6 @@
+// @filename: shape.tt
+export variant Shape { Circle(r: number), Point }
+// @filename: a.tt
+import { Shape } from ".\\shape.tt";
+declare const s: Shape;
+export const n = match (s) { Circle(r) => r, Point => 0 };

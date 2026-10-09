@@ -1,0 +1,10 @@
+=== completions /*member*/ memberCompletionAfterAValueTry.tt:3:19 ===
+  |   const v = try o.;
+  |                   ^ /*member*/
+completion: 1 item(s), member true, probe no
+  s (Field, 11)
+ttCompletions: pattern false, member {"receiver":"o"}
+patternCompletions: null
+editor completion: 1 item(s)
+  s (Field, 211)
+

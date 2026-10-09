@@ -1,0 +1,49 @@
+=== anOuterTryRunsItsOperandsInOrderAroundAnInnerTry.tt ===
+const seen: string[] = [];
+>seen : const seen: string[]
+function half(n: number): TResult<number, string> {
+>half : function half(n: number): TResult<number, string>
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  seen.push(`half(${n})`);
+>seen : const seen: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>n : (parameter) n: number
+  return n % 2 === 0 ? Result.Ok(n / 2) : Result.Err(`odd ${n}`);
+>n : (parameter) n: number
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>n : (parameter) n: number
+>Err : const Err: <string>(error: string) => Result.TErr<string>
+>n : (parameter) n: number
+const abs = (n: number) => { seen.push(`abs(${n})`); return Math.abs(n); };
+>abs : const abs: (n: number) => number
+>n : (parameter) n: number
+>seen : const seen: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>n : (parameter) n: number
+>Math : var Math: Math
+>abs : (method) Math.abs(x: number): number
+>n : (parameter) n: number
+function f(k: number): TResult<number, string> {
+>f : function f(k: number): TResult<number, string>
+>k : (parameter) k: number
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  const x = try half((k |> abs) + (try half(k)));
+>x : const x: number
+>half : function half(n: number): TResult<number, string>
+>k : (parameter) k: number
+>abs : const abs: (n: number) => number
+>half : function half(n: number): TResult<number, string>
+>k : (parameter) k: number
+  return Result.Ok(x);
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>x : const x: number
+console.log(JSON.stringify(f(-4)), seen.join(" "));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>f : function f(k: number): TResult<number, string>
+>seen : const seen: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

@@ -32,10 +32,12 @@ npm ci             # TypeScript를 포함한 의존성 설치
 
 다음 세 계약은 기능·수정·리팩터링에서 깨뜨릴 수 없습니다.
 
-1. **모든 유효한 TypeScript 파일은 그대로 유효한 `.tt` 파일입니다.** 완전히
-   인식된 tt 구문만 변환하고 나머지는 바이트 단위로 통과시킵니다. 유일한 예외는
-   상대 `.tt`/`.ttx` import 지정자 재작성이며 `--rewrite-imports off`로 끌 수
-   있습니다.
+1. **Every valid TypeScript file is a valid `.tt` file as it is.** Only
+   fully recognized tt syntax is transformed; everything else passes through
+   byte for byte. The one exception is import specifier rewriting — relative
+   `.tt`/`.ttx` specifiers, and `@tt/std` specifiers pointed at the `tt/`
+   modules a build writes (in passed-through `.ts` files too) — which
+   `--rewrite-imports off` disables.
 2. **에러 계층을 분리합니다.** tt 수준 오류는 ttc가 원본 위치와 함께 보고합니다.
    방출 코드는 타입 트릭 없는 순수 TypeScript여야 하며, 사용자 TypeScript의 타입
    오류는 TypeScript가 담당합니다.

@@ -1,0 +1,88 @@
+=== aPipelineStepWithAnIfLetCallbackAndAMatchIsLowered.tt ===
+variant V { A(n: number), B }
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => V
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const pick = (f: (v: V) => number, fallback: number) => (vs: V[]) => vs.map((v) => f(v) || fallback);
+>pick : const pick: (f: (v: V) => number, fallback: number) => (vs: V[]) => number[]
+>f : (parameter) f: (v: V) => number
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>fallback : (parameter) fallback: number
+>vs : (parameter) vs: V[]
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>vs : (parameter) vs: V[]
+>map : (method) Array<V>.map<number>(callbackfn: (value: V, index: number, array: V[]) => number, thisArg?: any): number[]
+>v : (parameter) v: V
+>f : (parameter) f: (v: V) => number
+>v : (parameter) v: V
+>fallback : (parameter) fallback: number
+function f(vs: V[], mode: number) {
+>f : function f(vs: V[], mode: number): number[]
+>vs : (parameter) vs: V[]
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>mode : (parameter) mode: number
+  return vs |> pick((v) => { if let A(n) = v { return n; } return 0; }, match (mode) { 1 => -1, _ => 9 });
+>vs : (parameter) vs: V[]
+>pick : const pick: (f: (v: V) => number, fallback: number) => (vs: V[]) => number[]
+>v : (parameter) v: V
+>n : const n: number
+>v : (parameter) v: V
+>n : const n: number
+>mode : (parameter) mode: number
+console.log(f([V.A(3), V.B], 1).join(","), f([V.B], 2).join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>f : function f(vs: V[], mode: number): number[]
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => V
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>join : (method) Array<number>.join(separator?: string): string
+>f : function f(vs: V[], mode: number): number[]
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>join : (method) Array<number>.join(separator?: string): string
+

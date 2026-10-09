@@ -1,0 +1,23 @@
+// @run: anOptionalCallArgumentRunsWholeBeforeALaterValue.tt
+variant S { A, B }
+const log: string[] = [];
+function o(t: string): S { log.push("subject" + t); return S.A; }
+function L(s: string) { log.push(s); return s; }
+function F(s: unknown) { log.push("F"); return s; }
+const g = { mm: (...a: unknown[]) => a.length };
+function f(...a: unknown[]) { log.push("f"); return a.length; }
+function main() {
+  g.mm?.(f(match (o("1")) { A => 1, B => 2 } |> F, L("x")), match (o("2")) { A => 1, B => 2 });
+  log.push("|");
+  g.mm(f(match (o("1")) { A => 1, B => 2 } |> F, L("x")), match (o("2")) { A => 1, B => 2 });
+  log.push("|");
+  f(f(match (o("1")) { A => 1, B => 2 } |> F, L("x")), match (o("2")) { A => 1, B => 2 });
+  log.push("|");
+  f(f(1 |> F, L("x")), match (o("2")) { A => 1, B => 2 });
+  log.push("|");
+  f([match (o("1")) { A => 1, B => 2 } |> F, L("x")], match (o("2")) { A => 1, B => 2 });
+  log.push("|");
+  const r = [f(match (o("1")) { A => 1, B => 2 } |> F, L("x")), match (o("2")) { A => 1, B => 2 }];
+}
+main();
+console.log(log.join(", "));

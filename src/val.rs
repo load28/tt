@@ -44,13 +44,15 @@ mod targets;
 pub(crate) use calls::method_calls;
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::SourceKind;
 use crate::ast::{Span, ValModifier, ValModifierKind};
 use crate::error::TtError;
 use crate::lexer::{Token, TokenKind, TplPart};
-use crate::parser::{PipelineShape, dotted_at, find_close_at, is_param_modifier, is_reserved};
+use crate::parser::{
+    ArmScope, PipelineShape, dotted_at, find_close_at, is_param_modifier, is_reserved,
+};
 
 use checker::*;
 
@@ -445,6 +447,7 @@ pub(crate) fn check_all(
     tokens: &[Token],
     modifiers: &Modifiers,
     pipelines: &[PipelineShape],
+    arms: &[ArmScope],
 ) -> Vec<TtError> {
     let sink = RefCell::new(Vec::new());
     run(
@@ -453,6 +456,7 @@ pub(crate) fn check_all(
         tokens,
         modifiers,
         pipelines,
+        arms,
         Sink::Report(&sink),
     );
     sink.into_inner()
@@ -466,6 +470,7 @@ pub(crate) fn probes(
     tokens: &[Token],
     modifiers: &Modifiers,
     pipelines: &[PipelineShape],
+    arms: &[ArmScope],
 ) -> ValProbes {
     let sink = RefCell::new(ValProbes::default());
     run(
@@ -474,6 +479,7 @@ pub(crate) fn probes(
         tokens,
         modifiers,
         pipelines,
+        arms,
         Sink::Probes(&sink),
     );
     sink.into_inner()
@@ -487,6 +493,7 @@ fn run(
     tokens: &[Token],
     modifiers: &Modifiers,
     pipelines: &[PipelineShape],
+    arms: &[ArmScope],
     sink: Sink,
 ) {
     // Files that do not use the modifier — the overwhelming majority —
@@ -496,11 +503,16 @@ fn run(
     }
     let mut declarations = Vec::new();
     collect_declarations(src, tokens, modifiers, &mut declarations);
-    let mut signatures: HashMap<&str, Option<Vec<ParamSig>>> = HashMap::new();
-    collect_signatures(&declarations, &mut signatures);
+    let declared: HashSet<&str> = declarations
+        .iter()
+        .map(|declaration| declaration.name)
+        .collect();
+    let functions: HashMap<usize, Vec<ParamSig>> = declarations
+        .iter()
+        .map(|declaration| (declaration.ident, declaration.params.clone()))
+        .collect();
     // The delegated form hands every declaration over as a node: which
-    // call names which declaration is then the symbol's answer, so a name
-    // that is ambiguous here need not be ambiguous there.
+    // call names which declaration is then the symbol's answer.
     if let Sink::Probes(sink) = sink {
         sink.borrow_mut()
             .functions
@@ -524,8 +536,10 @@ fn run(
         src,
         source_kind,
         modifiers,
-        signatures: &signatures,
+        declared: &declared,
+        functions: &functions,
         applications: &applications,
+        arm_scopes: arms,
         sink,
     };
     let mut frames = vec![Frame {
@@ -584,14 +598,45 @@ fn receiver(src: &str, flows: &HashMap<usize, (usize, Span)>, step: Span) -> Opt
     if is_identifier_text(text) {
         return Some(step);
     }
+    let trimmed = text.trim_end();
+    if let Some(asserted) = trimmed.strip_suffix('!') {
+        return receiver(
+            src,
+            flows,
+            Span {
+                start: step.start,
+                end: step.start + asserted.trim_end().len(),
+            },
+        );
+    }
     let inner = text.strip_prefix('(')?.strip_suffix(')')?;
-    let start = step.start + 1 + (inner.len() - inner.trim_start().len());
-    let end = step.end - 1 - (inner.len() - inner.trim_end().len());
-    let &(flow_end, first) = flows.get(&start)?;
-    if flow_end != end {
+    if !groups_whole(text) {
         return None;
     }
-    receiver(src, flows, first)
+    let start = step.start + 1 + (inner.len() - inner.trim_start().len());
+    let end = step.end - 1 - (inner.len() - inner.trim_end().len());
+    if let Some(&(flow_end, first)) = flows.get(&start) {
+        if flow_end != end {
+            return None;
+        }
+        return receiver(src, flows, first);
+    }
+    receiver(src, flows, Span { start, end })
+}
+
+fn groups_whole(text: &str) -> bool {
+    let mut depth = 0usize;
+    for byte in text[..text.len() - 1].bytes() {
+        match byte {
+            b'(' => depth += 1,
+            b')' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+        if depth == 0 {
+            return false;
+        }
+    }
+    true
 }
 
 fn is_identifier_text(text: &str) -> bool {
@@ -610,11 +655,6 @@ fn is_identifier_char(c: char) -> bool {
     }
 }
 
-/// Collects the parameter signatures of the file's named functions —
-/// `function f(...)`, `const f = (...) => ...`, `const f = function (...)`
-/// — which is what makes the call-site capability check possible. A name
-/// declared twice with different signatures maps to `None` and is not
-/// checked.
 /// One collected declaration, before any pairing: the declared name, the
 /// byte offset of its identifier, and the parameter list.
 struct FnDecl<'a> {
@@ -679,28 +719,6 @@ fn collect_declarations_grown<'a>(
                 }
             }
             _ => {}
-        }
-    }
-}
-
-/// The name-keyed view of the file's declarations — what the untyped path
-/// pairs a call with. A name declared twice with different signatures maps
-/// to `None` and is not checked; the delegated path does better, pairing
-/// each call with the declaration its callee *symbol* names
-/// ([`crate::val_probes`]).
-fn collect_signatures<'a>(
-    declarations: &[FnDecl<'a>],
-    out: &mut HashMap<&'a str, Option<Vec<ParamSig>>>,
-) {
-    for declaration in declarations {
-        match out.get(declaration.name) {
-            Some(Some(prev)) if *prev == declaration.params => {}
-            Some(_) => {
-                out.insert(declaration.name, None); // ambiguous — stop checking it
-            }
-            None => {
-                out.insert(declaration.name, Some(declaration.params.clone()));
-            }
         }
     }
 }
@@ -831,7 +849,7 @@ fn parse_params(src: &str, tokens: &[Token], modifiers: &Modifiers, open: usize)
     list_entries(tokens, open)
         .into_iter()
         .map(|(start, end)| {
-            let mut k = start;
+            let mut k = after_decorators(tokens, start, end);
             let mut val_at = None;
             while k < end {
                 match &tokens[k].kind {
@@ -865,6 +883,29 @@ fn parse_params(src: &str, tokens: &[Token], modifiers: &Modifiers, open: usize)
             ParamSig { name, val_at }
         })
         .collect()
+}
+
+fn after_decorators(tokens: &[Token], start: usize, end: usize) -> usize {
+    let mut k = start;
+    while k < end && matches!(tokens[k].kind, TokenKind::Punct(b'@')) {
+        k += 1;
+        if k < end && matches!(tokens[k].kind, TokenKind::Punct(b'(')) {
+            k = find_close_at(tokens, k).map_or(end, |close| close + 1);
+            continue;
+        }
+        while k < end && matches!(tokens[k].kind, TokenKind::Ident) {
+            k += 1;
+            if k < end && matches!(tokens[k].kind, TokenKind::Punct(b'.')) {
+                k += 1;
+            } else {
+                break;
+            }
+        }
+        if k < end && matches!(tokens[k].kind, TokenKind::Punct(b'(')) {
+            k = find_close_at(tokens, k).map_or(end, |close| close + 1);
+        }
+    }
+    k.min(end)
 }
 
 /// Every name a binding target introduces, collected into `out`. Handles

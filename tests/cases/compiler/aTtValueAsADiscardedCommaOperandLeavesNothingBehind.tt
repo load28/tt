@@ -1,0 +1,15 @@
+// @run: aTtValueAsADiscardedCommaOperandLeavesNothingBehind.tt
+import type { TResult } from "@tt/std";
+variant O { A(n: number), B }
+const log: string[] = [];
+const r = (n: number): TResult<number, string> => { log.push("r" + n); return { kind: "Ok", value: n }; };
+export function f(o: O) {
+  match (o) { A(n) => log.push("a" + n), B => 0 }, log.push("second");
+  const x = (match (o) { A(n) => n, B => 0 }, 5);
+  return x;
+}
+export function g(): TResult<number, string> {
+  const y = (try r(1), try r(2));
+  return { kind: "Ok", value: y };
+}
+console.log(f(O.A(1)), JSON.stringify(g()), log.join());

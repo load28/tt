@@ -132,6 +132,11 @@ impl Inputs {
     pub fn named(&self) -> &[PathBuf] {
         &self.named
     }
+
+    /// The directories the inputs name, canonical.
+    pub fn directories(&self) -> &[PathBuf] {
+        &self.directories
+    }
 }
 
 /// Process-wide entry point: toolchain discovery and project creation.

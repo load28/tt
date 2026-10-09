@@ -1,0 +1,66 @@
+==== ttc --out-dir (exit 1) ====
+error[try-placement]: `try` cannot be used in a setter — a setter's return value is discarded, so its `Err` propagation could not reach the caller
+ --> ./aTryInASetterIsAPlacementError.tt:5:34
+  |
+5 |     set x(n: number) { const a = try r(n); this.v = a; }
+  |                                  ^^^^^^^^
+  |
+  = help: move the propagation into an ordinary function, or handle the Result explicitly
+
+error[try-placement]: `try` cannot be used in a setter — a setter's return value is discarded, so its `Err` propagation could not reach the caller
+ --> ./aTryInASetterIsAPlacementError.tt:6:38
+  |
+6 |     set y(n: number) { this.v = n + (try r(n)); }
+  |                                      ^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+error[try-placement]: `try` cannot be used in a setter — a setter's return value is discarded, so its `Err` propagation could not reach the caller
+  --> ./aTryInASetterIsAPlacementError.tt:11:34
+   |
+11 |     set w(n: number) { const a = try r(n); this.v = a; },
+   |                                  ^^^^^^^^
+   |
+   = help: move the propagation into an ordinary function, or handle the Result explicitly
+
+error[try-placement]: `try` cannot be used in a setter — a setter's return value is discarded, so its `Err` propagation could not reach the caller
+  --> ./aTryInASetterIsAPlacementError.tt:12:38
+   |
+12 |     set z(n: number) { this.v = n + (try r(n)); },
+   |                                      ^^^^^^^^
+   |
+   = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+
+==== ttc --check-types (exit 1) ====
+error[try-placement]: `try` cannot be used in a setter — a setter's return value is discarded, so its `Err` propagation could not reach the caller
+ --> aTryInASetterIsAPlacementError.tt:5:34
+  |
+5 |     set x(n: number) { const a = try r(n); this.v = a; }
+  |                                  ^^^^^^^^
+  |
+  = help: move the propagation into an ordinary function, or handle the Result explicitly
+error[try-placement]: `try` cannot be used in a setter — a setter's return value is discarded, so its `Err` propagation could not reach the caller
+ --> aTryInASetterIsAPlacementError.tt:6:38
+  |
+6 |     set y(n: number) { this.v = n + (try r(n)); }
+  |                                      ^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+error[try-placement]: `try` cannot be used in a setter — a setter's return value is discarded, so its `Err` propagation could not reach the caller
+  --> aTryInASetterIsAPlacementError.tt:11:34
+   |
+11 |     set w(n: number) { const a = try r(n); this.v = a; },
+   |                                  ^^^^^^^^
+   |
+   = help: move the propagation into an ordinary function, or handle the Result explicitly
+error[try-placement]: `try` cannot be used in a setter — a setter's return value is discarded, so its `Err` propagation could not reach the caller
+  --> aTryInASetterIsAPlacementError.tt:12:38
+   |
+12 |     set z(n: number) { this.v = n + (try r(n)); },
+   |                                      ^^^^^^^^
+   |
+   = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

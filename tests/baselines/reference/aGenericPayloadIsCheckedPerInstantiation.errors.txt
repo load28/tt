@@ -1,0 +1,23 @@
+==== ttc --out-dir (exit 1) ====
+error[match-not-exhaustive]: match on variant Box is not exhaustive: missing "Full(item: Point())"
+  --> ./aGenericPayloadIsCheckedPerInstantiation.tt:11:10
+   |
+11 |   return match (b) { Full(item: Circle(radius)) => radius, Empty => 1 };
+   |          ^^^^^^^^^
+   |
+   = help: add the missing arms: `, Full(item: Point()) => undefined,`
+   = help: or add a final `_` arm: `, _ => undefined,`
+
+
+==== ttc --check-types (exit 1) ====
+error[match-not-exhaustive]: match on variant Box is not exhaustive: missing "Full(item: Point())"
+  --> aGenericPayloadIsCheckedPerInstantiation.tt:11:10
+   |
+11 |   return match (b) { Full(item: Circle(radius)) => radius, Empty => 1 };
+   |          ^^^^^^^^^
+   |
+   = help: add the missing arms: `, Full(item: Point()) => undefined,`
+   = help: or add a final `_` arm: `, _ => undefined,`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

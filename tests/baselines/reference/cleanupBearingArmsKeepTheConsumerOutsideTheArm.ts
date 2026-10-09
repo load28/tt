@@ -67,7 +67,7 @@ type Item = {kind: "item"; run: (x: number) => number};
 const trace: string[] = [];
 function consume(item: Item): number { trace.push("call"); return item.run(1); }
 let $tt_v0: Item;
-const $tt_v1 = (consume);
+const $tt_v1: typeof consume = (consume);
 {
   const $tt_m = State.Ready(3);
   switch ($tt_m.kind) {
@@ -96,7 +96,7 @@ trace.length = 0;
 function throwingConsumer(item: Item): number { trace.push("throwing"); throw new Error("consumer"); }
 try {
   let $tt_v2: Item;
-  const $tt_v3 = (throwingConsumer);
+  const $tt_v3: typeof throwingConsumer = (throwingConsumer);
   {
     const $tt_m = State.Ready(2);
     switch ($tt_m.kind) {

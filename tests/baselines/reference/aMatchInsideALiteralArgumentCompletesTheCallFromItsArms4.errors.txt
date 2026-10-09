@@ -14,5 +14,6 @@ error[ts2304]: Cannot find name 'x'.
   |                                    ^
 
 ==== tsc on the emitted TypeScript (exit 2) ====
-aMatchInsideALiteralArgumentCompletesTheCallFromItsArms4.ts(2,22): error TS2304: Cannot find name 'consume'.
+aMatchInsideALiteralArgumentCompletesTheCallFromItsArms4.ts(2,27): error TS2304: Cannot find name 'consume'.
+aMatchInsideALiteralArgumentCompletesTheCallFromItsArms4.ts(2,38): error TS2304: Cannot find name 'consume'.
 aMatchInsideALiteralArgumentCompletesTheCallFromItsArms4.ts(4,17): error TS2304: Cannot find name 'x'.

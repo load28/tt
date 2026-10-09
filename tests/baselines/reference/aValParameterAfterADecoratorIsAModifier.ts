@@ -1,0 +1,23 @@
+//// [tsconfig.json] ////
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "experimentalDecorators": true
+  }
+}
+
+//// [d.tt] ////
+declare function dec(...args: any[]): any;
+export class D {
+  constructor(@dec private val p: { b: number }) {
+    p.b = 1;
+  }
+  m(@dec() val q: { b: number }) {
+    q.b = 2;
+    return q.b;
+  }
+}
+

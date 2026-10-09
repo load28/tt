@@ -90,6 +90,8 @@ function viaTry(o: M | null, tag: string): R {
 >   }
   const called = o?.m(try read(tag));
 >called : const called: number | undefined
+>o : (parameter) o: M | null
+>m : (method) m(v: number): number
 >read : function read(tag: string): R
 >tag : (parameter) tag: string
   return { kind: "Ok", value: called ?? -1 };
@@ -106,6 +108,8 @@ function each(o: M | null, tag: string): string[] {
 >tag : (parameter) tag: string
     attempt(() => o?.m(match (arg(tag + ":call")) { 1 => 1, _ => 0 })),
 >attempt : function attempt(f: () => unknown): string
+>o : (parameter) o: M | null
+>m : (method) m(v: number): number
 >arg : function arg(tag: string): number
 >tag : (parameter) tag: string
     attempt(() => o?.m?.(match (arg(tag + ":both")) { 1 => 1, _ => 0 })),
@@ -124,6 +128,7 @@ function each(o: M | null, tag: string): string[] {
     attempt(() => o |> ?.m(match (arg(tag + ":pipe")) { 1 => 1, _ => 0 })),
 >attempt : function attempt(f: () => unknown): string
 >o : (parameter) o: M | null
+>m : (method) m(v: number): number
 >arg : function arg(tag: string): number
 >tag : (parameter) tag: string
 console.log(JSON.stringify([each(live, "live"), each(null, "null"), each(missing, "missing")]));

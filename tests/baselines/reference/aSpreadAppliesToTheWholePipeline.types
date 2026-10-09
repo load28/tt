@@ -1,0 +1,50 @@
+=== aSpreadAppliesToTheWholePipeline.tt ===
+const xs = [[1, 2], [3]];
+>xs : const xs: number[][]
+const flat = (x: number[][]) => x.flat();
+>flat : const flat: (x: number[][]) => number[]
+>x : (parameter) x: number[][]
+>x : (parameter) x: number[][]
+>flat : (method) Array<number[]>.flat<number[][], 1>(this: number[][], depth?: 1 | undefined): number[]
+const g = (...a: unknown[]) => a.length;
+>g : const g: (...a: unknown[]) => number
+>a : (parameter) a: unknown[]
+>a : (parameter) a: unknown[]
+>length : (property) Array<unknown>.length: number
+const arr = [...xs |> flat];
+>arr : const arr: number[]
+>xs : const xs: number[][]
+>flat : const flat: (x: number[][]) => number[]
+const count = g(...xs |> flat);
+>count : const count: number
+>g : const g: (...a: unknown[]) => number
+>xs : const xs: number[][]
+>flat : const flat: (x: number[][]) => number[]
+const obj = { ...({ a: 1 }) |> ((o: { a: number }) => ({ ...o, b: 2 })) };
+>obj : const obj: {
+>       a: number;
+>       b: number;
+>   }
+>a : (property) a: number
+>o : (parameter) o: {
+>       a: number;
+>   }
+>a : (property) a: number
+>o : (parameter) o: {
+>       a: number;
+>   }
+>b : (property) b: number
+console.log(JSON.stringify(arr), count, JSON.stringify(obj));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>arr : const arr: number[]
+>count : const count: number
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>obj : const obj: {
+>       a: number;
+>       b: number;
+>   }
+

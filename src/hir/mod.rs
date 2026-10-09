@@ -97,62 +97,97 @@ pub struct HirSourceMap {
 }
 
 impl HirFile {
-    /// The token indices of every match body's `{` and every arm's `=>` in
-    /// `tokens`. The lexer's function-body facts mark an arm block's `{`
-    /// like a function body, and an arm's `=>` like an arrow, but neither
+    /// Where every match body's `{` and every arm's `=>` follow: the source
+    /// offset a match's head ends at, and the offset each arm's pattern (or
+    /// guard) ends at. The lexer's function-body facts mark an arm block's
+    /// `{` like a function body, and an arm's `=>` like an arrow, but neither
     /// opens a function: a boundary query skips them
     /// ([`crate::flow::FunctionTargets`]).
-    pub(crate) fn match_owned_tokens(
-        &self,
-        tokens: &[crate::lexer::Token],
-    ) -> std::collections::HashSet<usize> {
-        let hir = self;
-        let first_from = |offset: usize, wanted: fn(&crate::lexer::TokenKind) -> bool| {
-            let from = tokens.partition_point(|token| token.span.start < offset);
-            let outside = tokens.first().is_none_or(|first| offset < first.span.start)
-                || from
-                    .checked_sub(1)
-                    .is_some_and(|previous| tokens[previous].span.end > offset);
-            if outside {
-                return None;
-            }
-            tokens[from..]
-                .iter()
-                .position(|token| wanted(&token.kind))
-                .map(|index| from + index)
-        };
+    pub(crate) fn match_owned(&self) -> MatchOwned {
         let span = |node: NodeId| {
-            hir.source_map
+            self.source_map
                 .node_span(node)
                 .unwrap_or_else(|| crate::ice::bug!("match syntax has no source span"))
         };
-        let mut owned = std::collections::HashSet::new();
-        for (_, expr) in hir.exprs.iter() {
+        let mut follows = Vec::new();
+        for (_, expr) in self.exprs.iter() {
             let Expr::Match { node, site, .. } = expr else {
                 continue;
             };
-            owned.extend(first_from(span(*node).end, |kind| {
-                matches!(kind, crate::lexer::TokenKind::Punct(b'{'))
-            }));
-            for arm in &hir.sites[*site].arms {
+            follows.push((span(*node).end, OwnedToken::Brace));
+            for arm in &self.sites[*site].arms {
                 if arm.body.is_none() {
                     continue;
                 }
-                let pattern_end = hir
+                let pattern_end = self
                     .source_map
                     .pattern_span(arm.pattern)
                     .unwrap_or_else(|| crate::ice::bug!("match arm pattern has no source span"))
                     .end;
                 let guard_end = arm
                     .guard
-                    .map_or(pattern_end, |guard| match &hir.exprs[guard] {
+                    .map_or(pattern_end, |guard| match &self.exprs[guard] {
                         Expr::OpaqueTs(node) | Expr::Seq { node, .. } => span(*node).end,
                         _ => crate::ice::bug!("match guard is not an expression program"),
                     });
-                owned.extend(first_from(pattern_end.max(guard_end), |kind| {
-                    matches!(kind, crate::lexer::TokenKind::Arrow)
-                }));
+                follows.push((pattern_end.max(guard_end), OwnedToken::Arrow));
             }
+        }
+        follows.sort_unstable_by_key(|&(offset, _)| offset);
+        MatchOwned { follows }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum OwnedToken {
+    Brace,
+    Arrow,
+}
+
+/// [`HirFile::match_owned`]: the match-owned tokens, found in any token
+/// stream of the file by the offsets they follow.
+pub(crate) struct MatchOwned {
+    follows: Vec<(usize, OwnedToken)>,
+}
+
+impl MatchOwned {
+    /// The indices in `tokens` of the match-owned tokens that stream holds.
+    /// Only the offsets inside the stream's extent are asked: an offset
+    /// before its first token or past its last names no token of it.
+    pub(crate) fn tokens(
+        &self,
+        tokens: &[crate::lexer::Token],
+    ) -> std::collections::HashSet<usize> {
+        let mut owned = std::collections::HashSet::new();
+        let (Some(first), Some(last)) = (tokens.first(), tokens.last()) else {
+            return owned;
+        };
+        let from = self
+            .follows
+            .partition_point(|&(offset, _)| offset < first.span.start);
+        let to = self
+            .follows
+            .partition_point(|&(offset, _)| offset <= last.span.end);
+        for &(offset, kind) in &self.follows[from..to.max(from)] {
+            crate::work::tick("match-owned offsets");
+            let at = tokens.partition_point(|token| token.span.start < offset);
+            if at
+                .checked_sub(1)
+                .is_some_and(|previous| tokens[previous].span.end > offset)
+            {
+                continue;
+            }
+            owned.extend(
+                tokens[at..]
+                    .iter()
+                    .position(|token| match kind {
+                        OwnedToken::Brace => {
+                            matches!(token.kind, crate::lexer::TokenKind::Punct(b'{'))
+                        }
+                        OwnedToken::Arrow => matches!(token.kind, crate::lexer::TokenKind::Arrow),
+                    })
+                    .map(|index| at + index),
+            );
         }
         owned
     }
@@ -304,8 +339,11 @@ pub struct VariantItem {
     pub generics: String,
     /// Where [`VariantItem::generics`] is written in the source.
     pub generics_span: Span,
+    /// From the end of the `variant` keyword to the opening brace.
+    pub header: Span,
     /// The declaration's variants, in order.
     pub variants: Vec<VariantId>,
+    pub(crate) scope: Option<Span>,
 }
 
 /// One case of a variant declaration, owned by it.
@@ -339,6 +377,7 @@ pub struct FieldData {
     pub ty_text: String,
     /// Where [`FieldData::ty_text`] is written in the source.
     pub ty_span: Span,
+    pub(crate) imports: Vec<(NodeId, ImportKind)>,
     pub(crate) comments: crate::ast::Comments,
 }
 

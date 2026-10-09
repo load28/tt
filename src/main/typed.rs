@@ -13,11 +13,51 @@ pub(super) fn typed_check_mode(inputs: &[String], options: &TypedCheckOptions<'_
         tsconfig: options.project.map(Path::to_path_buf),
         out_dir: options.out_dir.map(Path::to_path_buf),
     };
+    let groups = project_groups(inputs, &project_options, options);
+    if groups.len() > 1 {
+        if options.watch {
+            eprintln!(
+                "ttc: the inputs belong to {} TypeScript projects; watch one project at a time, \
+                 or name one with --project",
+                groups.len()
+            );
+            return ExitCode::FAILURE;
+        }
+        let mut report = TypedReport::checked();
+        let mut printed = HashSet::new();
+        for group in &groups {
+            report.absorb(typed_check_group(
+                &engine,
+                group,
+                &project_options,
+                options,
+                &mut printed,
+            ));
+        }
+        if options.json_report {
+            crate::out::line(&report.to_json());
+        }
+        return report.exit_code();
+    }
+    if options.watch {
+        let mut reported = None;
+        loop {
+            match open_typed_project(&engine, inputs, &project_options, options) {
+                Ok(project) => {
+                    return typed_watch(&engine, project, inputs, &project_options, options);
+                }
+                Err(e) => {
+                    if reported.as_ref() != Some(&e) {
+                        eprintln!("ttc: {e}");
+                        reported = Some(e);
+                    }
+                    thread::sleep(WATCH_INTERVAL);
+                }
+            }
+        }
+    }
     let report = match open_typed_project(&engine, inputs, &project_options, options) {
         Ok(mut project) => {
-            if options.watch {
-                return typed_watch(&engine, project, inputs, &project_options, options);
-            }
             let mut files = project.initial_files();
             files.extend(
                 options
@@ -28,7 +68,7 @@ pub(super) fn typed_check_mode(inputs: &[String], options: &TypedCheckOptions<'_
             );
             files.sort();
             files.dedup();
-            typed_pass(&mut project, &files, options).unwrap_or_else(|e| {
+            typed_pass(&mut project, &files, options, &mut HashSet::new()).unwrap_or_else(|e| {
                 eprintln!("ttc: {e}");
                 TypedReport::unchecked(0)
             })
@@ -42,6 +82,57 @@ pub(super) fn typed_check_mode(inputs: &[String], options: &TypedCheckOptions<'_
         crate::out::line(&report.to_json());
     }
     report.exit_code()
+}
+
+fn project_groups(
+    inputs: &[String],
+    project_options: &ttc::engine::ProjectOptions,
+    options: &TypedCheckOptions<'_>,
+) -> Vec<Vec<String>> {
+    if project_options.tsconfig.is_some() || !options.overlay.is_empty() {
+        return vec![inputs.to_vec()];
+    }
+    let mut groups: Vec<(Option<PathBuf>, Vec<String>)> = Vec::new();
+    for input in inputs {
+        let path = Path::new(input);
+        let probe = if path.is_dir() {
+            path.join("tsconfig.json")
+        } else {
+            path.to_path_buf()
+        };
+        let tsconfig = ttc::engine::Engine::document_project_identity(&probe, project_options)
+            .ok()
+            .and_then(|(tsconfig, _)| tsconfig);
+        match groups.iter_mut().find(|(key, _)| *key == tsconfig) {
+            Some((_, group)) => group.push(input.clone()),
+            None => groups.push((tsconfig, vec![input.clone()])),
+        }
+    }
+    groups.into_iter().map(|(_, group)| group).collect()
+}
+
+fn typed_check_group(
+    engine: &ttc::engine::Engine,
+    inputs: &[String],
+    project_options: &ttc::engine::ProjectOptions,
+    options: &TypedCheckOptions<'_>,
+    printed: &mut HashSet<String>,
+) -> TypedReport {
+    match open_typed_project(engine, inputs, project_options, options) {
+        Ok(mut project) => {
+            let mut files = project.initial_files();
+            files.sort();
+            files.dedup();
+            typed_pass(&mut project, &files, options, printed).unwrap_or_else(|e| {
+                eprintln!("ttc: {e}");
+                TypedReport::unchecked(0)
+            })
+        }
+        Err(e) => {
+            eprintln!("ttc: {e}");
+            TypedReport::unchecked(0)
+        }
+    }
 }
 
 /// Opens the project `inputs` belong to, with the overlays standing in for
@@ -113,6 +204,21 @@ impl TypedReport {
         }
     }
 
+    fn checked() -> Self {
+        Self {
+            reported: 0,
+            blocked: false,
+            writes: WriteOutcome::default(),
+        }
+    }
+
+    fn absorb(&mut self, other: TypedReport) {
+        self.reported += other.reported;
+        self.blocked |= other.blocked;
+        self.writes.written.extend(other.writes.written);
+        self.writes.failed.extend(other.writes.failed);
+    }
+
     fn exit_code(&self) -> ExitCode {
         if self.blocked {
             ExitCode::from(2)
@@ -169,6 +275,7 @@ pub(super) fn typed_pass(
     project: &mut ttc::engine::Project,
     files: &[PathBuf],
     options: &TypedCheckOptions<'_>,
+    printed: &mut HashSet<String>,
 ) -> Result<TypedReport, String> {
     let snapshot = match project.update(files) {
         Ok(snapshot) => snapshot,
@@ -205,25 +312,48 @@ pub(super) fn typed_pass(
     for (path, error) in &writes.failed {
         eprintln!("ttc: cannot write {}: {error}", shown(path));
     }
+    if checked.backend_error.is_none() {
+        let outside = project.left_out(&snapshot);
+        for file in &outside {
+            eprintln!(
+                "ttc: {}: not type-checked: the project's configuration leaves it out (name the file to check it as a root)",
+                shown(file)
+            );
+        }
+    }
 
     // The snapshot, not the file on disk: an `--overlay` was checked
     // against text that was never saved, and quoting the disk would draw a
     // caret under a line the compiler did not see.
+    let mut disk: HashMap<&Path, Option<String>> = HashMap::new();
     for diagnostic in &checked.diagnostics {
-        let disk = snapshot
-            .source_of(&diagnostic.path)
-            .is_none()
-            .then(|| fs::read_to_string(&diagnostic.path).ok())
-            .flatten();
-        eprintln!(
-            "{}",
-            ttc::render::engine_diagnostic(
-                diagnostic,
-                snapshot.source_of(&diagnostic.path).or(disk.as_deref()),
-                &shown(&diagnostic.path),
-                styles(),
-            )
+        if snapshot.source_of(&diagnostic.path).is_none() {
+            disk.entry(&diagnostic.path).or_insert_with(|| {
+                fs::read(&diagnostic.path)
+                    .ok()
+                    .map(ttc::lines::typescript_text)
+            });
+        }
+    }
+    let mut measured: HashMap<&Path, Option<ttc::lines::LineMap<'_>>> = HashMap::new();
+    let mut reported = 0;
+    for diagnostic in &checked.diagnostics {
+        let lines = measured.entry(&diagnostic.path).or_insert_with(|| {
+            snapshot
+                .source_of(&diagnostic.path)
+                .or_else(|| disk.get(diagnostic.path.as_path())?.as_deref())
+                .map(ttc::lines::LineMap::ecma)
+        });
+        let rendered = ttc::render::engine_diagnostic_measured(
+            diagnostic,
+            lines.as_ref(),
+            &shown(&diagnostic.path),
+            styles(),
         );
+        if printed.insert(rendered.clone()) {
+            eprintln!("{rendered}");
+            reported += 1;
+        }
     }
 
     // A backend that could not run is the pass failing to *run*, not the
@@ -236,14 +366,14 @@ pub(super) fn typed_pass(
         eprintln!("ttc: {error}");
         eprintln!("ttc: the TypeScript layer did not run — only tt-level diagnostics are shown");
         return Ok(TypedReport {
-            reported: checked.diagnostics.len(),
+            reported,
             blocked: true,
             writes,
         });
     }
 
     Ok(TypedReport {
-        reported: checked.diagnostics.len(),
+        reported,
         blocked: false,
         writes,
     })
@@ -310,7 +440,7 @@ pub(super) fn typed_watch(
 
         if first || current != stamps {
             let started = std::time::Instant::now();
-            match typed_pass(project, &files, options) {
+            match typed_pass(project, &files, options, &mut HashSet::new()) {
                 Ok(report) if report.writes.failed.is_empty() => eprintln!(
                     "ttc: {} file(s), {} reported in {} ms — watching",
                     files.len(),
@@ -372,7 +502,8 @@ pub(super) fn write_declarations(
                 std_dir
                     .join(declaration.module.file_name())
                     .with_extension("d.ts"),
-                declaration.text.as_bytes(),
+                declaration.module,
+                declaration.text.as_str(),
             )
         })
         .collect();
@@ -413,7 +544,7 @@ pub(super) fn write_declarations(
         // Every planned file fails once. The plan is of files, and colliding
         // declarations are two claims on one of them.
         let mut planned = HashSet::new();
-        let files = std_files.iter().map(|(path, _)| path.clone()).chain(
+        let files = std_files.iter().map(|(path, ..)| path.clone()).chain(
             targets
                 .iter()
                 .flat_map(|target| [target.clone(), target.with_extension("ts.map")]),
@@ -427,33 +558,43 @@ pub(super) fn write_declarations(
     }
     // Standard-library declarations mirror the generated `tt/` package, so
     // plain tsc can map the root and wildcard `@tt/std` entries to them.
-    for (path, text) in &std_files {
+    for (path, module, text) in &std_files {
         outcome.record(
             path,
-            fs::create_dir_all(&std_dir).and_then(|()| super::output::replace_file(path, text)),
+            super::output::create_dir_all(&std_dir).and_then(|()| {
+                super::ownership::write_owned_output(
+                    path,
+                    super::ownership::OutputOwner::SupportDeclaration(*module),
+                    text,
+                )
+                .map_err(std::io::Error::other)
+            }),
         );
     }
     for (declaration, target) in declarations.modules.iter().zip(targets) {
         let file = &declaration.file;
         let dir = target.parent().unwrap_or(Path::new(".")).to_path_buf();
         let map = target.with_extension("ts.map");
-        let created = fs::create_dir_all(&dir);
+        let created = super::output::create_dir_all(&dir);
         let sidecar = ttc::build_sidecar(
             &file.source,
             &declaration.text,
             &relative_path(&dir, &file.source_path),
         );
+        let owned = |path: &Path, code: &str| {
+            super::ownership::write_owned_output(
+                path,
+                super::ownership::OutputOwner::Source(&file.source_path),
+                code,
+            )
+            .map_err(std::io::Error::other)
+        };
         let declared = outcome.record(
             &target,
-            created.and_then(|()| {
-                super::output::replace_file(&target, sidecar.declarations.as_bytes())
-            }),
+            created.and_then(|()| owned(&target, &sidecar.declarations)),
         );
         if declared {
-            outcome.record(
-                &map,
-                super::output::replace_file(&map, sidecar.map.as_bytes()),
-            );
+            outcome.record(&map, owned(&map, &sidecar.map));
         } else {
             outcome.fail(
                 &map,
@@ -471,13 +612,17 @@ pub(super) fn write_declarations(
 /// back — but `ttc: /tmp/build-42/src/a.tt:3:1: ...` is not what the other
 /// modes print, and not what an editor's problem matcher expects.
 pub(super) fn shown(path: &Path) -> String {
-    let relative = std::env::current_dir()
-        .ok()
-        .and_then(|cwd| path.strip_prefix(cwd).ok().map(Path::to_path_buf));
-    relative
-        .unwrap_or_else(|| path.to_path_buf())
-        .display()
-        .to_string()
+    let Ok(cwd) = std::env::current_dir() else {
+        return path.display().to_string();
+    };
+    if let Ok(relative) = path.strip_prefix(&cwd) {
+        return relative.display().to_string();
+    }
+    let same_root = cwd.components().next() == path.components().next();
+    if path.is_absolute() && same_root {
+        return relative_path(&cwd, path);
+    }
+    path.display().to_string()
 }
 
 /// What diagnostics are painted with, decided once for the process.

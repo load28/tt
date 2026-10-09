@@ -1,0 +1,5 @@
+// @signatureHelp: open
+variant Shape { Circle(radius: number), Point }
+declare function add(a: number, b: string): number;
+declare const s: Shape;
+const a = match (s) { Circle(radius) => add(/*open*/

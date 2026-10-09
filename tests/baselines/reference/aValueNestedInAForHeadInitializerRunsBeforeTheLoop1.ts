@@ -38,7 +38,7 @@ declare function g(n: number): number;
 type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
 declare function r(): R;
 export function f(): R { let $tt_v0: number;
-const $tt_v1 = (g);
+const $tt_v1: typeof g = (g);
 {
   const $tt_m = o;
   switch ($tt_m.kind) {

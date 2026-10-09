@@ -11,7 +11,7 @@
 15:66 -> 58:17 len 28  ";\nfunction f(): R<string> { "
 16:33 -> 63:7 len 1  "a"
 16:41 -> 59:44 len 5  "Ok(2)"
-16:47 -> 63:26 len 50  " return Ok(a + $tt_t0); }\nconst xs = [1].map(x ="...
+16:46 -> 63:25 len 51  "; return Ok(a + $tt_t0); }\nconst xs = [1].map(x "...
 17:25 -> 64:62 len 1  "x"
 17:30 -> 64:65 len 6  "String"
 17:36 -> 64:72 len 27  ");\nconst ys = [1].map(x => "

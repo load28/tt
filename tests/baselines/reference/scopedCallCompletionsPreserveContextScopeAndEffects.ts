@@ -63,7 +63,7 @@ const trace: string[] = [];
 function consume(item: Item) { trace.push("call:" + item.run(3)); }
 for (const state of [State.Ready(4), State.Empty]) {
   trace.length = 0;
-  const $tt_v1 = (consume);
+  const $tt_v1: typeof consume = (consume);
   {
     const $tt_m = state;
     switch ($tt_m.kind) {
@@ -91,7 +91,7 @@ for (const state of [State.Ready(4), State.Empty]) {
 function throws(item: Item): void { trace.push("throws:" + item.run(2)); throw new Error("consumer"); }
 trace.length = 0;
 try {
-  const $tt_v3 = (throws);
+  const $tt_v3: typeof throws = (throws);
   {
     const $tt_m = State.Ready(5);
     switch ($tt_m.kind) {

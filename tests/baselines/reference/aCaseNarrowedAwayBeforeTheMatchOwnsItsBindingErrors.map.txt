@@ -1,0 +1,20 @@
+//// [aCaseNarrowedAwayBeforeTheMatchOwnsItsBindingErrors.tt] 18 mapping(s)
+1:27 -> 20:26 len 6  "number"
+1:27 -> 23:15 len 6  "number"
+1:44 -> 21:24 len 6  "number"
+1:44 -> 24:13 len 6  "number"
+1:53 -> 25:3 len 76  "\nexport function f(s: Shape): number {\n  if (s.k"...
+4:3 -> 47:3 len 7  "return "
+4:17 -> 30:19 len 1  "s"
+4:29 -> 33:17 len 1  "r"
+4:35 -> 34:18 len 1  "r"
+4:43 -> 38:17 len 1  "w"
+4:49 -> 39:18 len 1  "w"
+4:52 -> 47:16 len 79  ";\n}\nexport function g(s: Shape): number {\n  if ("...
+8:3 -> 66:3 len 7  "return "
+8:17 -> 53:19 len 1  "s"
+8:29 -> 56:17 len 1  "r"
+8:35 -> 57:18 len 1  "r"
+8:43 -> 61:18 len 1  "0"
+8:46 -> 66:16 len 4  ";\n}\n"
+

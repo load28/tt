@@ -1,0 +1,13 @@
+//// [aHoistedComputedSymbolKeyKeepsItsUniqueSymbolType.tt] 11 mapping(s)
+1:18 -> 20:21 len 6  "number"
+1:18 -> 23:10 len 6  "number"
+1:30 -> 25:3 len 29  "\nexport function f(o: O) {\n  "
+3:3 -> 46:3 len 15  "const it = { *["
+3:18 -> 28:43 len 15  "Symbol.iterator"
+3:33 -> 46:24 len 21  "]() { yield 1; }, v: "
+3:61 -> 30:19 len 1  "o"
+3:68 -> 33:17 len 1  "v"
+3:74 -> 34:18 len 1  "v"
+3:82 -> 38:18 len 1  "0"
+3:85 -> 46:51 len 30  " };\n  return [...it, it.v];\n}\n"
+

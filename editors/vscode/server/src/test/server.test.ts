@@ -1600,7 +1600,7 @@ test("the outline lists TypeScript's declarations with the variants in source or
     assert.deepEqual(answer.result.map(tree), [
       ["Box", [["width", []]]],
       ["Shape", [["Circle", []], ["Point", []]]],
-      ["Area", [["add", [["a", []], ["radius", []]]]]],
+      ["Area", [["add", [["a", [["radius", []]]]]]]],
       ["f", []],
     ]);
     const area = answer.result.find((symbol: any) => symbol.name === "Area");
@@ -2644,7 +2644,7 @@ test("a member name after any receiver completes members only", { skip: skipType
 });
 
 test("tt items are offered only where they are valid, ranked as TypeScript ranks keywords", { skip: skipTyped, timeout }, async () => {
-  const tt = ["Option", "Result", "Order", "variant", "match", "try", "flow", "result", "let-else"];
+  const tt = ["Option", "Result", "Order", "variant", "match", "try", "flow", "result", "let-else", "val"];
   const orders = "export variant Order { Open(id: number), Closed }\nexport const count = 1;\n";
   for (const [language, source, marker, allowed] of [
     ["ttx", "function Row(p: { a: number }) { return null; }\nconst e = <Row  />;\n", "<Row ", ["a"]],

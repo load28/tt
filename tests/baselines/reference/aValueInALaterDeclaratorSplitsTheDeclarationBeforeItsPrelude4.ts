@@ -39,7 +39,7 @@ export function f(): TResult<number, string> {
       $tt_v0 = $tt_t0;
       break $tt_v0;
     }
-    const x = $tt_t0.value; { const $tt_a0 = { value: { kind: "Ok" as const, value: x } }; $tt_v0 = $tt_a0.value; break $tt_v0; }
+    const x = $tt_t0.value; { $tt_v0 = { kind: "Ok" as const, value: x }; break $tt_v0; }
   }
   const b = $tt_v0;
   return Result.Ok(0);

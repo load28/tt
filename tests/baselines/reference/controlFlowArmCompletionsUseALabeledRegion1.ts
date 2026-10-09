@@ -4,7 +4,7 @@ consume(match (x) { A(v) => { for (const s of [1]) { if (s === v) return s; } re
 
 //// [controlFlowArmCompletionsUseALabeledRegion1.ts]
 {
-  const $tt_v1 = (consume);
+  const $tt_v1: typeof consume = (consume);
   $tt_y_v1: {
     const $tt_m = x;
     switch ($tt_m.kind) {

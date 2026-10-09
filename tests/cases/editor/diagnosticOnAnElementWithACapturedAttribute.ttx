@@ -1,0 +1,3 @@
+// @diagnostics: *
+export variant Load { Busy, Done(text: string) }
+export const view = (l: Load, id: string) => <div id={id}>{match (l) { Busy => 1, Done(text) => text }}</div>;

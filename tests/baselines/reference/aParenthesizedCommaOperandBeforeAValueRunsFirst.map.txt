@@ -1,0 +1,16 @@
+//// [aParenthesizedCommaOperandBeforeAValueRunsFirst.tt] 14 mapping(s)
+1:1 -> 1:1 len 266  "type R<T> = { kind: \"Ok\"; value: T } | { kind: \""...
+5:25 -> 14:1 len 8  "return ("
+5:33 -> 6:2 len 11  "(note(\"o\"))"
+5:45 -> 14:9 len 1  " "
+5:53 -> 8:17 len 1  "o"
+5:58 -> 10:10 len 1  "1"
+5:63 -> 14:26 len 5  "\"one\""
+5:75 -> 14:34 len 7  "\"other\""
+5:84 -> 14:42 len 31  "); }\nfunction h(): R<string> { "
+6:27 -> 22:1 len 11  "const v = ("
+6:38 -> 16:2 len 11  "(note(\"g\"))"
+6:50 -> 22:12 len 1  " "
+6:55 -> 17:16 len 4  "r(1)"
+6:59 -> 22:19 len 112  "); return { kind: \"Ok\", value: String(v) }; }\nco"...
+

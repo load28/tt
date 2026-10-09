@@ -80,7 +80,7 @@ const okay = (name: string, value: number): N => { order.push(name); return { ki
 const fail = (name: string): N => { order.push(name); return { kind: "Err", error: name }; };
 const report = (value: unknown) => { console.log(order.join(","), String(value)); order.length = 0; };
 let $tt_v0: number;
-const $tt_v2 = (report);
+const $tt_v2: typeof report = (report);
 do {
   const $tt_v40 = mark("head", new Box(1));
   let $tt_v1: number;
@@ -108,7 +108,7 @@ do {
 } while (false);
 $tt_v2($tt_v0);
 let $tt_v5: number;
-const $tt_v8 = (report);
+const $tt_v8: typeof report = (report);
 do {
   const $tt_v42 = mark("head", new Box(1));
   let $tt_v6: number;
@@ -156,7 +156,7 @@ do {
 } while (false);
 $tt_v8($tt_v5);
 let $tt_v13: number;
-const $tt_v15 = (report);
+const $tt_v15: typeof report = (report);
 do {
   const $tt_v45 = mark("head", new Box(1));
   let $tt_v14: number;
@@ -183,7 +183,7 @@ do {
 } while (false);
 $tt_v15($tt_v13);
 let $tt_v18: number;
-const $tt_v20 = (report);
+const $tt_v20: typeof report = (report);
 do {
   const $tt_v46 = mark("head", { list: [10, 20] });
   let $tt_v19: number;
@@ -210,7 +210,7 @@ do {
 } while (false);
 $tt_v20($tt_v18);
 let $tt_v22: string;
-const $tt_v24 = (report);
+const $tt_v24: typeof report = (report);
 do {
   const $tt_v47 = mark("head", new Box(1) as Box | undefined);
   let $tt_v27: (Box) | (undefined);
@@ -242,7 +242,7 @@ do {
 } while (false);
 $tt_v24($tt_v22);
 let $tt_v28: string;
-const $tt_v30 = (report);
+const $tt_v30: typeof report = (report);
 do {
   const $tt_v49 = mark("head", undefined as Box | undefined);
   let $tt_v33: (Box) | (undefined);
@@ -274,7 +274,7 @@ do {
 } while (false);
 $tt_v30($tt_v28);
 let $tt_v34: number;
-const $tt_v36 = (report);
+const $tt_v36: typeof report = (report);
 do {
   const $tt_v51 = mark("head", 2);
   let $tt_v35: number;

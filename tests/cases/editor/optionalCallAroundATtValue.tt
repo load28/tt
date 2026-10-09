@@ -1,0 +1,21 @@
+// @hover: o, m, p
+// @definition: o, m
+// @references: oDecl, mDecl
+// @rename: o, m, p
+// @signatureHelp: sig
+// @diagnostics: *
+import type { TResult } from "@tt/std";
+import * as Result from "@tt/std/result";
+declare function rr(n: number): TResult<number, string>;
+declare const ev: { kind: "A" } | { kind: "B" };
+export function f([|/*oDecl*/o|]?: { /*mDecl*/m(n: number, k?: number): number }): TResult<unknown, string> {
+  const r = [|/*o*/o|]?./*m*/m(try rr(1));
+  const s = [|o|]?.m(1, match (ev) { A => 1, B => 2 });
+  const z = [|o|]?.zz(try rr(1));
+  const q = [|o|]?.m(try rr(1), /*sig*/2);
+  return Result.Ok([r, s, z, q]);
+}
+export function g(p: { n?(k: number): number }): TResult<unknown, string> {
+  const r = /*p*/p.n?.(try rr(1));
+  return Result.Ok(r);
+}

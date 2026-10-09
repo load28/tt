@@ -148,7 +148,7 @@ impl Checker<'_> {
                     // Head and steps are expressions — `try` inside them is
                     // rejected for the same reason as inside a match.
                     if let Some(head) = &pipe.head {
-                        self.visit_program(head, Ctx::Expr, place.isolated());
+                        self.visit_program(head, Ctx::Expr, place);
                     }
                     for step in &pipe.steps {
                         self.visit_program(&step.body, Ctx::Expr, place.isolated());
@@ -198,20 +198,19 @@ impl Checker<'_> {
                 self.visit_program(&stmt.expr, Ctx::Expr, Place::ValueRegion);
                 return;
             }
-            _ => self
-                .function_targets
-                .get_or_init(|| {
-                    crate::flow::FunctionTargets::new(self.tokens, &|tokens| {
-                        self.semantic.hir.match_owned_tokens(tokens)
-                    })
-                })
-                .at_offset(stmt.span.start),
+            _ => self.function_targets().at_offset(stmt.span.start),
         };
         let (message, help) = match function_target {
             Some(crate::flow::FunctionTarget::Ordinary) => {
                 self.visit_program(&stmt.expr, Ctx::Expr, Place::ValueRegion);
                 return;
             }
+            Some(crate::flow::FunctionTarget::Setter) => (
+                "`try` cannot be used in a setter — a setter's return value is discarded, so its \
+                 `Err` propagation could not reach the caller"
+                    .to_string(),
+                "move the propagation into an ordinary function, or handle the Result explicitly",
+            ),
             Some(
                 crate::flow::FunctionTarget::Constructor | crate::flow::FunctionTarget::Generator,
             ) => (
@@ -254,7 +253,7 @@ impl Checker<'_> {
         // Ordinary expression propagation is judged after the SWC host owner
         // and evaluation protocol are known. A result block is the one
         // surface-owned boundary: its direct propagation targets that region.
-        if place == Place::ResultValueRegion {
+        if place == Place::ResultValueRegion && self.crosses_value_region(expr.span.start) {
             self.error(
                 TtError::span(
                     expr.span.start,
@@ -266,6 +265,22 @@ impl Checker<'_> {
             );
         }
         self.visit_program(&expr.expr, Ctx::Expr, Place::ValueRegion);
+    }
+
+    fn crosses_value_region(&self, at: usize) -> bool {
+        let Some(&result) = self.result_blocks.last() else {
+            return true;
+        };
+        self.function_targets()
+            .boundary_at_offset(at)
+            .is_none_or(|boundary| boundary < result)
+    }
+
+    fn function_targets(&self) -> &crate::flow::FunctionTargets {
+        self.function_targets.get_or_init(|| {
+            let owned = self.semantic.hir.match_owned();
+            crate::flow::FunctionTargets::new(self.tokens, &|tokens| owned.tokens(tokens))
+        })
     }
 
     /// let-else placement is the same flow fact as `try`'s, except the
@@ -404,13 +419,16 @@ impl Checker<'_> {
         } else {
             Place::ResultRegion
         };
+        self.result_blocks.push(block.span.start);
         for item in &block.items {
             let ResultItem::Stmts(stmts) = item;
             self.visit_program(stmts, Ctx::Stmt, statement_place);
         }
         if let Some(value) = &block.value {
             self.visit_program(value, Ctx::Expr, Place::ResultValueRegion);
-        } else {
+        }
+        self.result_blocks.pop();
+        if block.value.is_none() {
             self.check_result_outward_controls(block);
             let completes = self
                 .result_completions
@@ -493,6 +511,28 @@ impl Checker<'_> {
                 continue;
             }
             seen.push(&case.tag);
+        }
+
+        for case in &decl.cases {
+            let mut fields: Vec<&str> = Vec::new();
+            for field in case.fields.iter().flatten() {
+                if fields.contains(&field.name.as_str()) {
+                    self.error(
+                        TtError::span(
+                            field.name_off,
+                            field.name_off + field.name.len(),
+                            format!(
+                                "variant {}: case \"{}\" declares field `{}` twice",
+                                decl.name, case.tag, field.name
+                            ),
+                        )
+                        .code(DiagnosticCode::VariantDuplicateField)
+                        .help("rename one of the fields"),
+                    );
+                    continue;
+                }
+                fields.push(&field.name);
+            }
         }
 
         // A case carries its tag in one fixed property, so a payload field
@@ -722,7 +762,8 @@ impl Checker<'_> {
                                     alt.span.end,
                                     format!("match: duplicate arm {}", alt.value.render()),
                                 )
-                                .code(DiagnosticCode::MatchDuplicateArm),
+                                .code(DiagnosticCode::MatchDuplicateArm)
+                                .owner(expr.keyword_off, expr.body_close + 1),
                             );
                             continue;
                         }
@@ -765,7 +806,8 @@ impl Checker<'_> {
                                     alt.tag_off + alt.tag.len(),
                                     format!("match: duplicate arm \"{}\"", alt.tag),
                                 )
-                                .code(DiagnosticCode::MatchDuplicateArm),
+                                .code(DiagnosticCode::MatchDuplicateArm)
+                                .owner(expr.keyword_off, expr.body_close + 1),
                             );
                             continue;
                         }
@@ -850,7 +892,8 @@ impl Checker<'_> {
                                     alt.path_span.end,
                                     format!("match: duplicate arm `is {}`", alt.path),
                                 )
-                                .code(DiagnosticCode::MatchDuplicateArm),
+                                .code(DiagnosticCode::MatchDuplicateArm)
+                                .owner(expr.keyword_off, expr.body_close + 1),
                             );
                         } else {
                             arm_paths.push(&alt.path);
@@ -869,7 +912,7 @@ impl Checker<'_> {
 
         // children, in source order: scrutinee first, then guards and bodies
         let isolated = place.isolated();
-        self.visit_program(&expr.scrutinee, Ctx::Expr, isolated);
+        self.visit_program(&expr.scrutinee, Ctx::Expr, place);
         for arm in &expr.arms {
             if let Some(guard) = &arm.guard {
                 self.visit_program(&guard.expr, Ctx::Expr, isolated);
@@ -1022,7 +1065,7 @@ impl Checker<'_> {
         // children, in source order
         let isolated = place.isolated();
         for (_, scrutinee) in &expr.scrutinees {
-            self.visit_program(scrutinee, Ctx::Expr, isolated);
+            self.visit_program(scrutinee, Ctx::Expr, place);
         }
         for arm in &expr.arms {
             if let Some(guard) = &arm.guard {

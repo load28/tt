@@ -169,3 +169,54 @@ fn walking_back_agrees_with_the_measured_lines() {
         }
     }
 }
+
+#[test]
+fn a_utf16_map_answers_what_scanning_the_text_answers() {
+    for text in [
+        "",
+        "abc",
+        "\u{feff}abc",
+        "a\u{e9}b",
+        "\u{1f389}ab",
+        "\u{feff}x\u{1f389}\u{2028}\u{e9}y\u{10ffff}",
+        "\u{e9}\u{e9}\u{1f389}\u{1f389}",
+    ] {
+        let map = Utf16Map::new(text);
+        for byte in 0..=text.len() + 2 {
+            assert_eq!(
+                map.to_utf16(byte),
+                crate::typescript::mapper::to_utf16(text, byte),
+                "{text:?} byte {byte}"
+            );
+        }
+        for units in 0..=text.encode_utf16().count() + 2 {
+            assert_eq!(
+                map.to_byte(units),
+                crate::typescript::mapper::from_utf16(text, units),
+                "{text:?} units {units}"
+            );
+        }
+    }
+}
+
+#[test]
+fn columns_on_one_long_ascii_line_take_constant_work_per_position() {
+    let ask = |count: usize| {
+        let text = "export const v = h(1) + \"ab\".length; ".repeat(count);
+        crate::work::measure(|| {
+            let map = LineMap::lsp(&text);
+            for at in (0..text.len()).step_by(16) {
+                let _ = map.utf16_position(at);
+                let _ = map.char_position(at);
+                let _ = map.utf16_offset(0, at);
+                let _ = map.char_offset(0, at);
+            }
+        })
+    };
+    let small = ask(200).get("column scan bytes").copied().unwrap_or(0);
+    let large = ask(400).get("column scan bytes").copied().unwrap_or(0);
+    assert!(
+        large <= 2 * small + 64,
+        "column scan bytes: {small} for n statements on one line but {large} for 2n"
+    );
+}

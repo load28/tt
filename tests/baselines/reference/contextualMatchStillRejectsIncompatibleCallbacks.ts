@@ -33,7 +33,7 @@ function $tt_show(value: unknown): string {
 declare const flag: boolean;
 declare function consume(item: {run: (x: number) => number}): void;
 let $tt_v0: number;
-const $tt_v1 = (consume);
+const $tt_v1: typeof consume = (consume);
 {
   const $tt_m = flag;
   switch ($tt_m) {

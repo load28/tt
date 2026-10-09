@@ -1,0 +1,99 @@
+=== aDiscardedCommaOperandInAConditionalBranchIsNotAValue.tt ===
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+function r(): R { return { kind: "Ok", value: 7 }; }
+>r : function r(): R
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+const c = true;
+>c : const c: true
+variant S { A(n: number), B }
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => S
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const s: S = S.A(3) as S;
+>s : const s: S
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => S
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+function f(): R {
+>f : function f(): R
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+  const a = c ? (try r(), 1) : 2;
+>a : const a: number
+>c : const c: true
+>r : function r(): R
+  const b = c && (match (s) { A(n) => n, B => 0 }, 1);
+>b : const b: number
+>c : const c: true
+>s : const s: S
+>n : const n: number
+>n : const n: number
+  const i = !c || (try r(), 4);
+>i : const i: number
+>c : const c: true
+>r : function r(): R
+  const z = (try r(), 5);
+>z : const z: 5
+>r : function r(): R
+  return { kind: "Ok", value: a + +b + +i + z };
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>a : const a: number
+>b : const b: number
+>i : const i: number
+>z : const z: 5
+console.log(JSON.stringify(f()));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>f : function f(): R
+

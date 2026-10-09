@@ -52,7 +52,7 @@
 11:124 -> 97:19 len 1  "0"
 11:126 -> 107:25 len 48  ";\nconst take = (...values: number[]) => values;\n"
 13:1 -> 125:1 len 17  "const callArgs = "
-13:18 -> 110:18 len 4  "take"
+13:18 -> 110:31 len 4  "take"
 13:24 -> 111:41 len 1  "1"
 13:29 -> 111:18 len 22  "((n: number) => n + 1)"
 13:60 -> 113:17 len 1  "3"

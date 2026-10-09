@@ -1,0 +1,13 @@
+=== aSuperPipelineHeadThatIsNotAReceiverIsNotTypeScript.tt ===
+declare class B { value: number }
+>B : class B
+>value : (property) B.value: number
+declare function f(x: unknown): number;
+>f : function f(x: unknown): number
+>x : (parameter) x: unknown
+export class C extends B { m() { return super |> f; } }
+>C : class C
+>B : class B
+>m : (method) C.m(): number
+>f : function f(x: unknown): number
+

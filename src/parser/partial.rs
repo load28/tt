@@ -35,6 +35,7 @@ pub(crate) struct ArmHeader {
     pub(crate) pattern: Option<Pattern>,
     /// Whether an `if` guard follows the pattern.
     pub(crate) guarded: bool,
+    pub(crate) start: usize,
 }
 
 /// The pattern that the tokens before index `before` are being written in,
@@ -79,6 +80,25 @@ pub(crate) fn pattern_site_at(src: &str, tokens: &[Token], before: usize) -> Opt
     single_pattern_site(src, tokens, head_end, parens > 0)
 }
 
+/// The byte offset where the `=>` of the match arm whose pattern holds the
+/// token at `index` would be written, when that arm has none yet: the end
+/// of the arm's last token. `None` when the token is not in an arm's
+/// pattern or the arm already has its `=>`.
+pub(crate) fn arrowless_arm_end(src: &str, tokens: &[Token], index: usize) -> Option<usize> {
+    let PatternSite::Arm { open, .. } = pattern_site_at(src, tokens, index)? else {
+        return None;
+    };
+    let body = &tokens[open + 1..body_close(tokens, open)];
+    let at = index.checked_sub(open + 1)?;
+    let arm = matches::outline_arms(src, body)
+        .into_iter()
+        .find(|arm| at <= arm.end)?;
+    if arm.arrow.is_some() {
+        return None;
+    }
+    body[..arm.end].last().map(|token| token.span.end)
+}
+
 /// The finished arms of the match body whose `{` is the token at `open`, in
 /// source order.
 pub(crate) fn arm_headers(src: &str, tokens: &[Token], open: usize) -> Vec<ArmHeader> {
@@ -93,7 +113,62 @@ pub(crate) fn arm_headers(src: &str, tokens: &[Token], open: usize) -> Vec<ArmHe
             ArmHeader {
                 pattern: matches::parse_arm_pattern(&mut cur).filter(|_| cur.peek().is_none()),
                 guarded: arm.guard.is_some(),
+                start: body[arm.start].span.start,
             }
+        })
+        .collect()
+}
+
+pub(crate) fn tuple_arm_headers(
+    src: &str,
+    tokens: &[Token],
+    open: usize,
+    position: usize,
+) -> Vec<ArmHeader> {
+    let parser = Parser::new(src);
+    let body = &tokens[open + 1..body_close(tokens, open)];
+    matches::outline_arms(src, body)
+        .into_iter()
+        .filter(|arm| arm.arrow.is_some())
+        .filter_map(|arm| {
+            let end = arm.pattern_end();
+            if !matches!(body.get(arm.start)?.kind, TokenKind::Punct(b'(')) {
+                return None;
+            }
+            let close = find_close_at(body, arm.start).filter(|&close| close < end)?;
+            let mut element = arm.start + 1;
+            let mut index = 0;
+            let mut k = element;
+            let mut depth = 0usize;
+            let element_end = loop {
+                if k >= close {
+                    break (index == position).then_some(close)?;
+                }
+                let token = &body[k];
+                if token.opens_bracket() {
+                    depth += 1;
+                } else if token.closes_bracket() {
+                    depth = depth.saturating_sub(1);
+                } else if depth == 0 && matches!(token.kind, TokenKind::Punct(b',')) {
+                    if index == position {
+                        break k;
+                    }
+                    index += 1;
+                    element = k + 1;
+                }
+                k += 1;
+            };
+            let mut cur = Cursor::new(
+                &parser,
+                &body[..element_end],
+                element,
+                body[element_end].span.start,
+            );
+            Some(ArmHeader {
+                pattern: matches::parse_arm_pattern(&mut cur).filter(|_| cur.peek().is_none()),
+                guarded: arm.guard.is_some(),
+                start: body[arm.start].span.start,
+            })
         })
         .collect()
 }
@@ -106,7 +181,7 @@ pub(crate) fn pattern_of(text: &str) -> Option<Pattern> {
 }
 
 /// Whether the `{` at `brace` opens the body of a match.
-fn opens_match_body(src: &str, tokens: &[Token], brace: usize) -> bool {
+pub(crate) fn opens_match_body(src: &str, tokens: &[Token], brace: usize) -> bool {
     (0..brace).rev().any(|keyword| {
         super::parse::match_keyword_at(src, tokens, keyword)
             && matches::match_body_open(tokens, keyword + 1) == Some(brace)

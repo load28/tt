@@ -1,0 +1,28 @@
+=== completions /*opt*/ nestedPatternCompletionForStandardLibraryTypes.tt:4:37 ===
+  | export const x = match (o) { Opt(o: ) => 1, Res(r: ) => 3, _ => 2 };
+  |                                     ^ /*opt*/
+completion: 0 item(s), member false, probe yes
+ttCompletions: pattern true, member null
+  Some (case) "Option.Some(value: T)"
+  None (case) "Option.None"
+patternCompletions:
+  Some (case) "Option.Some(value: T)"
+  None (case) "Option.None"
+editor completion: 2 item(s)
+  None (EnumMember, 0None)
+  Some (EnumMember, 0Some)
+
+=== completions /*res*/ nestedPatternCompletionForStandardLibraryTypes.tt:4:52 ===
+  | export const x = match (o) { Opt(o: ) => 1, Res(r: ) => 3, _ => 2 };
+  |                                                    ^ /*res*/
+completion: 0 item(s), member false, probe yes
+ttCompletions: pattern true, member null
+  Ok (case) "Result.Ok(value: T)"
+  Err (case) "Result.Err(error: E)"
+patternCompletions:
+  Ok (case) "Result.Ok(value: T)"
+  Err (case) "Result.Err(error: E)"
+editor completion: 2 item(s)
+  Err (EnumMember, 0Err)
+  Ok (EnumMember, 0Ok)
+

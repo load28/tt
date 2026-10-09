@@ -1,0 +1,6 @@
+// @run: aNestedConciseArrowBodyClosesBeforeItsOuterArrow.tt
+variant V { A, B }
+const outer = (v: V) => [match (v) { A => () => [0], B => () => [2] }, () => [match (v) { A => 3, B => 4 }]];
+const [first, inner] = outer(V.B);
+console.log(first(), inner());
+export {};

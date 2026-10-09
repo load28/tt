@@ -240,7 +240,7 @@ export function m(s: string | null) {
       $tt_v18 = $tt_v17;
     }
     
-    const x = $tt_v18; { const $tt_a0 = { value: { kind: "Ok" as const, value: x } }; $tt_v15 = $tt_a0.value; break $tt_v15; }
+    const x = $tt_v18; { $tt_v15 = { kind: "Ok" as const, value: x }; break $tt_v15; }
   }
   return $tt_v15;
 }

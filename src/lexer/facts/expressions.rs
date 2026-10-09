@@ -172,6 +172,7 @@ pub(super) struct Object {
     pub(super) state: ObjectState,
     /// The member being read is a generator method (`*name() {}`).
     pub(super) generator: bool,
+    pub(super) setter: bool,
 }
 
 /// Whether the byte after `?` makes it an optional marker (`a?: T`,
@@ -204,6 +205,7 @@ impl Machine<'_> {
             kind,
             state: ObjectState::Key,
             generator: false,
+            setter: false,
         }));
     }
 
@@ -577,7 +579,10 @@ impl Machine<'_> {
             }
             Tk::Punct(b';' | b')' | b']' | b'}' | b'@' | b'#') => Out::Retry,
             Tk::Punct(b'{') => {
-                if e.cfg.brace_ends || !primary || tok.line_break {
+                if (e.cfg.brace_ends && (e.cfg.heritage || head != Head::MatchCall))
+                    || !primary
+                    || tok.line_break
+                {
                     return Out::Retry;
                 }
                 e.after(After::Primary);
@@ -742,6 +747,7 @@ impl Machine<'_> {
         if tok.is(b',') {
             object.state = ObjectState::Key;
             object.generator = false;
+            object.setter = false;
             self.push_frame(Frame::Object(object));
             return Out::Consumed;
         }
@@ -779,7 +785,9 @@ impl Machine<'_> {
                             "async" => named_next && !next_break,
                             _ => false,
                         };
-                    if !modifier {
+                    if modifier {
+                        object.setter = tok.text == "set";
+                    } else {
                         object.state = ObjectState::AfterKey;
                         self.mark(TokenFacts::MEMBER);
                     }
@@ -832,13 +840,16 @@ impl Machine<'_> {
                     Out::Consumed
                 }
                 Tk::Punct(b'{') => {
-                    let function = if object.generator {
+                    let function = if object.setter {
+                        FunctionKind::Setter
+                    } else if object.generator {
                         FunctionKind::Generator
                     } else {
                         FunctionKind::Ordinary
                     };
                     object.state = ObjectState::AfterValue;
                     object.generator = false;
+                    object.setter = false;
                     self.push_frame(Frame::Object(object));
                     self.open_function_body(function);
                     Out::Consumed

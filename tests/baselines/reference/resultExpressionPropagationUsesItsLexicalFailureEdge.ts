@@ -57,8 +57,7 @@ function compute(ok: boolean) {
     company = $tt_v2 + $tt_v1;
     trace.push("after");
     {
-      const $tt_a0 = { value: { kind: "Ok" as const, value: company } };
-      $tt_v0 = $tt_a0.value;
+      $tt_v0 = { kind: "Ok" as const, value: company };
       break $tt_v0;
     }
   }
@@ -99,12 +98,12 @@ $tt_v3: {
       break $tt_v4;
     }
     $tt_v5 = $tt_t2.value;
-    b = $tt_v5; { const $tt_a1 = { value: { kind: "Ok" as const, value: b } }; $tt_v4 = $tt_a1.value; break $tt_v4; }
+    b = $tt_v5; { $tt_v4 = { kind: "Ok" as const, value: b }; break $tt_v4; }
   }
   const inner = $tt_v4;
   {
-    const $tt_a2 = { value: { kind: "Ok" as const, value: [a, inner.kind] } };
-    $tt_v3 = $tt_a2.value;
+    const $tt_a0 = { value: { kind: "Ok" as const, value: [a, inner.kind] } };
+    $tt_v3 = $tt_a0.value;
     break $tt_v3;
   }
 }
@@ -130,7 +129,7 @@ $tt_v6: {
     $tt_v8 = 4;
   }
   
-  n = $tt_v8; { const $tt_a3 = { value: { kind: "Ok" as const, value: n } }; $tt_v6 = $tt_a3.value; break $tt_v6; }
+  n = $tt_v8; { $tt_v6 = { kind: "Ok" as const, value: n }; break $tt_v6; }
 }
 const skipped = $tt_v6;
 console.log(JSON.stringify(skipped));

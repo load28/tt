@@ -1,4 +1,4 @@
-//// [conditionalOperationsKeepTheirTypesWithoutUndefined.tt] 44 mapping(s)
+//// [conditionalOperationsKeepTheirTypesWithoutUndefined.tt] 46 mapping(s)
 1:1 -> 1:1 len 71  "\ndeclare const flag: boolean;\ndeclare const mayb"...
 4:1 -> 26:1 len 35  "export const a: number | boolean = "
 4:36 -> 6:14 len 4  "flag"
@@ -30,7 +30,7 @@
 7:64 -> 89:13 len 1  "9"
 7:65 -> 92:33 len 56  ";\ndeclare const f: ((v: number) => number) | und"...
 9:1 -> 114:1 len 37  "export const e: number | undefined = "
-9:38 -> 95:18 len 1  "f"
+9:38 -> 95:28 len 1  "f"
 9:49 -> 98:19 len 1  "1"
 9:54 -> 100:12 len 1  "1"
 9:59 -> 101:27 len 1  "5"
@@ -38,6 +38,8 @@
 9:71 -> 114:45 len 53  ";\ndeclare const host: { g?: (v: number) => numbe"...
 11:1 -> 136:1 len 37  "export const g: number | undefined = "
 11:38 -> 117:18 len 6  "host.g"
+11:38 -> 123:32 len 4  "host"
+11:38 -> 127:32 len 4  "host"
 11:54 -> 120:19 len 1  "1"
 11:59 -> 122:12 len 1  "1"
 11:64 -> 123:38 len 1  "6"

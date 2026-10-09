@@ -30,7 +30,7 @@ pub(crate) fn match_declarations(
             let file = snapshot
                 .files()
                 .iter()
-                .find(|f| projection::declaration_path_of(f) == declaration.path)
+                .find(|f| f.module_path == declaration.module)
                 .filter(|f| {
                     requested.contains(&f.source_path) && !placeholders.contains(&f.source_path)
                 })?;
@@ -75,7 +75,7 @@ fn reaches_placeholders(snapshot: &Snapshot) -> HashSet<PathBuf> {
                 .unwrap_or(std::path::Path::new("."));
             if file.tt_imports().iter().any(|import| {
                 directory
-                    .join(&import.specifier)
+                    .join(import.path())
                     .canonicalize()
                     .is_ok_and(|target| reached.contains(&target))
             }) {

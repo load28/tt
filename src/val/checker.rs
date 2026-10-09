@@ -13,8 +13,14 @@ pub(super) struct Checker<'a> {
     pub(super) source_kind: SourceKind,
     /// The parser's `val` modifiers.
     pub(super) modifiers: &'a Modifiers,
-    pub(super) signatures: &'a HashMap<&'a str, Option<Vec<ParamSig>>>,
+    /// The names the file's named function declarations bind.
+    pub(super) declared: &'a HashSet<&'a str>,
+    /// Each named function declaration's parameters, keyed by the byte
+    /// offset of its declared identifier: the binding a call's callee
+    /// resolves to in the scope model names one of these or none.
+    pub(super) functions: &'a HashMap<usize, Vec<ParamSig>>,
     pub(super) applications: &'a Applications,
+    pub(super) arm_scopes: &'a [ArmScope],
     /// Probe mode: collect method calls instead of reporting violations.
     /// The violations are the same either way — the file has already been
     /// checked by the time its probes are collected.
@@ -41,12 +47,15 @@ impl<'a> Checker<'a> {
     /// when the innermost binding of that name is an ordinary one (or
     /// there is none). Innermost wins — that is the shadowing rule.
     fn lookup(&self, frames: &[Frame<'a>], name: &str) -> Option<usize> {
-        for frame in frames.iter().rev() {
-            if let Some(var) = frame.vars.iter().rev().find(|v| v.name == name) {
-                return var.val_at;
-            }
-        }
-        None
+        self.binding(frames, name).and_then(|var| var.val_at)
+    }
+
+    /// The innermost binding of `name` in scope.
+    fn binding<'f>(&self, frames: &'f [Frame<'a>], name: &str) -> Option<&'f Var<'a>> {
+        frames
+            .iter()
+            .rev()
+            .find_map(|frame| frame.vars.iter().rev().find(|v| v.name == name))
     }
 
     /// Walks one token stream (the file, or one template interpolation),
@@ -64,7 +73,7 @@ impl<'a> Checker<'a> {
         // Parameter scopes, activated when the walk reaches the function
         // body they belong to: (body start, body end, bindings, whether the
         // body is a function's own `var` scope rather than a `catch` block).
-        let mut pending: Vec<(usize, usize, Vec<Var<'a>>, bool)> = Vec::new();
+        let mut pending: Vec<(usize, usize, Vec<Var<'a>>, bool)> = self.arm_frames(tokens);
         let mut i = 0usize;
         while i < tokens.len() {
             while frames.len() > base && frames[frames.len() - 1].end <= i {
@@ -110,6 +119,30 @@ impl<'a> Checker<'a> {
                         pending.push((start, end, vars, var_scope));
                     }
                 }
+                TokenKind::Arrow
+                    if !arms.contains(&i)
+                        && i > 0
+                        && matches!(tokens[i - 1].kind, TokenKind::Ident)
+                        && !dotted_at(tokens, 0, i - 1) =>
+                {
+                    let block = punct_at(tokens, i + 1, b'{');
+                    let end = if block {
+                        find_close_at(tokens, i + 1).unwrap_or(tokens.len())
+                    } else {
+                        expression_end(tokens, i + 1)
+                    };
+                    let parameter = &tokens[i - 1];
+                    pending.push((
+                        i + 1,
+                        end,
+                        vec![Var {
+                            name: self.text(parameter),
+                            val_at: None,
+                            ident: parameter.span.start,
+                        }],
+                        block,
+                    ));
+                }
                 TokenKind::Ident => {
                     i = self.visit_ident(tokens, i, frames, &writes, &arms);
                     continue;
@@ -119,6 +152,62 @@ impl<'a> Checker<'a> {
             i += 1;
         }
         frames.truncate(base);
+    }
+
+    /// The token of the binding a call argument passes along: a plain
+    /// access path (`x`, `x.y.z`), or one written through TypeScript's
+    /// wrappers, read by [`super::reference::argument_root`].
+    fn argument_root(&self, tokens: &[Token], start: usize, end: usize) -> Option<usize> {
+        if start >= end {
+            return None;
+        }
+        if matches!(tokens[start].kind, TokenKind::Ident) && !dotted_at(tokens, 0, start) {
+            let path = parse_path(self.src, tokens, start);
+            if path.end == end {
+                return (path.steps == 0 || path.last_prop.is_some()).then_some(start);
+            }
+        }
+        let from = tokens[start].span.start;
+        let text = &self.src[from..tokens[end - 1].span.end];
+        let input = crate::host_input::HostInput::new(text);
+        let mut parser = input.parser(self.source_kind);
+        let expression = parser.parse_expr().ok()?;
+        if !parser.take_errors().is_empty()
+            || input.byte(swc_common::Spanned::span(&*expression).hi) != text.len()
+        {
+            return None;
+        }
+        let root = super::reference::argument_root(&expression)?;
+        let root_at = from + input.byte(root.span.lo);
+        (start..end).find(|&k| tokens[k].span.start == root_at)
+    }
+
+    fn arm_frames(&self, tokens: &[Token]) -> Vec<(usize, usize, Vec<Var<'a>>, bool)> {
+        let at = |offset: usize| tokens.partition_point(|token| token.span.start < offset);
+        self.arm_scopes
+            .iter()
+            .filter_map(|scope| {
+                let start = at(scope.span.start);
+                if start >= tokens.len()
+                    || tokens[..start]
+                        .last()
+                        .is_some_and(|token| token.span.end > scope.span.start)
+                    || tokens[start].span.start >= scope.span.end
+                {
+                    return None;
+                }
+                let vars = scope
+                    .bindings
+                    .iter()
+                    .map(|binding| Var {
+                        name: &self.src[binding.start..binding.end],
+                        val_at: None,
+                        ident: binding.start,
+                    })
+                    .collect();
+                Some((start, at(scope.span.end), vars, false))
+            })
+            .collect()
     }
 
     /// Handles one identifier token: declarations register bindings, uses
@@ -203,8 +292,8 @@ impl<'a> Checker<'a> {
         }
 
         self.check_mutation(tokens, i, frames, writes.contains(&tokens[i].span.start));
-        if punct_at(tokens, i + 1, b'(') {
-            self.call(tokens, tokens[i].span, list_entries(tokens, i + 1), frames);
+        if let Some(open) = called_at(tokens, i) {
+            self.call(tokens, tokens[i].span, list_entries(tokens, open), frames);
         }
         let piped: Vec<(usize, usize)> = self
             .applications
@@ -238,15 +327,17 @@ impl<'a> Checker<'a> {
         match self.sink {
             // Which declaration a call names is the checker's question:
             // every call to a name the file declares is collected, and
-            // the pairing is by symbol identity, so a name the untyped
-            // path has to call ambiguous is settled per call site. The
-            // name gate only skips calls no same-file declaration
-            // could possibly match.
-            Sink::Probes(_) if self.signatures.contains_key(word) => {
+            // the pairing is by symbol identity. The name gate only skips
+            // calls no same-file declaration could possibly match. The
+            // untyped path resolves the callee in its own scope model.
+            Sink::Probes(_) if self.declared.contains(word) => {
                 self.probe_call(tokens, entries, callee.start, word);
             }
             _ => {
-                if let Some(Some(params)) = self.signatures.get(word) {
+                if let Some(params) = self
+                    .binding(frames, word)
+                    .and_then(|var| self.functions.get(&var.ident))
+                {
                     self.check_call(tokens, entries, word, params, frames);
                 }
             }
@@ -289,6 +380,20 @@ impl<'a> Checker<'a> {
                     {
                         self.declare(frames, vec![self.text(t)], None);
                     }
+                }
+                TokenKind::Ident
+                    if matches!(self.text(&tokens[k]), "const" | "let")
+                        && !dotted_at(tokens, 0, k) =>
+                {
+                    let val_at = k
+                        .checked_sub(1)
+                        .filter(|&at| {
+                            modifier_of(self.modifiers, &tokens[at])
+                                == Some(ValModifierKind::Declaration)
+                        })
+                        .map(|at| tokens[at].span.start);
+                    let names = collect_decl_names(self.src, tokens, k + 1);
+                    self.declare_quietly(frames, names, val_at);
                 }
                 _ => {}
             }
@@ -453,7 +558,16 @@ impl<'a> Checker<'a> {
     }
 
     /// Registers bindings in the innermost scope.
-    fn declare(&self, frames: &mut [Frame<'a>], names: Vec<&'a str>, val_at: Option<usize>) {
+    /// Binds `names` on entry to their block, as BlockDeclarationInstantiation
+    /// binds every lexical declaration of a block before its first
+    /// statement runs; the declaration itself reports its `val` binding
+    /// when the walk reaches it.
+    fn declare_quietly(
+        &self,
+        frames: &mut [Frame<'a>],
+        names: Vec<&'a str>,
+        val_at: Option<usize>,
+    ) {
         let src = self.src;
         if let Some(frame) = frames.last_mut() {
             frame.vars.extend(names.into_iter().map(|name| Var {
@@ -462,20 +576,34 @@ impl<'a> Checker<'a> {
                 ident: offset_in(src, name),
             }));
         }
+    }
+
+    fn declare(&self, frames: &mut [Frame<'a>], names: Vec<&'a str>, val_at: Option<usize>) {
+        let src = self.src;
+        let vars: Vec<Var<'a>> = names
+            .into_iter()
+            .map(|name| Var {
+                name,
+                val_at,
+                ident: offset_in(src, name),
+            })
+            .collect();
         if val_at.is_some()
             && let Sink::Probes(sink) = self.sink
-            && let Some(frame) = frames.last()
         {
             // Every `val` binding is a node the checker can resolve; which
             // mutations belong to it is then a question of symbol identity,
             // not of this file's scope model.
-            sink.borrow_mut().bindings.extend(
-                frame
-                    .vars
-                    .iter()
-                    .filter(|v| v.val_at == val_at)
-                    .map(|v| self.val_binding(v)),
-            );
+            sink.borrow_mut()
+                .bindings
+                .extend(vars.iter().map(|v| self.val_binding(v)));
+        }
+        if let Some(frame) = frames.last_mut() {
+            for var in vars {
+                if !frame.vars.iter().any(|bound| bound.ident == var.ident) {
+                    frame.vars.push(var);
+                }
+            }
         }
     }
 
@@ -498,7 +626,7 @@ impl<'a> Checker<'a> {
             .flat_map(|(param, (start, end))| {
                 let val_at = param.val_at;
                 let mut names = Vec::new();
-                let mut k = start;
+                let mut k = after_decorators(tokens, start, end);
                 while k < end
                     && (modifier_of(self.modifiers, &tokens[k]).is_some()
                         || matches!(&tokens[k].kind, TokenKind::Ident
@@ -652,16 +780,11 @@ impl<'a> Checker<'a> {
             return; // probes go through `probe_call`; Calls asks nothing
         };
         for (idx, (start, end)) in entries.into_iter().enumerate() {
-            if !matches!(tokens[start].kind, TokenKind::Ident) || dotted_at(tokens, 0, start) {
+            let Some(root) = self.argument_root(tokens, start, end) else {
                 continue;
-            }
-            let name = self.text(&tokens[start]);
+            };
+            let name = self.text(&tokens[root]);
             if self.lookup(frames, name).is_none() {
-                continue;
-            }
-            // only `x` / `x.y.z` — a computed argument is not a path
-            let path = parse_path(self.src, tokens, start);
-            if path.end != end || (path.steps > 0 && path.last_prop.is_none()) {
                 continue;
             }
             let Some(param) = params.get(idx) else {
@@ -676,8 +799,8 @@ impl<'a> Checker<'a> {
             };
             report.borrow_mut().push(
                 TtError::span(
-                    tokens[start].span.start,
-                    tokens[start].span.end,
+                    tokens[root].span.start,
+                    tokens[root].span.end,
                     format!(
                         "cannot pass val binding `{name}` to mutable parameter {described} of \
                          `{callee}` (the parameter is not declared with `val`, so the function \
@@ -706,21 +829,45 @@ impl<'a> Checker<'a> {
             return;
         };
         for (idx, (start, end)) in entries.into_iter().enumerate() {
-            if !matches!(tokens[start].kind, TokenKind::Ident) || dotted_at(tokens, 0, start) {
+            let Some(root) = self.argument_root(tokens, start, end) else {
                 continue;
-            }
-            // only `x` / `x.y.z` — a computed argument is not a path
-            let path = parse_path(self.src, tokens, start);
-            if path.end != end || (path.steps > 0 && path.last_prop.is_none()) {
-                continue;
-            }
+            };
             sink.borrow_mut().passes.push(ValPass {
-                offset: tokens[start].span.start,
-                name: self.text(&tokens[start]).to_string(),
+                offset: tokens[root].span.start,
+                name: self.text(&tokens[root]).to_string(),
                 callee: word.to_string(),
                 callee_at,
                 arg_index: idx,
             });
         }
     }
+}
+
+fn called_at(tokens: &[Token], i: usize) -> Option<usize> {
+    let mut start = i;
+    let mut at = i + 1;
+    loop {
+        while punct_at(tokens, at, b'!') && !punct_at(tokens, at + 1, b'=') {
+            at += 1;
+        }
+        if start > 0
+            && punct_at(tokens, start - 1, b'(')
+            && punct_at(tokens, at, b')')
+            && find_close_at(tokens, start - 1) == Some(at)
+            && !(start > 1 && tokens[start - 2].facts.ends_expression())
+        {
+            start -= 1;
+            at += 1;
+            continue;
+        }
+        break;
+    }
+    if punct_at(tokens, at, b'(') {
+        return Some(at);
+    }
+    (matches!(
+        tokens.get(at).map(|token| &token.kind),
+        Some(TokenKind::OptChain)
+    ) && punct_at(tokens, at + 1, b'('))
+    .then_some(at + 1)
 }

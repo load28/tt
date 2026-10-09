@@ -1,0 +1,34 @@
+=== anInertConditionWithAnIfLetIsLowered.tt ===
+variant V { A(n: number), B }
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => V
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+export function f(k: number, v: V) {
+>f : function f(k: number, v: V): string
+>k : (parameter) k: number
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  const u = ((x: number) => { if let A(n) = v { return n + x; } return 0; }) ? match (k) { 1 => "one", _ => "other" } : "none";
+>u : const u: string
+>x : (parameter) x: number
+>n : const n: number
+>v : (parameter) v: V
+>n : const n: number
+>x : (parameter) x: number
+>k : (parameter) k: number
+  return u;
+>u : const u: string
+

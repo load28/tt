@@ -10,7 +10,7 @@ declare function g(a: number, b: number, c: number): void;
 declare function eff(): number;
 {
   let $tt_v0: number;
-  const $tt_v1 = (g);
+  const $tt_v1: typeof g = (g);
   {
     const $tt_m = 1;
     switch ($tt_m) {
@@ -22,7 +22,7 @@ declare function eff(): number;
 }
 {
   let $tt_v2: number;
-  const $tt_v3 = (g);
+  const $tt_v3: typeof g = (g);
   const $tt_v4: number = (eff());
   {
     const $tt_m = 1;

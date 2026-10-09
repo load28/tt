@@ -225,7 +225,7 @@ Do not legalize an illegal function-targeted `Propagate` by wrapping it in `$tt_
 | Ordinary Result-returning function | TypeScript return from that function; write `Result.Ok(x)` explicitly | That function, when placement permits |
 | Statement, initializer, `if`, loop, `switch`, or TypeScript `try` body directly owned by `result` | Complete the block with `Ok(x)` | This block |
 | Inline `if let` body or let-else `else` inside `result` | Complete the block with `Ok(x)` | This block; let-else divergence is relative to block completion |
-| Isolated value region: value-producing match arm/scrutinee, pipeline step, template interpolation | That isolated region owns its value exits; a match block-arm `return` yields the arm value | Function target remains Legal if no outer ResultRegion is crossed; a `try` targeting an outer `result` is rejected as `try-crosses-value-region` |
+| Isolated value region: value-producing match arm or guard, pipeline step, template interpolation (a match scrutinee and a pipeline head run before the region and belong to the enclosing scope; TASK-768) | That isolated region owns its value exits; a match block-arm `return` yields the arm value | Function target remains Legal if no outer ResultRegion is crossed; a `try` targeting an outer `result` is rejected as `try-crosses-value-region` |
 | Function/method/accessor nested inside `result` | TypeScript return from that nested function-like | That nested function-like, subject to owner restrictions |
 | Constructor/generator/async generator nested inside `result` | TypeScript constructor/iterator completion | Function-targeted `try` is rejected; a nested `result` remains Legal |
 | Nested `result` | Complete the inner block with `Ok(x)` | The inner block |

@@ -45,7 +45,7 @@ fn call_completion_proofs_require_a_whole_value_single_argument() {
         let completion = program
             .overlay
             .iter()
-            .find_map(|entry| entry.protocol.call_completion);
+            .find_map(|entry| entry.protocol.call_completion.clone());
         assert_eq!(
             completion.map(|facts| (
                 facts.consumed,
@@ -289,7 +289,7 @@ fn a_match_argument_keeps_its_call_parent_path() {
     assert!(
         entry
             .parents
-            .iter()
+            .kinds(&syntax.parent_edges)
             .any(|parent| matches!(parent, AstParentKind::CallExpr(_))),
         "{:?}",
         entry.parents
@@ -675,6 +675,7 @@ fn mixed_syntax_matrix_covers_every_host_protocol_class() {
             EvaluationOwner::FunctionBody => "function",
             EvaluationOwner::Constructor => "constructor",
             EvaluationOwner::Generator => "generator",
+            EvaluationOwner::Setter => "setter",
             EvaluationOwner::ParameterInitializer => "parameter",
             EvaluationOwner::ClassInitializer => "class-field",
             EvaluationOwner::ClassDefinition => "class-definition",
@@ -1065,4 +1066,54 @@ fn multibyte_source_and_projection_coordinates_do_not_mix() {
     assert!(projected.starts_with("(() => {"), "{projected}");
     assert!(projected.contains("\"안녕\""), "{projected}");
     assert!(projected.contains("\"끝\""), "{projected}");
+}
+
+#[test]
+fn a_segment_list_keeps_the_order_a_vector_would() {
+    let segment = |at: usize| ProjectionSourceSegment {
+        projected: ProjectedSpan {
+            start: ProjectedByte(at),
+            end: ProjectedByte(at),
+        },
+        source: SourceSpan { start: at, end: at },
+        kind: ProjectionSegmentKind::Copied,
+    };
+    let starts = |segments: &mut dyn Iterator<Item = &ProjectionSourceSegment>| {
+        segments
+            .map(|segment| segment.source.start)
+            .collect::<Vec<_>>()
+    };
+    let mut list = projection::SegmentList::default();
+    let mut vector: Vec<ProjectionSourceSegment> = Vec::new();
+    let mut state = 7usize;
+    for at in 0..400 {
+        state = state
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        match (state >> 33) % 3 {
+            0 => {
+                list.push(segment(at));
+                vector.push(segment(at));
+            }
+            1 => {
+                list.push_front(segment(at));
+                vector.insert(0, segment(at));
+            }
+            _ => {
+                let index = (state >> 40) % (vector.len() + 1);
+                list.insert(index, segment(at));
+                vector.insert(index, segment(at));
+            }
+        }
+        let since = (state >> 20) % (vector.len() + 1);
+        assert_eq!(
+            starts(&mut list.since(since).rev()),
+            starts(&mut vector[since..].iter().rev())
+        );
+        assert_eq!(list.len(), vector.len());
+    }
+    assert_eq!(
+        starts(&mut list.into_vec().iter()),
+        starts(&mut vector.iter())
+    );
 }

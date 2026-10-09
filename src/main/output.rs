@@ -128,12 +128,37 @@ pub(super) fn normalized_absolute(path: &Path) -> PathBuf {
 /// sibling temporary first and the rename replaces the target in one step,
 /// so a reader sees the previous file or the new one, never a prefix.
 pub(super) fn write_output(out_path: &Path, code: &str) -> Result<(), String> {
+    write_output_bytes(out_path, code.as_bytes())
+}
+
+pub(super) fn write_output_bytes(out_path: &Path, code: &[u8]) -> Result<(), String> {
     if let Some(parent) = out_path.parent()
-        && let Err(e) = fs::create_dir_all(parent)
+        && let Err(e) = create_dir_all(parent)
     {
-        return Err(format!("ttc: {}: {e}", parent.display()));
+        return Err(format!("{}: {e}", out_path.display()));
     }
-    replace_file(out_path, code.as_bytes()).map_err(|e| format!("ttc: {}: {e}", out_path.display()))
+    replace_file(out_path, code).map_err(|e| format!("{}: {e}", out_path.display()))
+}
+
+pub(super) fn create_dir_all(dir: &Path) -> std::io::Result<()> {
+    fs::create_dir_all(dir).map_err(|error| {
+        if !matches!(
+            error.kind(),
+            std::io::ErrorKind::AlreadyExists | std::io::ErrorKind::NotADirectory
+        ) {
+            return error;
+        }
+        match dir
+            .ancestors()
+            .find(|ancestor| fs::metadata(ancestor).is_ok_and(|meta| !meta.is_dir()))
+        {
+            Some(file) => std::io::Error::new(
+                std::io::ErrorKind::NotADirectory,
+                format!("{}: not a directory", file.display()),
+            ),
+            None => error,
+        }
+    })
 }
 
 /// Publishes bytes through an exclusively owned sibling staging file.
@@ -187,19 +212,42 @@ pub(crate) const WATCH_INTERVAL: Duration = Duration::from_millis(300);
 pub(super) fn watch_mode(
     inputs: &[String],
     out_dir: Option<&Path>,
+    project: Option<&Path>,
     opts: &BuildOptions,
 ) -> ExitCode {
     let mut stamps: HashMap<PathBuf, SystemTime> = HashMap::new();
     let mut reads: HashMap<PathBuf, (SystemTime, Vec<PathBuf>)> = HashMap::new();
     let mut placed: Option<PathBuf> = None;
+    let mut configured: Option<JsxPreserve> = None;
+    let mut packaged: Option<bool> = None;
+    let mut refused = false;
     let mut first = true;
     let mut input_error = None;
 
     loop {
-        let jobs = match build_jobs(inputs, out_dir, true) {
-            Ok(jobs) => {
-                input_error = None;
-                jobs
+        let round = build_jobs(inputs, out_dir, true).and_then(|jobs| {
+            if opts.print && jobs.len() != 1 {
+                return Err("ttc: --print requires exactly one source file".to_string());
+            }
+            let files: Vec<PathBuf> = jobs.iter().map(|job| job.file.clone()).collect();
+            let jsx_preserve = if opts.check {
+                JsxPreserve::new()
+            } else {
+                project_jsx_preserve(opts.rewrite_imports, &files, project).map_err(|error| {
+                    format!(
+                        "ttc: {error} (name the configuration with --project, or choose \
+                         --rewrite-imports ts or off)"
+                    )
+                })?
+            };
+            Ok((jobs, jsx_preserve))
+        });
+        let (jobs, jsx_preserve) = match round {
+            Ok(round) => {
+                if input_error.take().is_some() {
+                    configured = None;
+                }
+                round
             }
             // An input can disappear mid-edit; keep watching rather than
             // tearing the session down.
@@ -212,6 +260,11 @@ pub(super) fn watch_mode(
                 continue;
             }
         };
+        let round_opts = BuildOptions {
+            jsx_preserve: jsx_preserve.clone(),
+            ..opts.clone()
+        };
+        let opts = &round_opts;
 
         let stamp = |file: &Path| {
             fs::metadata(file)
@@ -234,21 +287,32 @@ pub(super) fn watch_mode(
 
         let root = support_root(&jobs, out_dir);
         let moved = root != placed;
-        let changed: Vec<PathBuf> = if first || moved {
-            jobs.iter().map(|job| job.file.clone()).collect()
-        } else {
-            current
+        let module_package = std_placement(root.as_deref())
+            .as_deref()
+            .is_some_and(package_is_module);
+        let repackaged = packaged.is_some_and(|before| before != module_package);
+        let reconfigured = configured.as_ref().is_none_or(|configured| {
+            jsx_preserve
                 .iter()
-                .filter(|(file, stamp)| stamps.get(*file) != Some(stamp))
-                .map(|(file, _)| file.clone())
-                .chain(
-                    stamps
-                        .keys()
-                        .filter(|file| !current.contains_key(*file))
-                        .cloned(),
-                )
-                .collect()
-        };
+                .any(|(file, value)| configured.get(file).is_some_and(|before| before != value))
+        });
+        let edited: Vec<PathBuf> = current
+            .iter()
+            .filter(|(file, stamp)| stamps.get(*file) != Some(stamp))
+            .map(|(file, _)| file.clone())
+            .chain(
+                stamps
+                    .keys()
+                    .filter(|file| !current.contains_key(*file))
+                    .cloned(),
+            )
+            .collect();
+        let changed: Vec<PathBuf> =
+            if first || moved || reconfigured || repackaged || (refused && !edited.is_empty()) {
+                jobs.iter().map(|job| job.file.clone()).collect()
+            } else {
+                edited
+            };
 
         let selected: Vec<Job> = if changed.is_empty() {
             Vec::new()
@@ -259,7 +323,11 @@ pub(super) fn watch_mode(
                 .cloned()
                 .collect()
         };
-        if !selected.is_empty() {
+        let claimed = selected.is_empty() || opts.print || !claim_conflicts(&jobs).0;
+        refused = !claimed;
+        if !claimed {
+            eprintln!("ttc: 0 file(s) rebuilt, with errors — watching");
+        } else if !selected.is_empty() {
             let failed = compile_jobs(&selected, root.as_deref(), opts);
             // The count is what was rebuilt; only the word after it says
             // how the round went, so "failed" must not borrow it.
@@ -276,6 +344,8 @@ pub(super) fn watch_mode(
         }
         stamps = current;
         placed = root;
+        configured = Some(jsx_preserve);
+        packaged = Some(module_package);
         thread::sleep(WATCH_INTERVAL);
     }
 }
@@ -287,22 +357,10 @@ pub(super) const TYPES_DIR: &str = ".tt-types";
 /// the sidecar tree mirrors the source tree rather than the whole cwd.
 pub(super) fn input_relative(file: &Path, inputs: &[String]) -> PathBuf {
     let file = normalized_absolute(file);
-    let directory_roots = inputs
-        .iter()
-        .map(Path::new)
-        .filter(|path| path.is_dir())
-        .map(normalized_absolute);
-    let named_root = deepest_shared_directory(
-        inputs
-            .iter()
-            .map(Path::new)
-            .filter(|path| path.is_file())
-            .filter_map(|path| normalized_absolute(path).parent().map(Path::to_path_buf)),
-    );
-    for root in directory_roots.chain(named_root) {
-        if let Ok(relative) = file.strip_prefix(root) {
-            return relative.to_path_buf();
-        }
+    if let Some(root) = input_root(inputs)
+        && let Ok(relative) = file.strip_prefix(root)
+    {
+        return relative.to_path_buf();
     }
     PathBuf::from(file.file_name().unwrap_or_default())
 }
@@ -325,7 +383,7 @@ pub(super) fn with_dependents(jobs: &[Job], changed: &[PathBuf]) -> HashSet<Path
         let dir = job.file.parent().unwrap_or(Path::new("."));
         let imports_changed = ttc::tt_imports(&source)
             .iter()
-            .any(|import| changed_real.contains(&identity(&dir.join(&import.specifier))));
+            .any(|import| changed_real.contains(&identity(&dir.join(import.path()))));
         if imports_changed {
             targets.insert(job.file.clone());
         }

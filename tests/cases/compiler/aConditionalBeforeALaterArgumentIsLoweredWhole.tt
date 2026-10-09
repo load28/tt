@@ -1,0 +1,10 @@
+// @run: aConditionalBeforeALaterArgumentIsLoweredWhole.tt
+const calls: string[] = [];
+variant V { A, B }
+function f(...xs: number[]): number { calls.push("f"); return xs.reduce((a, b) => a + b, 0); }
+function a(): number { calls.push("a"); return 1; }
+function b(): number { calls.push("b"); return 10; }
+export function g(c: boolean, v: V) {
+  return f(a(), c ? match (v) { A => { calls.push("A"); return 100; }, B => 200 } : match (v) { A => { calls.push("A2"); return 300; }, B => 400 }, b());
+}
+console.log(g(true, V.A), g(false, V.B), JSON.stringify(calls));

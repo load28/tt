@@ -1,0 +1,31 @@
+//// [aSpreadBesideATtValueReadsItsElementsFirst.tt] 29 mapping(s)
+1:19 -> 30:3 len 224  "\nconst o: { a: number } = { a: 1 };\nconst arr = "...
+7:3 -> 46:3 len 12  "return { ..."
+7:15 -> 37:24 len 1  "o"
+7:16 -> 46:21 len 5  ", b: "
+7:28 -> 39:19 len 5  "get()"
+7:42 -> 46:42 len 1  "1"
+7:50 -> 46:46 len 1  "0"
+7:53 -> 46:48 len 43  " };\n}\nexport function arrayScrutinee() {\n  "
+10:3 -> 59:3 len 11  "return [..."
+10:14 -> 50:30 len 3  "arr"
+10:17 -> 59:20 len 2  ", "
+10:26 -> 52:19 len 5  "get()"
+10:40 -> 59:38 len 1  "1"
+10:48 -> 59:42 len 1  "0"
+10:51 -> 59:44 len 52  "];\n}\nexport function objectArm(v: V) {\n  o.a = 1"...
+14:3 -> 73:3 len 12  "return { ..."
+14:15 -> 64:24 len 1  "o"
+14:16 -> 73:21 len 5  ", b: "
+14:28 -> 66:19 len 1  "v"
+14:38 -> 73:42 len 7  "bump(v)"
+14:52 -> 73:52 len 1  "0"
+14:55 -> 73:54 len 59  " };\n}\nexport function arrayArm(v: V) {\n  arr.len"...
+18:3 -> 87:3 len 11  "return [..."
+18:14 -> 78:30 len 3  "arr"
+18:17 -> 87:20 len 2  ", "
+18:26 -> 80:19 len 1  "v"
+18:36 -> 87:38 len 11  "arr.push(3)"
+18:54 -> 87:52 len 1  "0"
+18:57 -> 87:54 len 189  "];\n}\nconsole.log(JSON.stringify(objectScrutinee("...
+

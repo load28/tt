@@ -4,6 +4,7 @@
 //! only through HIR nodes and the source map. Every tt surface reaches this
 //! module through a shared Core primitive.
 
+mod authored;
 mod emitter;
 mod planning;
 
@@ -26,6 +27,7 @@ use crate::program_syntax::{
 };
 use crate::{AnchorKind, RewrittenExtensions, SourceKind, StdImports};
 
+use authored::*;
 use emitter::*;
 use planning::*;
 
@@ -279,6 +281,7 @@ pub(crate) struct EmitSource<'a> {
     pub(crate) kind: SourceKind,
     pub(crate) automatic_semicolons: &'a [crate::lexer::AutomaticSemicolon],
     pub(crate) comments: &'a [crate::ast::Span],
+    pub(crate) tokens: &'a [crate::lexer::Token],
 }
 
 pub(crate) fn emit_with_map<'a>(
@@ -294,6 +297,7 @@ pub(crate) fn emit_with_map<'a>(
         kind: source_kind,
         automatic_semicolons,
         comments,
+        tokens,
     } = emit_source;
     let governed = crate::lexer::directive_governed_lines(source, comments);
     let target = TargetRewritePlan::build(semantic, core, source, lowering_plan);
@@ -361,16 +365,15 @@ pub(crate) fn emit_with_map<'a>(
                 if propagate.binding.is_some()
                     && !for_initializer_nodes.contains(&propagate.node) =>
             {
-                Some(propagate.owner)
+                semantic.hir.source_map.node_span(propagate.owner)
             }
             Statement::Decision(decision)
                 if matches!(decision.kind, DecisionKind::LetElse { .. }) =>
             {
-                Some(decision.extent)
+                semantic.hir.source_map.node_extent(decision.extent)
             }
             _ => None,
         })
-        .filter_map(|node| semantic.hir.source_map.node_span(node))
         .map(|span| span.start);
     let relocated_documentation: HashMap<usize, SourceSpan> = target
         .owner_slots
@@ -404,6 +407,7 @@ pub(crate) fn emit_with_map<'a>(
         core,
         source,
         source_kind,
+        tokens,
         direct_apply_inputs,
         member_apply_steps,
         reference_apply_steps,
@@ -440,8 +444,59 @@ pub(crate) fn emit_with_map<'a>(
                 .iter()
                 .map(|replacement| replacement.source),
         ),
+        replacement_order: crate::span_index::NestedOrder::new(
+            target
+                .source_replacements
+                .iter()
+                .map(|replacement| (replacement.source.start, replacement.source.end)),
+        ),
+        claim_order: {
+            let claims: Vec<usize> = target
+                .source_replacements
+                .iter()
+                .enumerate()
+                .filter(|(_, replacement)| replacement.claim)
+                .map(|(index, _)| index)
+                .collect();
+            (
+                crate::span_index::NestedOrder::new(claims.iter().map(|&index| {
+                    let source = target.source_replacements[index].source;
+                    (source.start, source.end)
+                })),
+                claims,
+            )
+        },
+        value_order: std::cell::OnceCell::new(),
+        slot_value_order: std::cell::OnceCell::new(),
+        nested_input_order: std::cell::OnceCell::new(),
+        piped_steps: std::cell::OnceCell::new(),
+        slots_named: std::cell::OnceCell::new(),
+        deferred_arm_values: std::cell::OnceCell::new(),
+        statement_order: std::cell::OnceCell::new(),
+        claimed_frames: target
+            .source_replacements
+            .iter()
+            .enumerate()
+            .filter(|(_, replacement)| replacement.claim)
+            .fold(
+                std::collections::BTreeMap::<usize, Vec<(usize, usize)>>::new(),
+                |mut frames, (index, replacement)| {
+                    frames
+                        .entry(replacement.source.start)
+                        .or_default()
+                        .push((replacement.source.end, index));
+                    frames
+                },
+            )
+            .into_iter()
+            .map(|(start, mut ends)| {
+                ends.sort_unstable();
+                (start, ends)
+            })
+            .collect(),
         source_replacements: target.source_replacements,
         active_capture_sources: RefCell::new(Vec::new()),
+        rebuilt_sources: RefCell::new(Vec::new()),
         delivered_conditional_values: RefCell::new(HashSet::new()),
         consumed_exprs: target.consumed_exprs,
         arrow_returns_by_expr: target.arrow_returns.iter().enumerate().rev().fold(
@@ -477,6 +532,12 @@ pub(crate) fn emit_with_map<'a>(
         expression_boundary_name: target.expression_boundary_name,
         match_raise_name: target.match_raise_name,
         match_show_name: target.match_show_name,
+        spread_name: target.spread_name,
+        guarded_if_tests: target.guarded_if_tests,
+        anonymous_functions: target.anonymous_functions,
+        function_names: target.function_names,
+        discarded_values: target.discarded_values,
+        if_test_closings: RefCell::new(Vec::new()),
         host_error: target.host_error,
         host_json: target.host_json,
         host_string: target.host_string,
@@ -502,6 +563,7 @@ pub(crate) fn emit_with_map<'a>(
         ambient_items: target.ambient_items,
         used_match_raise: Cell::new(false),
         used_match_show: Cell::new(false),
+        used_spread: Cell::new(false),
         used_host_error: Cell::new(false),
         conditional_region_depth: Cell::new(0),
         active_structured_exprs: ActiveExprStack::default(),
@@ -564,6 +626,12 @@ pub(crate) fn emit_with_map<'a>(
                 emitter.match_show_name
             ));
         }
+        if emitter.used_spread.get() {
+            prelude.push(format!(
+                "var {}: {{\n  <T extends readonly unknown[]>(values: T): [...T];\n  <T>(values: Iterable<T>): T[];\n}} = function (values: Iterable<unknown>) {{\n  return [...values];\n}};\n",
+                emitter.spread_name
+            ));
+        }
         if emitter.used_expression_boundary.get() {
             prelude.push(format!(
                 "var {}: <T>(run: () => T) => T = function (run) {{ return run(); }};\n",
@@ -606,6 +674,12 @@ pub(crate) fn emit_with_map<'a>(
             prelude.push(format!(
                 "function {}(value: unknown): string {body}\n",
                 emitter.match_show_name
+            ));
+        }
+        if emitter.used_spread.get() {
+            let name = &emitter.spread_name;
+            prelude.push(format!(
+                "function {name}<T extends readonly unknown[]>(values: T): [...T];\nfunction {name}<T>(values: Iterable<T>): T[];\nfunction {name}(values: Iterable<unknown>) {{\n  return [...values];\n}}\n"
             ));
         }
         if emitter.used_expression_boundary.get() {
@@ -724,6 +798,11 @@ pub(crate) fn emit_with_map<'a>(
         &boundaries,
         &preservation,
         &governed_statements,
+        comments
+            .iter()
+            .filter(|comment| source[comment.start..].starts_with("//"))
+            .map(|comment| comment.end)
+            .collect(),
     );
     for result_return in &mut flat.result_return_temps {
         result_return.src_end = result_return_args

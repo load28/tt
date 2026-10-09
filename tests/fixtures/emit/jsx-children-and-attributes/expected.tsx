@@ -49,6 +49,7 @@ export const view = <main>
 </main>;
 
 let $tt_v1: string;
+const $tt_v2 = (Panel);
 {
   const $tt_m = state;
   switch ($tt_m.kind) {
@@ -66,4 +67,4 @@ let $tt_v1: string;
     }
   }
 }
-export const panel = <Panel value={$tt_v1} />;
+export const panel = <$tt_v2 value={$tt_v1} />;

@@ -77,7 +77,7 @@ function a() {
     switch ($tt_m.kind) {
       case "A": {
         const { n } = $tt_m;
-        const $tt_a0 = { value: () => n + 1 };
+        const $tt_a0 = { value: (void 0, () => n + 1) };
         $tt_v0 = $tt_a0.value;
         break;
       }
@@ -130,7 +130,7 @@ function f() {
     switch ($tt_m.kind) {
       case "A": {
         const { n } = $tt_m;
-        $tt_v3 = (k: number) => k + n;
+        $tt_v3 = (void 0, (k: number) => k + n);
         break;
       }
       case "B": {
@@ -151,7 +151,7 @@ function g() {
     switch ($tt_m.kind) {
       case "A": {
         const { n } = $tt_m;
-        $tt_v4 = () => v;
+        $tt_v4 = (void 0, () => v);
         break;
       }
       case "B": {

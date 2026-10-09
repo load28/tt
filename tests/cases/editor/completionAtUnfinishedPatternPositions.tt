@@ -1,0 +1,12 @@
+// @completions: iflet, elseiflet, afterwild, quote, unclosed
+variant Shape { Circle(radius: number), Point }
+variant Opt<T> { Has(item: T), Nope }
+declare const s: Shape;
+declare const o: Opt<Shape>;
+declare const d: "a" | "b";
+export function f() {
+  if let /*iflet*/ = o { }
+  if let Has(item) = o { } else if let /*elseiflet*/ = o { }
+  const w = match (s) { Point => 0, _ => 1, /*afterwild*/ };
+  const q = match (d) { "/*quote*/ };
+  const u = match (s) { /*unclosed*/

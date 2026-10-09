@@ -1,0 +1,88 @@
+=== main.ttx ===
+variant S { A, B }
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const log: string[] = [];
+>log : const log: string[]
+const React = {
+>React : const React: {
+>       createElement(tag: {
+>           name: string;
+>       }, _props: unknown, ..._children: unknown[]): null;
+>   }
+  createElement(tag: { name: string }, _props: unknown, ..._children: unknown[]) {
+>createElement : (method) createElement(tag: {
+>       name: string;
+>   }, _props: unknown, ..._children: unknown[]): null
+>tag : (parameter) tag: {
+>       name: string;
+>   }
+>name : (property) name: string
+>_props : (parameter) _props: unknown
+>_children : (parameter) _children: unknown[]
+    log.push(`create ${tag.name}`);
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>tag : (parameter) tag: {
+>       name: string;
+>   }
+>name : (property) name: string
+function o(): S { log.push("subject"); return S.A; }
+>o : function o(): S
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>S : const S: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+function Comp(_p: { k: number; z: number }) { return null; }
+>Comp : function Comp(_p: {
+>       k: number;
+>       z: number;
+>   }): null
+>_p : (parameter) _p: {
+>       k: number;
+>       z: number;
+>   }
+>k : (property) k: number
+>z : (property) z: number
+function main() {
+>main : function main(): any
+  return <Comp {...{ get k() { log.push("k"); return 1; } }} z={match (o()) { A => 1, B => 2 }} />;
+>Comp : function Comp(_p: {
+>       k: number;
+>       z: number;
+>   }): null
+>k : (accessor) k: number
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>o : function o(): S
+main();
+>main : function main(): any
+console.log(log.join(", "));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

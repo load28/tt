@@ -1,0 +1,29 @@
+// @filename: tsconfig.json
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "jsx": "preserve",
+    "strict": true,
+    "noEmit": true
+  }
+}
+// @filename: view.ttx
+declare global {
+  namespace JSX {
+    interface IntrinsicElements { [name: string]: unknown }
+    type Element = unknown;
+  }
+}
+export variant S { A, B }
+declare const x: S;
+declare const s: S;
+declare const c: boolean;
+declare function g(f: () => unknown): unknown;
+export function a() { return <ul>{() => <li>{match (x) { A => 1, B => 2 }}</li>}{match (s) { A => 3, B => 4 }}</ul>; }
+export function b() { return <ul>{() => (match (x) { A => 1, B => 2 })}{match (s) { A => 3, B => 4 }}</ul>; }
+export function c1() { return <ul a={() => <li>{match (x) { A => 1, B => 2 }}</li>} b={match (s) { A => 3, B => 4 }}/>; }
+export function d() { return <ul><b>{() => <li>{match (x) { A => 1, B => 2 }}</li>}</b>{match (s) { A => 3, B => 4 }}</ul>; }
+export function e() { return <ul>{g(() => <li>{match (x) { A => 1, B => 2 }}</li>)}{c && match (s) { A => 3, B => 4 }}</ul>; }
+export function h() { return <ul>{(() => <li>{match (x) { A => 1, B => 2 }}</li>)()}{match (s) { A => 3, B => 4 }}</ul>; }

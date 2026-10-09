@@ -9,7 +9,7 @@ declare function id(v: number): number;
 let n = 0;
 while (true) {
   let $tt_v0: number;
-  const $tt_v1 = (id);
+  const $tt_v1: typeof id = (id);
   {
     const $tt_m = n;
     switch ($tt_m) {

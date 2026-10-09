@@ -1,0 +1,36 @@
+=== aTryInAResultBlockLoopConditionIsAPlacementError.tt ===
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Ok"
+>value : (property) value: T
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Err"
+>error : (property) error: string
+declare function r(): R<number>;
+>r : function r(): R<number>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+declare let k: number;
+>k : let k: number
+declare const o: { a?: number };
+>o : const o: {
+>       a?: number;
+>   }
+>a : (property) a?: number | undefined
+export function loops() {
+>loops : function loops(): any
+export function defaults() {
+>defaults : function defaults(): any
+

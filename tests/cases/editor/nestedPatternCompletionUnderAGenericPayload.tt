@@ -1,0 +1,25 @@
+// @completions: nested, empty, deeper
+variant Shape { Circle(radius: number), Point }
+variant Opt<T> { Has(item: T), Nope }
+variant Box<T> { Full(value: T) }
+declare const o: Opt<Shape>;
+declare const b: Box<Opt<Shape>>;
+export function f(): number {
+  return match (o) {
+    Has(item: Circle(radius: r)) => r,
+    Has(item: Po/*nested*/int()) => 0,
+    Nope => 0,
+  };
+}
+export function g(): number {
+  return match (o) {
+    Has(item: /*empty*/) => 0,
+    _ => 0,
+  };
+}
+export function h(): number {
+  return match (b) {
+    Full(value: Has(item: Ci/*deeper*/rcle(radius: r))) => r,
+    _ => 0,
+  };
+}

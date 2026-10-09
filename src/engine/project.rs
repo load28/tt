@@ -15,7 +15,7 @@
 //! compiler process stays up and only changed modules are re-served).
 
 use std::cell::{Cell, RefCell};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -139,6 +139,11 @@ pub struct Project {
     scoped: RefCell<HashMap<PathBuf, ScopedMaterialization>>,
     /// Each file's last reference closure and what it was computed from.
     closures: RefCell<HashMap<PathBuf, KnownClosure>>,
+    /// The candidates the last membership question found in the
+    /// project's TypeScript programs: projected up front by the next
+    /// update, so a steady project serves no candidate as a placeholder
+    /// that its program contains.
+    known_members: HashSet<PathBuf>,
     next_snapshot: u64,
     /// The language-service half — the running `tsgo --lsp` conversation —
     /// started by the first editor question ([`crate::engine::language`]).
@@ -177,6 +182,7 @@ impl Project {
             materialized: RefCell::new(None),
             scoped: RefCell::new(HashMap::new()),
             closures: RefCell::new(HashMap::new()),
+            known_members: HashSet::new(),
             next_snapshot: 0,
             service: None,
         }
@@ -263,14 +269,18 @@ impl Project {
     /// program, while the directory is not itself an input.
     ///
     /// A project without a configuration takes its program from the walk
-    /// of its root, so the directories that walk listed are dependencies
-    /// too.
+    /// of its root, so the files and directories that walk listed are
+    /// dependencies too.
     pub fn dependencies(&self) -> std::io::Result<Dependencies> {
-        let (mut files, walked) = project_tree(
-            &self.root,
-            self.out_dir.as_deref(),
-            &["tt", "ttx", "ts", "tsx", "mts", "cts", "json"],
-        )?;
+        let (mut files, walked) = if self.tsconfig.is_none() {
+            project_tree(
+                &self.root,
+                self.out_dir.as_deref(),
+                &["tt", "ttx", "ts", "tsx", "mts", "cts", "json"],
+            )?
+        } else {
+            (Vec::new(), Vec::new())
+        };
         files.extend(self.dependencies.borrow().iter().cloned());
         files.extend(self.requested.iter().cloned());
         files.extend(self.cache.keys().cloned());
@@ -280,9 +290,7 @@ impl Project {
         files.sort();
         files.dedup();
         let mut directories: Vec<_> = self.directories.borrow().iter().cloned().collect();
-        if self.tsconfig.is_none() {
-            directories.extend(walked);
-        }
+        directories.extend(walked);
         directories.sort();
         directories.dedup();
         Ok(Dependencies { files, directories })
@@ -340,6 +348,17 @@ impl Project {
         files: &[PathBuf],
         target: Option<&Path>,
     ) -> Result<Snapshot, Box<Blocked>> {
+        self.update_with_roots(files, target, &[])
+    }
+
+    /// [`Project::update_scoped`] for a check that also makes `roots` roots
+    /// by request: they are projected whatever the configuration says.
+    fn update_with_roots(
+        &mut self,
+        files: &[PathBuf],
+        target: Option<&Path>,
+        roots: &[PathBuf],
+    ) -> Result<Snapshot, Box<Blocked>> {
         self.requested.extend(
             files
                 .iter()
@@ -382,10 +401,71 @@ impl Project {
         if let Some(unnamed) = overlays.keys().find(|path| path.to_str().is_none()) {
             return Err(unnameable(unnamed));
         }
-        let mut pending = files.to_vec();
-        let mut seen: HashSet<_> = files.iter().cloned().collect();
+        let deferring = self.tsconfig.is_some() && self.backend.is_ok();
+        let (mut pending, mut deferred): (Vec<PathBuf>, BTreeSet<PathBuf>) = if deferring {
+            let (pending, deferred): (Vec<_>, Vec<_>) = files.iter().cloned().partition(|file| {
+                crate::SourceKind::from_tt_path(file).is_none()
+                    || self.requested.contains(file)
+                    || self.opened.contains(file)
+                    || self.named.contains(file)
+                    || self.known_members.contains(file)
+                    || roots.contains(file)
+                    || target == Some(file.as_path())
+            });
+            (pending, deferred.into_iter().collect())
+        } else {
+            (files.to_vec(), BTreeSet::new())
+        };
+        let mut seen: HashSet<_> = pending.iter().cloned().collect();
+        let mut imported = HashSet::new();
+        let mut unread = Vec::new();
         let mut cursor = 0;
-        while cursor < pending.len() {
+        loop {
+            if cursor == pending.len() {
+                deferred.retain(|file| !seen.contains(file));
+                if deferred.is_empty() {
+                    break;
+                }
+                let joined = self
+                    .program_members(&projected, &blocked_files, &deferred, &overlays, roots)
+                    .map_err(|failure| {
+                        Box::new(Blocked {
+                            path: self.root.clone(),
+                            error: CompileError {
+                                message: failure.message,
+                                filename: None,
+                                line: 0,
+                                col: 0,
+                                end_line: 0,
+                                end_col: 0,
+                            },
+                        })
+                    })?;
+                let joined: Vec<PathBuf> = match joined {
+                    Some(members) => {
+                        self.known_members = files
+                            .iter()
+                            .filter(|file| members.contains(&projection::module_path_of(file)))
+                            .cloned()
+                            .collect();
+                        deferred
+                            .iter()
+                            .filter(|file| self.known_members.contains(*file))
+                            .cloned()
+                            .collect()
+                    }
+                    None => deferred.iter().cloned().collect(),
+                };
+                if joined.is_empty() {
+                    break;
+                }
+                for file in joined {
+                    deferred.remove(&file);
+                    seen.insert(file.clone());
+                    pending.push(file);
+                }
+                continue;
+            }
             let file = pending[cursor].clone();
             cursor += 1;
             let file = &file;
@@ -394,19 +474,32 @@ impl Project {
             }
             let text = match overlays.get(file) {
                 Some(text) => text.clone(),
-                None => std::fs::read_to_string(file).map_err(|e| {
-                    Box::new(Blocked {
-                        path: file.clone(),
-                        error: CompileError {
-                            message: format!("cannot read: {e}"),
-                            filename: Some(file.display().to_string()),
-                            line: 0,
-                            col: 0,
-                            end_line: 0,
-                            end_col: 0,
-                        },
-                    })
-                })?,
+                None => match std::fs::read_to_string(file) {
+                    Ok(text) => text,
+                    Err(e) => {
+                        let failure = Box::new(Blocked {
+                            path: file.clone(),
+                            error: CompileError {
+                                message: format!("cannot read: {e}"),
+                                filename: Some(file.display().to_string()),
+                                line: 0,
+                                col: 0,
+                                end_line: 0,
+                                end_col: 0,
+                            },
+                        });
+                        // A file the project scan found, which no input
+                        // names and nothing imports, is one module the
+                        // checker does not get — TypeScript's own scan
+                        // skips an entry it cannot read — not a reason the
+                        // check cannot run.
+                        if self.requested.contains(file) || imported.contains(file) {
+                            return Err(failure);
+                        }
+                        unread.push(failure);
+                        continue;
+                    }
+                },
             };
             let open = self.opened.contains(file);
             let doc = match self.cache.get(file) {
@@ -428,6 +521,7 @@ impl Project {
                             &overlays,
                             &mut pending,
                             &mut seen,
+                            &mut imported,
                         );
                         blocked_files.push(Arc::new(blocked));
                         None
@@ -435,10 +529,23 @@ impl Project {
                 },
             };
             if let Some(doc) = doc {
-                discover_imports(file, doc.tt_imports(), &overlays, &mut pending, &mut seen);
+                discover_imports(
+                    file,
+                    doc.tt_imports(),
+                    &overlays,
+                    &mut pending,
+                    &mut seen,
+                    &mut imported,
+                );
                 cache.insert(file.clone(), doc.clone());
                 projected.push(doc);
             }
+        }
+        if let Some(failure) = unread
+            .into_iter()
+            .find(|failure| imported.contains(&failure.path))
+        {
+            return Err(failure);
         }
         // Entries for files that left the project go with the old map; a
         // blocked update above leaves the previous cache intact instead, so
@@ -471,8 +578,13 @@ impl Project {
             && let Ok(backend) = &self.backend
             && available(backend)?
         {
-            let (mut query, _) =
-                projection::assemble(&projected, &blocked_files, &self.root, &self.sources);
+            let (mut query, _) = projection::assemble(
+                &projected,
+                &blocked_files,
+                &deferred,
+                &self.root,
+                &self.sources,
+            );
             query
                 .modules
                 .retain(|module| !projected.iter().any(|doc| doc.module_path == module.path));
@@ -503,7 +615,7 @@ impl Project {
             {
                 for (index, emit) in emits {
                     if projected[index].emit != emit {
-                        Arc::make_mut(&mut projected[index]).emit = emit;
+                        Arc::make_mut(&mut projected[index]).replace_emit(emit);
                     }
                 }
                 self.next_snapshot += 1;
@@ -511,6 +623,7 @@ impl Project {
                     id: self.next_snapshot,
                     files: projected,
                     blocked: blocked_files,
+                    deferred: deferred.into_iter().collect(),
                     host_overlays: overlays
                         .iter()
                         .filter(|(path, _)| is_host_source(path))
@@ -550,12 +663,13 @@ impl Project {
                         ScopedMaterialization {
                             read: read.clone(),
                             generation,
+                            source: source_digest(&projected[index].source),
                             emit: emit.clone(),
                         },
                     );
                 }
                 if projected[index].emit != emit {
-                    Arc::make_mut(&mut projected[index]).emit = emit;
+                    Arc::make_mut(&mut projected[index]).replace_emit(emit);
                 }
             }
         }
@@ -564,12 +678,61 @@ impl Project {
             id: self.next_snapshot,
             files: projected,
             blocked: blocked_files,
+            deferred: deferred.into_iter().collect(),
             host_overlays: overlays
                 .iter()
                 .filter(|(path, _)| is_host_source(path))
                 .map(|(path, text)| (path.clone(), text.clone()))
                 .collect(),
         })
+    }
+
+    /// The modules the project's TypeScript programs contain when every
+    /// file in `deferred` is served as a placeholder: the configuration's
+    /// `files` and `include` and module resolution decide it, as for any
+    /// other module, without the deferred files being projected. `None`
+    /// when there is no checker to ask, and every candidate is projected.
+    fn program_members(
+        &self,
+        projected: &[Arc<ProjectedDocument>],
+        blocked: &[Arc<super::snapshot::BlockedFile>],
+        deferred: &BTreeSet<PathBuf>,
+        overlays: &HashMap<PathBuf, String>,
+        requested: &[PathBuf],
+    ) -> Result<Option<HashSet<PathBuf>>, crate::typescript::backend::Failure> {
+        let Ok(backend) = &self.backend else {
+            return Ok(None);
+        };
+        match backend.open(self.tsconfig.as_deref(), &self.root) {
+            Ok(()) => {}
+            Err(failure) if failure.kind == FailureKind::Unavailable => return Ok(None),
+            Err(failure) => return Err(failure),
+        }
+        let (mut query, _) =
+            projection::assemble(projected, blocked, deferred, &self.root, &self.sources);
+        query.modules.extend(
+            overlays
+                .iter()
+                .filter(|(path, _)| is_host_source(path))
+                .map(|(path, text)| crate::typescript::backend::Module {
+                    path: path.clone(),
+                    text: text.clone(),
+                }),
+        );
+        query
+            .modules
+            .sort_by(|left, right| left.path.cmp(&right.path));
+        let mut roots = self.roots(projected, requested);
+        roots.sort();
+        let query = crate::typescript::backend::Query {
+            contextual_only: true,
+            roots,
+            ..query
+        };
+        let answers = backend.ask(self.tsconfig.as_deref(), &self.root, &query)?;
+        Ok(answers
+            .project_modules
+            .map(|modules| modules.into_iter().collect()))
     }
 
     /// The refined emits of the projected modules `target`'s types can
@@ -661,8 +824,9 @@ impl Project {
                 members
             }
         };
-        let current = |entry: &ScopedMaterialization| {
-            unchanged.of(entry)
+        let current = |index: usize, entry: &ScopedMaterialization| {
+            entry.source == source_digest(&projected[index].source)
+                && unchanged.of(entry)
                 && members
                     .iter()
                     .filter(|member| texts.0.contains_key(*member))
@@ -679,7 +843,7 @@ impl Project {
                 projected[index].emit.contextual_slots.is_empty()
                     || cache
                         .get(&projected[index].module_path)
-                        .is_some_and(&current)
+                        .is_some_and(|entry| current(index, entry))
             })
         };
         if !settled {
@@ -723,12 +887,13 @@ impl Project {
             };
             let read = Arc::new(texts.of(members.iter()));
             let mut cache = self.scoped.borrow_mut();
-            for (path, emit) in question {
+            for ((path, emit), &index) in question.into_iter().zip(&in_closure) {
                 cache.insert(
                     path,
                     ScopedMaterialization {
                         read: read.clone(),
                         generation: stable,
+                        source: source_digest(&projected[index].source),
                         emit,
                     },
                 );
@@ -744,9 +909,10 @@ impl Project {
                     // about the target; it keeps a materialization whose
                     // served inputs are unchanged.
                     let usable = if in_closure.contains(&index) {
-                        current(entry)
+                        current(index, entry)
                     } else {
-                        unchanged.of(entry)
+                        entry.source == source_digest(&projected[index].source)
+                            && unchanged.of(entry)
                     };
                     usable.then(|| (index, entry.emit.clone()))
                 })
@@ -928,6 +1094,16 @@ impl Project {
             dependencies
                 .files
                 .extend(tsconfig_lookup(&inputs.collected));
+            for named in inputs.named() {
+                dependencies
+                    .files
+                    .extend(tsconfig_lookup(std::slice::from_ref(named)));
+            }
+            for directory in inputs.directories() {
+                dependencies
+                    .files
+                    .extend(tsconfig_lookup(&[directory.join("tsconfig.json")]));
+            }
             dependencies.files.sort();
             dependencies.files.dedup();
         }
@@ -937,7 +1113,7 @@ impl Project {
     fn check_for_dependencies(&mut self, inputs: &super::Inputs) -> Result<(), String> {
         let files = self.candidates(inputs).map_err(|error| error.to_string())?;
         let snapshot = self
-            .update(&files)
+            .update_with_roots(&files, None, &inputs.named)
             .map_err(|blocked| blocked.error.message.clone())?;
         let checked =
             self.check_requested(&snapshot, &CheckRequest::default(), &inputs.named, None)?;
@@ -956,6 +1132,26 @@ impl Project {
             .borrow()
             .as_ref()
             .is_none_or(|members| members.contains(path))
+    }
+
+    /// The inputs' `.tt` files the last check's configured program left out,
+    /// sorted: projected, yet in none of its TypeScript programs. A file
+    /// that failed to project reports its own errors and is not among them.
+    pub fn left_out(&self, snapshot: &Snapshot) -> Vec<PathBuf> {
+        let mut out: Vec<PathBuf> = self
+            .requested
+            .iter()
+            .filter(|file| !self.checked(file))
+            .filter(|file| {
+                !snapshot
+                    .blocked()
+                    .iter()
+                    .any(|blocked| &blocked.source_path == *file)
+            })
+            .cloned()
+            .collect();
+        out.sort();
+        out
     }
 
     /// Checks a snapshot: asks the running compiler about it and returns
@@ -977,6 +1173,66 @@ impl Project {
         file: &Path,
     ) -> Result<Checked, String> {
         self.check_requested(snapshot, request, &[], Some(file))
+    }
+
+    /// The literals the checker says a match's scrutinee can still be,
+    /// beside `covered`: asked in `code`, the projection of `path` with the
+    /// match being written repaired, at the scrutinee's UTF-16 offset
+    /// `position` — the question the typed check asks of every literal
+    /// match. `None` when there is no checker or no certain answer.
+    pub(crate) fn literal_members(
+        &mut self,
+        path: &Path,
+        code: String,
+        position: usize,
+        covered: Vec<crate::Literal>,
+    ) -> Result<Option<Vec<crate::Literal>>, String> {
+        let mut files = self.initial_files();
+        files.push(path.to_path_buf());
+        files.sort();
+        files.dedup();
+        let snapshot = self
+            .update_with_roots(&files, None, &[path.to_path_buf()])
+            .map_err(|blocked| blocked.error.to_string())?;
+        let Ok(backend) = &self.backend else {
+            return Ok(None);
+        };
+        let (assembled, _) = projection::assemble(
+            snapshot.files(),
+            snapshot.blocked(),
+            snapshot.deferred(),
+            &self.root,
+            &self.sources,
+        );
+        let module = projection::module_path_of(path);
+        let mut modules = assembled.modules;
+        match modules.iter_mut().find(|served| served.path == module) {
+            Some(served) => served.text = code,
+            None => modules.push(crate::typescript::backend::Module {
+                path: module.clone(),
+                text: code,
+            }),
+        }
+        let query = crate::typescript::backend::Query {
+            sources: assembled.sources,
+            roots: self.roots(snapshot.files(), &[path.to_path_buf()]),
+            modules,
+            literals: vec![crate::typescript::backend::LiteralQuery {
+                module: module.clone(),
+                position,
+                covered,
+            }],
+            diagnostics_scope: Some(module),
+            ..crate::typescript::backend::Query::default()
+        };
+        let answers = backend
+            .ask(self.tsconfig.as_deref(), &self.root, &query)
+            .map_err(|failure| failure.message)?;
+        Ok(answers
+            .literal_missing
+            .into_iter()
+            .find(|answer| answer.index == 0)
+            .map(|answer| answer.missing))
     }
 
     /// Ask for editor diagnostics on the exact graph already served by the
@@ -1014,6 +1270,7 @@ impl Project {
         let (mut query, probes) = projection::assemble(
             snapshot.files(),
             snapshot.blocked(),
+            snapshot.deferred(),
             &self.root,
             &self.sources,
         );
@@ -1152,7 +1409,15 @@ struct ContextualQuestion {
 struct ScopedMaterialization {
     read: Arc<std::collections::BTreeMap<PathBuf, u64>>,
     generation: (u64, u64),
+    source: u64,
     emit: crate::MappedEmit,
+}
+
+fn source_digest(source: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    source.hash(&mut hasher);
+    hasher.finish()
 }
 
 /// Whether materializations still describe the served texts: the disk is as
@@ -1311,7 +1576,18 @@ fn project_tree(
             // Directory entries already carry the file type on supported
             // filesystems. Only symlinks need a target metadata lookup.
             let kind = entry.file_type()?;
-            if kind.is_dir() || (kind.is_symlink() && path.is_dir()) {
+            // A symlink is what its target is. One whose target cannot be
+            // read names no file or directory, and TypeScript's directory
+            // listing (`getAccessibleFileSystemEntries`) skips it too.
+            let kind = if kind.is_symlink() {
+                match std::fs::metadata(&path) {
+                    Ok(target) => target.file_type(),
+                    Err(_) => continue,
+                }
+            } else {
+                kind
+            };
+            if kind.is_dir() {
                 stack.push(path);
             } else if path
                 .extension()
@@ -1436,18 +1712,29 @@ fn collect_sources_in(
         children.sort();
         for child in children {
             // Exclusion is a property of the entry name, even when its
-            // target is missing or unreadable. Inspect only admitted entries.
-            if excluded_source_entry(&child) && !is_source(&child, include_ts) {
+            // target is missing or unreadable: a dot-file or dot-directory and
+            // `node_modules` are left out, as TypeScript's include patterns
+            // leave them out. Only a file named on the command line is read
+            // whatever its name.
+            if excluded_source_entry(&child) {
                 continue;
             }
-            // A directory holds entries the walk cannot read — a dangling
-            // symlink, a loop, a permission. Naming the one that failed is
-            // the difference between a fixable report and "the directory
-            // you named does not exist", which is what the bare error said
-            // about a directory that plainly does.
-            let meta = std::fs::metadata(&child).map_err(|e| named(&child, e))?;
+            // A symlink whose target cannot be read is skipped, as
+            // TypeScript's directory listing skips it. Any other entry the
+            // walk cannot read is named, rather than reported as "the
+            // directory you named does not exist".
+            let meta = match std::fs::metadata(&child) {
+                Ok(meta) => meta,
+                Err(_)
+                    if std::fs::symlink_metadata(&child)
+                        .is_ok_and(|link| link.file_type().is_symlink()) =>
+                {
+                    continue;
+                }
+                Err(error) => return Err(named(&child, error)),
+            };
             if meta.is_dir() {
-                if !excluded_source_entry(&child) && !alias_of_walked_directory(root, &child)? {
+                if !alias_of_walked_directory(root, &child)? {
                     collect_sources_in(root, &child, include_ts, out, directories)?;
                 }
             } else if meta.is_file() && is_source(&child, include_ts) {
@@ -1493,7 +1780,11 @@ fn alias_of_walked_directory(root: &Path, dir: &Path) -> std::io::Result<bool> {
 fn excluded_source_entry(path: &Path) -> bool {
     path.file_name().is_some_and(|name| {
         let name = name.to_string_lossy();
-        name.starts_with('.') || name == "node_modules"
+        name.starts_with('.')
+            || matches!(
+                &*name,
+                "node_modules" | "bower_components" | "jspm_packages"
+            )
     })
 }
 
@@ -1573,23 +1864,23 @@ fn discover_imports(
     overlays: &HashMap<PathBuf, String>,
     pending: &mut Vec<PathBuf>,
     seen: &mut HashSet<PathBuf>,
+    imported: &mut HashSet<PathBuf>,
 ) {
     for import in imports {
         if !(import.specifier.starts_with('.') || Path::new(&import.specifier).is_absolute()) {
             continue;
         }
-        let target = file
-            .parent()
-            .unwrap_or(Path::new("."))
-            .join(&import.specifier);
+        let target = file.parent().unwrap_or(Path::new(".")).join(import.path());
         let target = super::paths::canonical(&target).ok().or_else(|| {
             super::normalize_document_path(&target)
                 .ok()
                 .filter(|path| overlays.contains_key(path))
         });
-        if let Some(target) = target
-            && seen.insert(target.clone())
-        {
+        let Some(target) = target else {
+            continue;
+        };
+        imported.insert(target.clone());
+        if seen.insert(target.clone()) {
             pending.push(target);
         }
     }

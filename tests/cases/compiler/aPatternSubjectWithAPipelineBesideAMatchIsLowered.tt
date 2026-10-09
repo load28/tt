@@ -1,0 +1,9 @@
+// @run: aPatternSubjectWithAPipelineBesideAMatchIsLowered.tt
+variant V { A(n: number), B }
+const wrap = (xs: unknown[]): V => (xs.length === 2 ? V.A(Number(xs[0]) + String(xs[1]).length) : V.B);
+function f(k: number) {
+  const A(n) = wrap([match (k) { 1 => 10, _ => 20 }, k |> String]) else { return -1; };
+  if let A(n: m) = wrap([match (k) { 1 => 1, _ => 2 }, 100 |> String]) { return n + m; }
+  return n;
+}
+console.log(f(1), f(25));

@@ -4,7 +4,7 @@ function f(maybe: any): TResult<number, string> { return Result.Ok(maybe?.(first
 
 //// [tryPreservesArgumentAndConditionalEvaluationOrder2.ts]
 function f(maybe: any): TResult<number, string> { let $tt_v4;
-const $tt_v1 = (maybe);
+const $tt_v1: typeof maybe = (maybe);
 if ($tt_v1 != null) {
   const $tt_v2 = (first());
   let $tt_v0;

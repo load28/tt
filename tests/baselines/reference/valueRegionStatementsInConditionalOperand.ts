@@ -164,7 +164,7 @@ function and(on: boolean, n: number) {
         break $tt_v0;
       }
       $tt_v3 = $tt_t0.value;
-      const v = $tt_v3 * 2; { const $tt_a0 = { value: { kind: "Ok" as const, value: v } }; $tt_v0 = $tt_a0.value; break $tt_v0; }
+      const v = $tt_v3 * 2; { $tt_v0 = { kind: "Ok" as const, value: v }; break $tt_v0; }
     }
     $tt_v2 = $tt_v1 && $tt_v0;
   } else {
@@ -194,7 +194,7 @@ function or(on: boolean, n: number) {
         break $tt_v4;
       }
       $tt_v7 = $tt_t1.value;
-      const v = 1 + $tt_v7; { const $tt_a1 = { value: { kind: "Ok" as const, value: v } }; $tt_v4 = $tt_a1.value; break $tt_v4; }
+      const v = 1 + $tt_v7; { $tt_v4 = { kind: "Ok" as const, value: v }; break $tt_v4; }
     }
     $tt_v6 = $tt_v5 || $tt_v4;
   }
@@ -214,14 +214,14 @@ function nullish(on: boolean, n: number) {
 });
     $tt_v8: {
       let $tt_v11: number;
-      const $tt_v12 = (String);
+      const $tt_v12: typeof String = (String);
       const $tt_t2 = read(n);
       if (!("value" in $tt_t2)) {
         $tt_v8 = $tt_t2;
         break $tt_v8;
       }
       $tt_v11 = $tt_t2.value;
-      const v = $tt_v12($tt_v11); { const $tt_a2 = { value: { kind: "Ok" as const, value: v } }; $tt_v8 = $tt_a2.value; break $tt_v8; }
+      const v = $tt_v12($tt_v11); { $tt_v8 = { kind: "Ok" as const, value: v }; break $tt_v8; }
     }
     $tt_v10 = $tt_v9 ?? $tt_v8;
   } else {
@@ -251,7 +251,7 @@ function ternary(on: boolean, n: number) {
         break $tt_y_v13;
       }
       $tt_v17 = $tt_t4.value;
-      const v = [$tt_v16, $tt_v17]; { const $tt_a3 = { value: { kind: "Ok" as const, value: v } }; $tt_v15 = $tt_a3.value; break $tt_y_v13; }
+      const v = [$tt_v16, $tt_v17]; { $tt_v15 = { kind: "Ok" as const, value: v }; break $tt_y_v13; }
     }
   } else {
     $tt_v15 = "no";
@@ -275,7 +275,7 @@ function optional(on: boolean, n: number) {
         break $tt_v18;
       }
       $tt_v21 = $tt_t5.value;
-      const v = 2 * $tt_v21; { const $tt_a4 = { value: { kind: "Ok" as const, value: v } }; $tt_v18 = $tt_a4.value; break $tt_v18; }
+      const v = 2 * $tt_v21; { $tt_v18 = { kind: "Ok" as const, value: v }; break $tt_v18; }
     }
     $tt_v20 = $tt_v19($tt_v18);
   } else {
@@ -324,14 +324,14 @@ function later(on: boolean, n: number) {
       const $tt_m = n;
       switch ($tt_m) {
         case 0: {
-          const $tt_a5 = { value: () => 0 };
-          $tt_v26 = $tt_a5.value;
+          const $tt_a0 = { value: (void 0, () => 0) };
+          $tt_v26 = $tt_a0.value;
           break;
         }
         default: {
-          const $tt_a6 = { value: (() => {
+          const $tt_a1 = { value: ((void 0, () => {
             let $tt_v29: number;
-            const $tt_v30 = (Number);
+            const $tt_v30: typeof Number = (Number);
             {
               const $tt_m = n;
               switch ($tt_m) {
@@ -340,8 +340,8 @@ function later(on: boolean, n: number) {
               }
             }
             return 2 * $tt_v30(($tt_v29 === 0 ? 3 : 4));
-          }) };
-          $tt_v26 = $tt_a6.value;
+          })) };
+          $tt_v26 = $tt_a1.value;
           break;
         }
       }

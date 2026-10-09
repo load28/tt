@@ -10,7 +10,7 @@
 2:50 -> 8:3 len 192  "\nconst events: string[] = [];\nconst read = (): R"...
 8:9 -> 21:11 len 5  "value"
 8:21 -> 16:20 len 6  "read()"
-8:28 -> 21:32 len 3  "\n  "
+8:27 -> 21:31 len 4  ";\n  "
 9:10 -> 24:19 len 12  "subject(tag)"
 10:5 -> 26:12 len 1  "1"
 10:12 -> 27:9 len 19  "events.push(\"one\");"

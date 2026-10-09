@@ -1,0 +1,9 @@
+// @completions: fields
+// @definition: tag, own
+export variant Shape { Circle(radius: number), Point }
+type Hand = { kind: "Circle"; r: number } | { kind: "Square"; side: number };
+declare const h: Hand;
+declare const s: Shape;
+export const a = match (h) { /*tag*/Circle(r) => r, Square(side) => side };
+export const b = match (h) { Circle(/*fields*/) => 1, _ => 0 };
+export const c = match (s) { /*own*/Circle(radius) => radius, Point => 0 };

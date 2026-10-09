@@ -21,18 +21,36 @@ use super::*;
 /// namespace bodies, control-statement bodies, bare blocks — is
 /// transparent: it never *provides* a boundary, and never blocks an outer
 /// one from counting.
-pub(crate) fn in_function_body(tokens: &[Token], at: usize) -> bool {
-    let mut stack: Vec<bool> = Vec::new();
-    for (k, t) in tokens.iter().enumerate().take(at) {
-        match t.kind {
-            TokenKind::Punct(b'{') => stack.push(function_target_brace(tokens, k).is_some()),
-            TokenKind::Punct(b'}') => {
-                stack.pop();
+#[derive(Default)]
+pub(crate) struct FunctionBodies {
+    stack: Vec<bool>,
+    functions: usize,
+    table: Vec<bool>,
+}
+
+impl FunctionBodies {
+    pub(crate) fn inside(&mut self, tokens: &[Token], at: usize) -> bool {
+        while self.table.len() <= at {
+            let k = self.table.len();
+            crate::work::tick("function body table entries");
+            self.table.push(self.functions > 0);
+            let Some(token) = tokens.get(k) else {
+                break;
+            };
+            match token.kind {
+                TokenKind::Punct(b'{') => {
+                    let is_function = function_target_brace(tokens, k).is_some();
+                    self.functions += usize::from(is_function);
+                    self.stack.push(is_function);
+                }
+                TokenKind::Punct(b'}') if self.stack.pop() == Some(true) => {
+                    self.functions -= 1;
+                }
+                _ => {}
             }
-            _ => {}
         }
+        self.table[at]
     }
-    stack.iter().any(|&is_function| is_function)
 }
 
 /// Number of braced user-written function bodies enclosing a token. This is
@@ -111,6 +129,7 @@ pub(crate) enum FunctionTarget {
     Ordinary,
     Constructor,
     Generator,
+    Setter,
     StaticBlock,
     ClassElement,
 }
@@ -178,7 +197,12 @@ impl FunctionTargets {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn at(&self, at: usize) -> Option<FunctionTarget> {
+        self.innermost(at).map(|(_, target)| target)
+    }
+
+    fn innermost(&self, at: usize) -> Option<(usize, FunctionTarget)> {
         let braced = self.braced[at.min(self.braced.len() - 1)];
         let before = self.arrows.partition_point(|(arrow, _)| *arrow < at);
         let concise_arrow = self.arrows[..before]
@@ -187,26 +211,34 @@ impl FunctionTargets {
             .find(|(_, end)| *end > at)
             .map(|(arrow, _)| (*arrow, FunctionTarget::Ordinary));
         match (braced, concise_arrow) {
-            (Some(braced), Some(arrow)) => Some(if braced.0 > arrow.0 {
-                braced.1
-            } else {
-                arrow.1
-            }),
-            (Some((_, target)), None) | (None, Some((_, target))) => Some(target),
+            (Some(braced), Some(arrow)) => Some(if braced.0 > arrow.0 { braced } else { arrow }),
+            (Some(innermost), None) | (None, Some(innermost)) => Some(innermost),
             (None, None) => None,
         }
     }
 
     pub(crate) fn at_offset(&self, offset: usize) -> Option<FunctionTarget> {
+        self.innermost_at_offset(offset).map(|(_, target)| target)
+    }
+
+    pub(crate) fn boundary_at_offset(&self, offset: usize) -> Option<usize> {
+        self.innermost_at_offset(offset).map(|(start, _)| start)
+    }
+
+    fn innermost_at_offset(&self, offset: usize) -> Option<(usize, FunctionTarget)> {
         let at = self.spans.partition_point(|(start, _)| *start < offset);
+        let own = |at: usize| {
+            self.innermost(at)
+                .map(|(token, target)| (self.spans[token].0, target))
+        };
         match at.checked_sub(1) {
             Some(token) if self.spans[token].1 > offset => self
                 .interpolations
                 .iter()
                 .find(|(span, _)| span.start <= offset && offset < span.end)
-                .and_then(|(_, inner)| inner.at_offset(offset))
-                .or_else(|| self.at(token)),
-            _ => self.at(at),
+                .and_then(|(_, inner)| inner.innermost_at_offset(offset))
+                .or_else(|| own(token)),
+            _ => own(at),
         }
     }
 }
@@ -307,6 +339,8 @@ pub(super) fn function_target_brace(tokens: &[Token], brace: usize) -> Option<Fu
     if facts.function_body() {
         Some(if facts.constructor_body() {
             FunctionTarget::Constructor
+        } else if facts.setter_body() {
+            FunctionTarget::Setter
         } else if facts.generator_body() {
             FunctionTarget::Generator
         } else {

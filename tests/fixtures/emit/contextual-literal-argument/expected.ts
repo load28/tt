@@ -30,7 +30,7 @@ const State = {
 };
 declare const state: State;
 
-const $tt_v2 = (consume);
+const $tt_v2: typeof consume = (consume);
 {
   const $tt_m = state;
   switch ($tt_m.kind) {
@@ -51,7 +51,7 @@ const $tt_v2 = (consume);
 
 
 let $tt_v3: number;
-const $tt_v5 = (consume);
+const $tt_v5: typeof consume = (consume);
 {
   const $tt_m = state;
   switch ($tt_m.kind) {
@@ -71,7 +71,7 @@ const $tt_v5 = (consume);
 }
 const kept = $tt_v3;
 
-const $tt_v7 = (consumeAll);
+const $tt_v7: typeof consumeAll = (consumeAll);
 {
   const $tt_m = state;
   switch ($tt_m.kind) {
@@ -91,7 +91,7 @@ const $tt_v7 = (consumeAll);
 }
 
 
-const $tt_v10 = (nested);
+const $tt_v10: typeof nested = (nested);
 {
   const $tt_m = state;
   switch ($tt_m.kind) {
@@ -112,18 +112,18 @@ const $tt_v10 = (nested);
 
 
 let $tt_v11: (x: number) => number;
-const $tt_v13 = (consume);
+const $tt_v13: typeof consume = (consume);
 const $tt_v12: string = (effect());
 {
   const $tt_m = state;
   switch ($tt_m.kind) {
     case "Ready": {
       const { value } = $tt_m;
-      $tt_v11 = (x: number) => x + value;
+      $tt_v11 = (void 0, (x: number) => x + value);
       break;
     }
     case "Empty": {
-      $tt_v11 = (x: number) => x;
+      $tt_v11 = (void 0, (x: number) => x);
       break;
     }
     default: {
@@ -134,17 +134,17 @@ const $tt_v12: string = (effect());
 $tt_v13({ kind: $tt_v12, run: $tt_v11 });
 
 let $tt_v14: (x: number) => number;
-const $tt_v16 = (consume);
+const $tt_v16: typeof consume = (consume);
 {
   const $tt_m = state;
   switch ($tt_m.kind) {
     case "Ready": {
       const { value } = $tt_m;
-      $tt_v14 = x => x + value;
+      $tt_v14 = (void 0, x => x + value);
       break;
     }
     case "Empty": {
-      $tt_v14 = x => x;
+      $tt_v14 = (void 0, x => x);
       break;
     }
     default: {

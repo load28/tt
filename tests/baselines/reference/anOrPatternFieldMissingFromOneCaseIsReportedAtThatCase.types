@@ -1,0 +1,45 @@
+=== anOrPatternFieldMissingFromOneCaseIsReportedAtThatCase.tt ===
+variant V { A(n: number), B(m: string) }
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>       m: string;
+>   }
+>A : (property) A: (n: number) => V
+>n : (property) n: number
+>B : (property) B: (m: string) => V
+>m : (property) m: string
+export function f(v: V) {
+>f : function f(v: V): any
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>       m: string;
+>   }
+  return match (v) { A(n) | B(n) => n };
+>v : (parameter) v: V
+>n : const n: number
+>n : const n: any
+>n : const n: any
+export function g(v: V) {
+>g : function g(v: V): any
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>       m: string;
+>   }
+  const A(n) | B(n) = v else { return 0; };
+>n : const n: number
+>n : const n: any
+>v : (parameter) v: V
+  return n;
+>n : const n: any
+

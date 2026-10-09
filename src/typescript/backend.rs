@@ -341,8 +341,8 @@ pub(crate) struct Resolution {
 /// One emitted declaration file, in memory.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Declaration {
-    /// The path the compiler would have written it to.
-    pub path: PathBuf,
+    /// The lowered module it declares.
+    pub module: PathBuf,
     pub text: String,
 }
 
@@ -368,6 +368,8 @@ pub(crate) struct Answers {
     pub result_shapes: Vec<ResultShape>,
     pub declarations: Vec<Declaration>,
     pub contextual_slots: Vec<ContextualSlotType>,
+    /// Requests the contextual pass sent to the compiler's checker.
+    pub contextual_round_trips: u64,
     pub disk_generation: Option<u64>,
     /// The answer to [`Query::reference_closure`].
     pub reference_closure: Option<ReferenceClosure>,

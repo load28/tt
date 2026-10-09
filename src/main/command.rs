@@ -116,7 +116,19 @@ pub(super) fn entry() -> ExitCode {
 /// than aborting the process with a backtrace.
 pub(super) fn run() -> ExitCode {
     ttc::ice::panic_for_test("cli");
-    let argv: Vec<String> = std::env::args().skip(1).collect();
+    let mut argv: Vec<String> = Vec::new();
+    for argument in std::env::args_os().skip(1) {
+        match argument.into_string() {
+            Ok(argument) => argv.push(argument),
+            Err(argument) => {
+                eprintln!(
+                    "ttc: {}: argument is not valid UTF-8 — rename the path",
+                    argument.to_string_lossy()
+                );
+                return ExitCode::FAILURE;
+            }
+        }
+    }
 
     // `ttc help [topic]` — only as the first argument, so a file that
     // happens to be named "help" can still be passed as `./help`.
@@ -470,6 +482,7 @@ pub(super) fn run() -> ExitCode {
             CliOption::SourceMap,
             CliOption::RewriteImports,
             CliOption::Project,
+            CliOption::Node,
         ][..]
     } else {
         &[
@@ -481,6 +494,7 @@ pub(super) fn run() -> ExitCode {
             CliOption::SourceMap,
             CliOption::RewriteImports,
             CliOption::Project,
+            CliOption::Node,
         ][..]
     };
     let mode = if types {
@@ -589,6 +603,22 @@ pub(super) fn run() -> ExitCode {
         // so a project's tsconfig `paths` and `.gitignore` keep pointing at
         // the same place. A check that writes nothing needs no directory.
         let sidecar_out = types.then(|| out_dir.unwrap_or_else(|| PathBuf::from(TYPES_DIR)));
+        if let Some(missing) = inputs.iter().find(|input| {
+            let path = Path::new(input.as_str());
+            !path.exists()
+                && !ttc::engine::normalize_document_path(path)
+                    .is_ok_and(|document| overlay.contains_key(&document))
+        }) {
+            eprintln!("ttc: no such file or directory: {missing}");
+            return ExitCode::FAILURE;
+        }
+        if let Some(named) = inputs.iter().find(|input| {
+            let path = Path::new(input.as_str());
+            path.is_file() && ttc::SourceKind::from_tt_path(path).is_none()
+        }) {
+            eprintln!("ttc: {named}: not a tt source (expected .tt, .ttx)");
+            return ExitCode::FAILURE;
+        }
         return typed_check_mode(
             &inputs,
             &TypedCheckOptions {
@@ -615,7 +645,9 @@ pub(super) fn run() -> ExitCode {
 
     if jobs.is_empty() {
         eprintln!("ttc: no sources found");
-        return ExitCode::FAILURE;
+        if !watch || print || symbols || emit_map || sidecar_dir.is_some() {
+            return ExitCode::FAILURE;
+        }
     }
     if print && jobs.len() != 1 {
         eprintln!("ttc: --print requires exactly one source file");
@@ -635,11 +667,18 @@ pub(super) fn run() -> ExitCode {
     }
 
     let files: Vec<PathBuf> = jobs.iter().map(|job| job.file.clone()).collect();
-    let jsx_preserve = match project_jsx_preserve(rewrite_imports, &files, project.as_deref()) {
-        Ok(preserve) => preserve,
-        Err(error) => {
-            eprintln!("ttc: {error}");
-            return ExitCode::FAILURE;
+    let jsx_preserve = if check {
+        JsxPreserve::new()
+    } else {
+        match project_jsx_preserve(rewrite_imports, &files, project.as_deref()) {
+            Ok(preserve) => preserve,
+            Err(error) => {
+                eprintln!(
+                    "ttc: {error} (name the configuration with --project, or choose \
+                     --rewrite-imports ts or off)"
+                );
+                return ExitCode::FAILURE;
+            }
         }
     };
     let build = BuildOptions {
@@ -652,10 +691,11 @@ pub(super) fn run() -> ExitCode {
         source_map,
         out_dir: out_dir.clone(),
         jobs: jobs_limit,
+        node: node.clone(),
     };
 
     if watch {
-        return watch_mode(&inputs, out_dir.as_deref(), &build);
+        return watch_mode(&inputs, out_dir.as_deref(), project.as_deref(), &build);
     }
 
     let root = support_root(&jobs, build.out_dir.as_deref());

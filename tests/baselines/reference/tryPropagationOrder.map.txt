@@ -6,7 +6,7 @@
 19:47 -> 26:18 len 18  "step(\"bb\", second)"
 19:65 -> 31:35 len 246  ");\n  log.push(\"after\");\n  return Result.Ok(total"...
 27:3 -> 58:3 len 17  "return Result.Ok("
-27:20 -> 42:19 len 3  "add"
+27:20 -> 42:31 len 3  "add"
 27:23 -> 58:26 len 1  "("
 27:28 -> 43:18 len 15  "step(\"x\", true)"
 27:43 -> 58:33 len 2  ", "
@@ -16,10 +16,10 @@
 27:89 -> 58:49 len 110  "));\n}\nflush(\"arguments ok\", args(false));\nflush("...
 32:9 -> 70:11 len 1  "a"
 32:17 -> 65:20 len 19  "step(\"first\", true)"
-32:37 -> 70:28 len 3  "\n  "
+32:36 -> 70:27 len 4  ";\n  "
 33:9 -> 76:9 len 1  "b"
 33:17 -> 71:18 len 18  "step(\"second\", ok)"
-33:36 -> 76:26 len 23  "\n  log.push(\"tail\");\n  "
+33:35 -> 76:25 len 24  ";\n  log.push(\"tail\");\n  "
 35:10 -> 79:44 len 5  "a * b"
 36:2 -> 84:2 len 130  ";\nflush(\"block ok\", block(true));\nflush(\"block f"...
 40:7 -> 88:18 len 17  "step(\"check\", ok)"
@@ -27,12 +27,12 @@
 47:3 -> 111:3 len 16  "const outcome = "
 48:11 -> 105:11 len 1  "v"
 48:19 -> 100:20 len 17  "step(\"inner\", ok)"
-48:37 -> 105:28 len 5  "\n    "
+48:36 -> 105:27 len 6  ";\n    "
 49:12 -> 107:46 len 1  "v"
 50:4 -> 111:25 len 43  ";\n  log.push(`outcome ${outcome.kind}`);\n  "
 52:9 -> 117:9 len 1  "w"
 52:17 -> 113:18 len 7  "outcome"
-52:25 -> 117:26 len 190  "\n  log.push(\"unwrapped\");\n  return Result.Ok(w);"...
+52:24 -> 117:25 len 191  ";\n  log.push(\"unwrapped\");\n  return Result.Ok(w)"...
 59:3 -> 130:3 len 17  "return Result.Ok("
 59:24 -> 125:19 len 18  "step(\"scaled\", ok)"
 59:42 -> 130:26 len 98  " * 1.5);\n}\nflush(\"binds tightly\", scaled(true));"...

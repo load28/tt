@@ -1,13 +1,15 @@
 ==== ttc --out-dir (exit 1) ====
-error[verify-failed]: generated TypeScript failed to parse: Expected ',', got '=>'. This is either invalid TypeScript passed through from the source or a ttc bug; use --no-verify to bypass.
+error[verify-failed]: generated TypeScript failed to parse: Expected ',', got '=>'. This is either invalid TypeScript passed through from the source or a ttc bug.
  --> ./anArrowAfterALaterParenthesizedItemIsASyntaxError.tt:8:9
   |
 8 | (a, b() => 1);
   |         ^
+  |
+  = help: use --no-verify to bypass
 
 
 ==== ttc --check-types (exit 1) ====
-error[verify-failed]: generated TypeScript failed to parse: Expected ',', got '=>'. This is either invalid TypeScript passed through from the source or a ttc bug; use --no-verify to bypass.
+error[verify-failed]: generated TypeScript failed to parse: Expected ',', got '=>'. This is either invalid TypeScript passed through from the source or a ttc bug.
  --> anArrowAfterALaterParenthesizedItemIsASyntaxError.tt:8:9
   |
 8 | (a, b() => 1);

@@ -12,7 +12,7 @@
 20:1 -> 58:1 len 15  "const nested = "
 21:9 -> 40:9 len 1  "a"
 21:17 -> 35:18 len 10  "read(true)"
-21:28 -> 40:26 len 3  "\n  "
+21:27 -> 40:25 len 4  ";\n  "
 22:3 -> 52:3 len 14  "const inner = "
 22:26 -> 43:5 len 7  "let b; "
 22:33 -> 50:5 len 4  "b = "

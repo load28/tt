@@ -31,11 +31,31 @@ pub fn owned_output(output: &Path) -> bool {
         return false;
     };
     record["version"] == 1
-        && fs::read_to_string(output).is_ok_and(|actual| {
+        && fs::read(output).is_ok_and(|actual| {
             ["content", "replaced"]
                 .iter()
-                .any(|key| record[*key].as_str() == Some(actual.as_str()))
+                .any(|key| recorded_bytes(&record[*key]).as_deref() == Some(actual.as_slice()))
         })
+}
+
+/// The bytes a record holds under one key.
+pub fn recorded_bytes(value: &serde_json::Value) -> Option<Vec<u8>> {
+    match value {
+        serde_json::Value::String(text) => Some(text.as_bytes().to_vec()),
+        serde_json::Value::Array(items) => items
+            .iter()
+            .map(|item| item.as_u64().and_then(|byte| u8::try_from(byte).ok()))
+            .collect(),
+        _ => None,
+    }
+}
+
+/// How a record holds `bytes`.
+pub fn recordable(bytes: &[u8]) -> serde_json::Value {
+    match std::str::from_utf8(bytes) {
+        Ok(text) => serde_json::Value::from(text),
+        Err(_) => serde_json::Value::from(bytes.to_vec()),
+    }
 }
 
 #[cfg(all(test, unix))]

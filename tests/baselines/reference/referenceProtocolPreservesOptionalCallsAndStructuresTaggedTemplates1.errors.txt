@@ -7,11 +7,6 @@ error[ts2304]: Cannot find name 'receiver'.
   |
 2 | const value = receiver.method?.(match (input) { A(value) => value, B => 0 });
   |               ^^^^^^^^
-error[ts2304]: Cannot find name 'receiver'. (in code ttc generated for this construct)
- --> referenceProtocolPreservesOptionalCallsAndStructuresTaggedTemplates1.tt:2:33
-  |
-2 | const value = receiver.method?.(match (input) { A(value) => value, B => 0 });
-  |                                 ^^^^^^^^^^^^^
 error[ts2552]: Cannot find name 'input'. Did you mean 'oninput'?
  --> referenceProtocolPreservesOptionalCallsAndStructuresTaggedTemplates1.tt:2:40
   |

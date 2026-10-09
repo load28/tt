@@ -1,0 +1,6 @@
+=== diagnostics possiblyUndefinedTtValueIsReportedAsAnExpression.tt ===
+diagnostics: 1 diagnostic(s)
+  3:17-3:46 "match (v) { A => v, B => {} }" error TS2532: Object is possibly 'undefined'.
+published: 1 diagnostic(s)
+  3:17-3:46 "match (v) { A => v, B => {} }" error ts2532 (ttc): Object is possibly 'undefined'.
+

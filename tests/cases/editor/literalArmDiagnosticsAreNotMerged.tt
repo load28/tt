@@ -1,0 +1,3 @@
+// @diagnostics: *
+declare const n: 1 | 2;
+export const k = match (n) { 3 => "a", 4 => "b", _ => "c" };

@@ -63,8 +63,7 @@ function inner(s: S) {
         class Loc { tag = "a"; } $tt_v0 = new Loc(); break;
       }
       case "B": {
-        const $tt_a0 = { value: ({ tag: "b" }) };
-        $tt_v0 = $tt_a0.value;
+        $tt_v0 = ({ tag: "b" });
         break;
       }
       default: {
@@ -98,8 +97,7 @@ function inResult(s: S) {
           class Loc { tag = "a" + n; } $tt_v2 = new Loc(); break;
         }
         case "B": {
-          const $tt_a1 = { value: ({ tag: "b" }) };
-          $tt_v2 = $tt_a1.value;
+          $tt_v2 = ({ tag: "b" });
           break;
         }
         default: {
@@ -109,8 +107,7 @@ function inResult(s: S) {
     }
     const v = $tt_v2;
     {
-      const $tt_a2 = { value: { kind: "Ok" as const, value: v.tag } };
-      $tt_v1 = $tt_a2.value;
+      $tt_v1 = { kind: "Ok" as const, value: v.tag };
       break $tt_v1;
     }
   }
@@ -125,8 +122,7 @@ function unnamed(s: S) {
         class Hidden { tag = "h"; } $tt_v3 = new Hidden(); break;
       }
       case "B": {
-        const $tt_a3 = { value: ({ tag: "b" }) };
-        $tt_v3 = $tt_a3.value;
+        $tt_v3 = ({ tag: "b" });
         break;
       }
       default: {

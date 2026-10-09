@@ -1,0 +1,107 @@
+=== aValueInsideAnArgumentIsNotTheWholeArgument.tt ===
+variant S { A, B }
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const s: S = S.A as S;
+>s : const s: S
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>S : const S: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+const g = { mm: (...a: unknown[]) => a };
+>g : const g: {
+>       mm: (...a: unknown[]) => unknown[];
+>   }
+>mm : (property) mm: (...a: unknown[]) => unknown[]
+>a : (parameter) a: unknown[]
+>a : (parameter) a: unknown[]
+function f(...a: unknown[]) { return a; }
+>f : function f(...a: unknown[]): unknown[]
+>a : (parameter) a: unknown[]
+>a : (parameter) a: unknown[]
+function main() {
+>main : function main(): string
+  const b = g.mm?.(1, (match (s) { A => 0, B => 1 } ? "then" : "else"));
+>b : const b: unknown[] | undefined
+>g : const g: {
+>       mm: (...a: unknown[]) => unknown[];
+>   }
+>mm : (property) mm: (...a: unknown[]) => unknown[]
+>s : const s: S
+  const c = g.mm?.(match (s) { A => 0, B => 1 } ? "then" : "else");
+>c : const c: unknown[] | undefined
+>g : const g: {
+>       mm: (...a: unknown[]) => unknown[];
+>   }
+>mm : (property) mm: (...a: unknown[]) => unknown[]
+>s : const s: S
+  const d = f?.(match (s) { A => 0, B => 1 } ? "then" : "else");
+>d : const d: unknown[] | undefined
+>f : function f(...a: unknown[]): unknown[]
+>s : const s: S
+  const e = f(match (s) { A => 0, B => 1 } ? "then" : "else");
+>e : const e: unknown[]
+>f : function f(...a: unknown[]): unknown[]
+>s : const s: S
+  const h = g.mm?.(match (s) { A => 0, B => 1 } || "or");
+>h : const h: unknown[] | undefined
+>g : const g: {
+>       mm: (...a: unknown[]) => unknown[];
+>   }
+>mm : (property) mm: (...a: unknown[]) => unknown[]
+>s : const s: S
+  const i = g.mm?.(match (s) { A => 0, B => 1 } + 100);
+>i : const i: unknown[] | undefined
+>g : const g: {
+>       mm: (...a: unknown[]) => unknown[];
+>   }
+>mm : (property) mm: (...a: unknown[]) => unknown[]
+>s : const s: S
+  const j = g?.mm(match (s) { A => 0, B => 1 } ? "then" : "else");
+>j : const j: unknown[] | undefined
+>g : const g: {
+>       mm: (...a: unknown[]) => unknown[];
+>   }
+>mm : (property) mm: (...a: unknown[]) => unknown[]
+>s : const s: S
+  return JSON.stringify({ b, c, d, e, h, i, j });
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>b : (property) b: unknown[] | undefined
+>c : (property) c: unknown[] | undefined
+>d : (property) d: unknown[] | undefined
+>e : (property) e: unknown[]
+>h : (property) h: unknown[] | undefined
+>i : (property) i: unknown[] | undefined
+>j : (property) j: unknown[] | undefined
+console.log(main());
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>main : function main(): string
+

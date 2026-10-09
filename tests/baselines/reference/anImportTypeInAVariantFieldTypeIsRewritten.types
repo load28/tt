@@ -1,0 +1,45 @@
+=== a.tt ===
+export const x = 1;
+>x : const x: 1
+export interface X { n: number }
+>X : interface X
+>n : (property) X.n: number
+
+=== b.tt ===
+export variant V { A(m: typeof import("./a.tt")), B }
+>V : type V = {
+>       kind: "A";
+>       m: typeof import("./a.tt");
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (m: typeof import("./a.tt")) => V
+>m : (property) m: typeof import("./a.tt")
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+export declare variant W { C(n: import("./a.tt").X) }
+>W : type W = {
+>       kind: "C";
+>       n: import("./a.tt").X;
+>   }
+>C : (property) C: (n: import("./a.tt").X) => W
+>n : (property) n: X
+>X : interface X
+export const v: V = V.A({ x: 1 });
+>v : const v: V
+>V : type V = {
+>       kind: "A";
+>       m: typeof import("./a.tt");
+>   } | {
+>       kind: "B";
+>   }
+>V : const V: {
+>       A: (m: typeof import("./a.tt")) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (m: typeof import("./a.tt")) => V
+>x : const x: 1
+

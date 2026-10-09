@@ -1,0 +1,1 @@
+[{"kind":"Ok","value":7},{"kind":"Ok","value":-1},{"kind":"Err","error":"bad 0"},{"kind":"Ok","value":12},{"kind":"Ok","value":-1},{"kind":"Err","error":"bad 0"}]

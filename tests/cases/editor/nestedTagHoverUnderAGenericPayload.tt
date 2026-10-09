@@ -1,0 +1,26 @@
+// @hover: inner, deeper, declared, binding
+variant Shape { Circle(radius: number), Point }
+variant Opt<T> { Has(item: T), Nope }
+variant Box<T> { Full(value: T) }
+variant Wrap { Holds(shape: Shape) }
+declare const o: Opt<Shape>;
+declare const b: Box<Opt<Shape>>;
+declare const w: Wrap;
+export function f(): number {
+  return match (o) {
+    Has(item: Cir/*inner*/cle(radius: /*binding*/r)) => r,
+    _ => 0,
+  };
+}
+export function g(): number {
+  return match (b) {
+    Full(value: Has(item: Po/*deeper*/int())) => 0,
+    _ => 0,
+  };
+}
+export function h(): number {
+  return match (w) {
+    Holds(shape: Cir/*declared*/cle(radius: r)) => r,
+    _ => 0,
+  };
+}

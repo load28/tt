@@ -1,0 +1,20 @@
+//// [aStatementSubjectConditionalLowersAsOneOperation.tt] 18 mapping(s)
+1:1 -> 1:1 len 409  "import * as Result from \"@tt/std/result\";\nimport"...
+9:14 -> 26:11 len 5  "value"
+9:23 -> 10:7 len 1  "c"
+9:27 -> 12:34 len 4  "wrap"
+9:31 -> 18:20 len 1  "("
+9:36 -> 13:20 len 4  "r(1)"
+9:40 -> 18:27 len 1  ")"
+9:44 -> 20:14 len 4  "none"
+9:56 -> 24:5 len 26  "return Result.Err(\"none\");"
+9:85 -> 26:28 len 67  "\n  return Result.Ok(value);\n}\nexport function if"...
+13:15 -> 57:15 len 5  "value"
+13:31 -> 33:21 len 6  "log(n)"
+13:46 -> 36:20 len 4  "true"
+13:62 -> 44:23 len 1  "n"
+13:72 -> 47:22 len 1  "S"
+13:78 -> 53:16 len 1  "S"
+13:82 -> 58:7 len 13  "return value;"
+13:97 -> 60:4 len 161  "\n  return 0;\n}\nfunction log<T>(x: T): T { L.push"...
+

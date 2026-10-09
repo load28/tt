@@ -18,6 +18,7 @@ pub(super) fn analyze(program: &Program, table: &Table, depth: Depth) -> Pattern
         .iter()
         .map(|e| DeclaredVariant {
             name: e.name.clone(),
+            type_names: e.type_names.clone(),
             origin: e.origin.clone(),
             constructors: e.constructors.clone(),
         })
@@ -26,6 +27,7 @@ pub(super) fn analyze(program: &Program, table: &Table, depth: Depth) -> Pattern
 }
 
 /// One candidate variant of the analysis' declaration table.
+#[derive(Clone)]
 pub(super) struct Entry {
     /// The variant's name in the analyzed file's scope.
     pub(super) name: String,
@@ -34,6 +36,8 @@ pub(super) struct Entry {
     pub(super) origin: Origin,
     /// The constructors, in declaration order, including payload fields.
     pub(super) constructors: Vec<MatchConstructor>,
+    pub(super) scope: Option<crate::hir::Span>,
+    pub(super) type_names: Vec<String>,
 }
 
 /// The candidate variants a match's subject can resolve to, in shadowing
@@ -41,7 +45,7 @@ pub(super) struct Entry {
 pub(super) struct Table {
     /// Local declarations first (in source order), then imported ones, then
     /// the built-ins; each name appears once, so the nearer origin wins.
-    entries: Vec<Entry>,
+    entries: Vec<std::sync::Arc<Entry>>,
 }
 
 impl Table {
@@ -52,7 +56,7 @@ impl Table {
     /// and constructors with declared field text.
     pub(super) fn from_resolution(resolution: &crate::resolve::Resolution) -> Table {
         use crate::resolve::{DeclOrigin, DefKind};
-        let entries = resolution
+        let entries: Vec<Entry> = resolution
             .defs
             .iter()
             .filter_map(|(id, def)| {
@@ -63,8 +67,17 @@ impl Table {
                 if resolution.type_ns.get(&def.name) != Some(&id) {
                     return None;
                 }
+                let mut type_names: Vec<String> = resolution
+                    .type_ns
+                    .iter()
+                    .filter(|&(name, &named)| named == id && *name != def.name)
+                    .map(|(name, _)| name.clone())
+                    .collect();
+                type_names.sort();
                 Some(Entry {
+                    scope: data.scope,
                     name: def.name.clone(),
+                    type_names,
                     origin: match &data.origin {
                         DeclOrigin::Local(_) => Origin::Local,
                         DeclOrigin::Imported { from } => Origin::Imported { from: from.clone() },
@@ -98,7 +111,24 @@ impl Table {
                 })
             })
             .collect();
-        Table { entries }
+        Table {
+            entries: entries.into_iter().map(std::sync::Arc::new).collect(),
+        }
+    }
+
+    pub(super) fn visible_at(&self, at: usize) -> Table {
+        Table {
+            entries: self
+                .entries
+                .iter()
+                .filter(|entry| {
+                    entry
+                        .scope
+                        .is_none_or(|scope| scope.start <= at && at < scope.end)
+                })
+                .cloned()
+                .collect(),
+        }
     }
 
     /// The first variant whose cases contain every tag — `None` for an empty
@@ -120,6 +150,7 @@ impl Table {
                 tags.iter()
                     .all(|tag| entry.constructors.iter().any(|c| c.tag == *tag))
             })
+            .map(|entry| &**entry)
             .collect()
     }
 
@@ -135,7 +166,9 @@ impl Table {
     /// read against (`coverage::subject_of`).
     pub(super) fn entry_of_members(&self, tags: &[String]) -> Entry {
         Entry {
+            scope: None,
             name: String::new(),
+            type_names: Vec::new(),
             origin: Origin::Local,
             constructors: tags
                 .iter()
@@ -178,7 +211,10 @@ impl Table {
             return None; // a union, intersection, array, ... — not one variant
         }
         let base = &trimmed[..base_len];
-        self.entries.iter().find(|e| e.name == base)
+        self.entries
+            .iter()
+            .find(|e| e.name == base || e.type_names.iter().any(|name| name == base))
+            .map(|entry| &**entry)
     }
 }
 
@@ -285,6 +321,7 @@ fn walk_if_let_grown(stmt: &IfLetStmt, table: &Table, depth: Depth, out: &mut Pa
 }
 
 pub(super) fn analyze_match(expr: &MatchExpr, table: &Table, depth: Depth) -> MatchAnalysis {
+    let table = &table.visible_at(expr.keyword_off);
     // The subject is read from *every* arm's tags, guarded or not — the
     // type-reading counterpart of the resolver's identification (name
     // resolution itself is [`crate::resolve`]'s and attached afterwards).
@@ -306,6 +343,7 @@ pub(super) fn analyze_match(expr: &MatchExpr, table: &Table, depth: Depth) -> Ma
                 pattern_start: arm.pattern_span.start,
                 body_start: arm.body_span.start,
                 body_end: arm.body_span.end,
+                end: arm.end,
                 pattern_bindings: Vec::new(),
                 body_bindings: Vec::new(),
             };
@@ -335,6 +373,7 @@ pub(super) fn analyze_tuple_match(
     table: &Table,
     depth: Depth,
 ) -> MatchAnalysis {
+    let table = &table.visible_at(expr.keyword_off);
     let arity = expr.scrutinees.len();
     // Each position reads its subject independently, from the tags every
     // arm uses there.
@@ -365,6 +404,7 @@ pub(super) fn analyze_tuple_match(
                 pattern_start: arm.pattern_span.start,
                 body_start: arm.body_span.start,
                 body_end: arm.body_span.end,
+                end: arm.end,
                 pattern_bindings: Vec::new(),
                 body_bindings: Vec::new(),
             };
@@ -445,6 +485,7 @@ pub(super) fn analyze_alt_site(
     table: &Table,
     depth: Depth,
 ) -> PatternSite {
+    let table = &table.visible_at(keyword_off);
     let tags: Vec<&str> = alts.iter().map(|alt| alt.tag.as_str()).collect();
     let subject = table.resolve(&tags);
     let group = (alts[0].tag_off, alts.last().expect("non-empty").end);

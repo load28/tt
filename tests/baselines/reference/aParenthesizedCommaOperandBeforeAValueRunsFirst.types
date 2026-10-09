@@ -1,0 +1,69 @@
+=== aParenthesizedCommaOperandBeforeAValueRunsFirst.tt ===
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Ok"
+>value : (property) value: T
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Err"
+>error : (property) error: string
+const log: string[] = [];
+>log : const log: string[]
+const note = (s: string) => { log.push(s); return 0; };
+>note : const note: (s: string) => number
+>s : (parameter) s: string
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>s : (parameter) s: string
+const r = (n: number): R<number> => { log.push("r"); return { kind: "Ok", value: n }; };
+>r : const r: (n: number) => R<number>
+>n : (parameter) n: number
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>n : (parameter) n: number
+function f(o: number) { return ((note("o")), match (o) { 1 => "one", _ => "other" }); }
+>f : function f(o: number): "one" | "other"
+>o : (parameter) o: number
+>note : const note: (s: string) => number
+>o : (parameter) o: number
+function h(): R<string> { const v = ((note("g")), try r(1)); return { kind: "Ok", value: String(v) }; }
+>h : function h(): R<string>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>v : const v: number
+>note : const note: (s: string) => number
+>r : const r: (n: number) => R<number>
+>kind : (property) kind: "Ok"
+>value : (property) value: string
+>String : var String: (value?: any) => string
+>v : const v: number
+console.log(f(1), JSON.stringify(h()), log.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>f : function f(o: number): "one" | "other"
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>h : function h(): R<string>
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

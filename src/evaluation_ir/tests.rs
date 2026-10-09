@@ -194,6 +194,7 @@ fn a_result_binding_is_nested_under_the_result_region() {
         exits,
         protocol,
         context,
+        ..
     } = &propagation.placement
     else {
         panic!("the propagation is not nested: {:?}", propagation.placement);
@@ -552,10 +553,9 @@ fn validate_order_rejects_a_repeated_value_planned_into_its_owner() {
     let mut plan = file.lowering_plan(&core).expect("lowering plan");
     // Break the plan the way a protocol bug would: keep the statement
     // capability but drop the loop operation that preserves repetition.
-    plan.owners[0].values[0]
-        .schedule
-        .steps
-        .retain(|step| step.operation != HostEvaluationOperation::LoopTest);
+    plan.owners[0].values[0].schedule.edit_steps(|steps| {
+        steps.retain(|step| step.operation != HostEvaluationOperation::LoopTest)
+    });
     let error = file.validate_order(&plan).expect_err("must be rejected");
     assert_eq!(error.invariant, crate::ice::Invariant::RepetitionRegionLeft);
     assert_eq!(error.stage, crate::ice::LoweringStage::EvaluationOrder);
@@ -586,22 +586,26 @@ fn validate_order_rejects_a_capture_overlapping_a_tt_value() {
     // Break the dependency edge by turning the prior operation's slot
     // back into a raw source capture containing tt syntax.
     let operation = plan.owners[0].operations[0].clone();
-    for step in &mut plan.owners[0].values[1].schedule.steps {
-        for input in &mut step.inputs {
-            let PlannedEvaluationInput::Slot { slot, mode } = *input else {
-                continue;
-            };
-            if slot == operation.result {
-                *input = PlannedEvaluationInput::Source {
-                    source: operation.parent,
-                    mode,
-                    target: slot,
-                    receiver: None,
-                    key: None,
-                };
-            }
+    plan.owners[0].values[1].schedule.edit_steps(|steps| {
+        for step in steps {
+            step.inputs.edit(|inputs| {
+                for input in inputs {
+                    let PlannedEvaluationInput::Slot { slot, mode } = *input else {
+                        continue;
+                    };
+                    if slot == operation.result {
+                        *input = PlannedEvaluationInput::Source {
+                            source: operation.parent,
+                            mode,
+                            target: slot,
+                            receiver: None,
+                            key: None,
+                        };
+                    }
+                }
+            });
         }
-    }
+    });
     let error = file.validate_order(&plan).expect_err("must be rejected");
     assert_eq!(
         error.invariant,
@@ -618,10 +622,13 @@ fn validate_order_rejects_values_out_of_source_order() {
     // Isolate the ordinal contract: drop the slot dependency so only
     // the source-order inversion remains for the validator to see.
     for value in &mut plan.owners[0].values {
-        for step in &mut value.schedule.steps {
-            step.inputs
-                .retain(|input| !matches!(input, PlannedEvaluationInput::Slot { .. }));
-        }
+        value.schedule.edit_steps(|steps| {
+            for step in steps {
+                step.inputs.edit(|inputs| {
+                    inputs.retain(|input| !matches!(input, PlannedEvaluationInput::Slot { .. }))
+                });
+            }
+        });
     }
     let error = file.validate_order(&plan).expect_err("must be rejected");
     assert_eq!(
@@ -638,13 +645,17 @@ fn validate_order_rejects_a_slot_read_before_it_is_produced() {
     let mut plan = file.lowering_plan(&core).expect("lowering plan");
     // Point the second value's dependency at its own not-yet-produced slot.
     let ValueTarget::Slot(own) = plan.owners[0].values[1].target;
-    for step in &mut plan.owners[0].values[1].schedule.steps {
-        for input in &mut step.inputs {
-            if let PlannedEvaluationInput::Slot { slot, .. } = input {
-                *slot = own;
-            }
+    plan.owners[0].values[1].schedule.edit_steps(|steps| {
+        for step in steps {
+            step.inputs.edit(|inputs| {
+                for input in inputs {
+                    if let PlannedEvaluationInput::Slot { slot, .. } = input {
+                        *slot = own;
+                    }
+                }
+            });
         }
-    }
+    });
     let error = file.validate_order(&plan).expect_err("must be rejected");
     assert_eq!(
         error.invariant,
@@ -662,18 +673,22 @@ fn validate_reference_rejects_a_receiverless_member_reference() {
         plan.owners[0].values[0].capability,
         TargetCapability::StatementRegion
     );
-    for step in &mut plan.owners[0].values[0].schedule.steps {
-        for input in &mut step.inputs {
-            if let PlannedEvaluationInput::Source {
-                mode: EvaluationInputMode::MemberReference,
-                receiver,
-                ..
-            } = input
-            {
-                *receiver = None;
-            }
+    plan.owners[0].values[0].schedule.edit_steps(|steps| {
+        for step in steps {
+            step.inputs.edit(|inputs| {
+                for input in inputs {
+                    if let PlannedEvaluationInput::Source {
+                        mode: EvaluationInputMode::MemberReference,
+                        receiver,
+                        ..
+                    } = input
+                    {
+                        *receiver = None;
+                    }
+                }
+            });
         }
-    }
+    });
     let error = file
         .validate_reference(&plan)
         .expect_err("must be rejected");
@@ -686,13 +701,17 @@ fn validate_reference_rejects_a_reference_demoted_to_a_value_slot() {
     let (file, core) =
         evaluation("consume(match (left) { A => 1, _ => 0 }, match (right) { B => 2, _ => 0 });\n");
     let mut plan = file.lowering_plan(&core).expect("lowering plan");
-    for step in &mut plan.owners[0].values[1].schedule.steps {
-        for input in &mut step.inputs {
-            if let PlannedEvaluationInput::Slot { mode, .. } = input {
-                *mode = EvaluationInputMode::MemberReference;
-            }
+    plan.owners[0].values[1].schedule.edit_steps(|steps| {
+        for step in steps {
+            step.inputs.edit(|inputs| {
+                for input in inputs {
+                    if let PlannedEvaluationInput::Slot { mode, .. } = input {
+                        *mode = EvaluationInputMode::MemberReference;
+                    }
+                }
+            });
         }
-    }
+    });
     let error = file
         .validate_reference(&plan)
         .expect_err("must be rejected");

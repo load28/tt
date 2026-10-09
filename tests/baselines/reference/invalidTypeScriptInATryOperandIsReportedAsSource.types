@@ -1,0 +1,24 @@
+=== invalidTypeScriptInATryOperandIsReportedAsSource.tt ===
+declare function r(n: number): { kind: "Ok"; value: number };
+>r : function r(n: number): {
+>       kind: "Ok";
+>       value: number;
+>   }
+>n : (parameter) n: number
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+export function f() { const v = try r(1 2); return { kind: "Ok" as const, value: v }; }
+>f : function f(): {
+>       kind: "Ok";
+>       value: number;
+>   }
+>v : const v: number
+>r : function r(n: number): {
+>       kind: "Ok";
+>       value: number;
+>   }
+>kind : (property) kind: "Ok"
+>const : type const = "Ok"
+>value : (property) value: number
+>v : const v: number
+

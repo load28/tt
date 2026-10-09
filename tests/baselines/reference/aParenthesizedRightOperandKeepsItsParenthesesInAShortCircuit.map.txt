@@ -1,0 +1,12 @@
+//// [aParenthesizedRightOperandKeepsItsParenthesesInAShortCircuit.tt] 10 mapping(s)
+1:1 -> 1:1 len 252  "import * as Result from \"@tt/std/result\";\nimport"...
+6:3 -> 22:3 len 14  "const value = "
+6:17 -> 7:29 len 1  "g"
+6:18 -> 22:23 len 2  "(("
+6:20 -> 9:17 len 3  "o.y"
+6:28 -> 11:19 len 3  "o.x"
+6:28 -> 17:25 len 4  "o.x "
+6:34 -> 17:40 len 1  " "
+6:39 -> 12:20 len 4  "r(5)"
+6:44 -> 22:31 len 126  "));\n  return Result.Ok([value, o.x]);\n}\nconsole."...
+

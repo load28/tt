@@ -1,0 +1,59 @@
+=== aLineCommentAtTheEndOfAMatchKeepsTheStatementEnd.tt ===
+variant S { A(n: number), B }
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => S
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const s: S = S.A(3) as S;
+>s : const s: S
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => S
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+function f() {
+>f : function f(): number
+  const m = match (s) { A(n) => n, B => 4 // c
+>m : const m: number
+>s : const s: S
+>n : const n: number
+>n : const n: number
+  return m;
+>m : const m: number
+function g() {
+>g : function g(): number
+  const k = match (s // c
+>k : const k: number
+>s : const s: S
+  ) { A(n) => n + 1, B => 4 };
+>n : const n: number
+>n : const n: number
+  return k;
+>k : const k: number
+console.log(f(), g());
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>f : function f(): number
+>g : function g(): number
+

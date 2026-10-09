@@ -1,0 +1,10 @@
+// @run: aTryAroundAPipelineInALogicalOperandLowersOnce.tt
+import * as Result from "@tt/std/result";
+import type { TResult } from "@tt/std";
+function r(n: number): TResult<number, string> { return Result.Ok(n); }
+const f = (x: TResult<number, string>) => x.kind.length;
+export function F(c: boolean): TResult<number, string> {
+  const x = match (c && (try r(result { return try r(2); } |> f))) { _ => 0 };
+  return Result.Ok(x);
+}
+console.log(JSON.stringify(F(true)));

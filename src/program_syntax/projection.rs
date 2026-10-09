@@ -2,7 +2,9 @@
 
 mod segments;
 
-pub(super) use segments::{ProjectionSegmentKind, ProjectionSegments, ProjectionSourceSegment};
+pub(super) use segments::{
+    ProjectionSegmentKind, ProjectionSegments, ProjectionSourceSegment, SegmentList,
+};
 
 use super::*;
 
@@ -13,6 +15,8 @@ pub(crate) struct ProgramSyntax {
     pub(super) projection: String,
     pub(super) module: Module,
     pub(super) overlay: Vec<OverlayEntry>,
+    #[cfg(test)]
+    pub(super) parent_edges: super::parents::ParentEdges,
     pub(super) owners: Vec<HostOwnerSyntax>,
     pub(super) occupied_names: HashSet<String>,
     pub(super) directive_prologue_end: Option<usize>,
@@ -20,6 +24,9 @@ pub(crate) struct ProgramSyntax {
     pub(super) commonjs: bool,
     pub(super) globals: HashMap<SourceSpan, GlobalStatement>,
     pub(super) completion_scopes: Vec<super::completion::CompletionScope>,
+    pub(super) if_tests: Vec<IfTestFacts>,
+    pub(super) anonymous_functions: Vec<SourceSpan>,
+    pub(super) function_names: Vec<(SourceSpan, String)>,
 }
 
 #[derive(Debug)]
@@ -166,17 +173,53 @@ impl ProgramSyntax {
             source_kind,
             mode,
         )?;
+        for part in &projection.hidden_parts {
+            let text = &source[part.source.start..part.source.end];
+            let (receiver, member) = match part.role {
+                HiddenRole::Step { postfix: true } => ("$tt_syntax_piped", ""),
+                HiddenRole::Head { receiver: true }
+                    if crate::lexer::is_member_receiver(text, 0, text.len(), source_kind) =>
+                {
+                    ("", ".$tt_syntax")
+                }
+                HiddenRole::Head { .. } | HiddenRole::Step { .. } | HiddenRole::Operand => ("", ""),
+            };
+            let open = "class $tt_syntax extends Object { async *$tt_syntax() { (";
+            let start = open.len() + receiver.len();
+            let code = format!("{open}{receiver}{text}{member}); }} }}");
+            let segments = [ProjectionSourceSegment {
+                projected: ProjectedSpan {
+                    start: ProjectedByte(start),
+                    end: ProjectedByte(start + text.len()),
+                },
+                source: part.source,
+                kind: ProjectionSegmentKind::Copied,
+            }];
+            parse_module(&code, &segments, source_kind, mode).map_err(|error| match error {
+                ProgramSyntaxError::Parse { message, .. } => {
+                    ProgramSyntaxError::SourceNotTypeScript {
+                        message,
+                        source: part.source.start,
+                    }
+                }
+                error => error,
+            })?;
+        }
+        let indexed_segments = ProjectionSegments::new(projection.source_segments.clone());
         let completion_scopes = super::completion::completion_scopes(
             &parsed.module,
             parsed.start,
             &projection.pending,
-            &projection.source_segments,
+            &indexed_segments,
             &projection.completion,
         );
+        let if_tests = if_tests(&parsed.module, parsed.start, &indexed_segments);
+        let (anonymous_functions, function_names) =
+            anonymous_functions(&parsed.module, parsed.start, &indexed_segments);
         let mut collector = ParentCollector::new(
             parsed.start,
             &projection.pending,
-            &projection.source_segments,
+            indexed_segments,
             &projection.projection_only_protocol_parents,
             &projection.arm_blocks,
             &projection.tt_bindings,
@@ -212,12 +255,17 @@ impl ProgramSyntax {
             projection: projection.code,
             module: parsed.module,
             overlay: collected.overlay,
+            #[cfg(test)]
+            parent_edges: collected.parent_edges,
             owners: collected.owners,
             occupied_names: collected.occupied_names,
             script,
             commonjs,
             globals,
             completion_scopes,
+            if_tests,
+            anonymous_functions,
+            function_names,
         };
         syntax.validate()?;
         Ok(syntax)
@@ -255,6 +303,23 @@ impl ProgramSyntax {
     }
 
     /// What TypeScript's completion rules say at each construct's place.
+    pub(crate) fn if_tests(&self) -> &[IfTestFacts] {
+        &self.if_tests
+    }
+
+    /// The source spans of the expressions ECMA-262 calls anonymous function
+    /// definitions (`IsAnonymousFunctionDefinition`): an arrow function, or a
+    /// function or class expression without a name, written alone or under
+    /// parentheses and TypeScript's erased wrappers (`as`, `satisfies`, `!`,
+    /// `<T>`, instantiation). Assigning one to an identifier names it.
+    pub(crate) fn anonymous_functions(&self) -> &[SourceSpan] {
+        &self.anonymous_functions
+    }
+
+    pub(crate) fn function_names(&self) -> &[(SourceSpan, String)] {
+        &self.function_names
+    }
+
     pub(crate) fn take_completion_scopes(&mut self) -> Vec<super::completion::CompletionScope> {
         std::mem::take(&mut self.completion_scopes)
     }
@@ -461,6 +526,7 @@ impl ProgramSyntax {
     fn validate(&self) -> Result<(), ProgramSyntaxError> {
         let _module_span = self.module.span;
         let projection_len = self.projection.len();
+        let mut checked_steps = HashSet::new();
         for entry in &self.overlay {
             let start = entry.projected.start.0;
             let end = entry.projected.end.0;
@@ -487,13 +553,20 @@ impl ProgramSyntax {
                 | HostContinuation::Discard
                 | HostContinuation::Compose => {}
             }
-            for step in entry.protocol.steps() {
+            let mut steps = entry.protocol.steps();
+            while let Some(step) = steps.first()
+                && checked_steps.insert(steps.identity())
+            {
                 if step.parent.start >= step.parent.end || step.parent.end > self.source_len {
                     return Err(ProgramSyntaxError::InvalidSourceSpan {
                         start: SourceByte(step.parent.start),
                         end: SourceByte(step.parent.end),
                     });
                 }
+                let Some(rest) = steps.rest() else {
+                    break;
+                };
+                steps = rest;
             }
         }
         for (index, owner) in self.owners.iter().enumerate() {
@@ -527,6 +600,7 @@ pub(super) struct Projection {
     pub(super) pending: Vec<PendingOverlay>,
     pub(super) source_segments: Vec<ProjectionSourceSegment>,
     pub(super) projection_only_protocol_parents: Vec<ProjectedSpan>,
+    pub(super) hidden_parts: Vec<HiddenPart>,
 }
 
 #[derive(Debug)]
@@ -556,9 +630,28 @@ pub(super) struct ProjectionBuilder<'a> {
     pub(super) source: &'a str,
     pub(super) code: String,
     pub(super) pending: Vec<PendingOverlay>,
-    pub(super) source_segments: Vec<ProjectionSourceSegment>,
+    pub(super) source_segments: SegmentList,
     pub(super) projection_only_protocol_parents: Vec<ProjectedSpan>,
     pub(super) automatic_semicolons: Vec<crate::lexer::AutomaticSemicolon>,
+    pub(super) hidden_parts: Vec<HiddenPart>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(super) struct HiddenPart {
+    pub(super) source: SourceSpan,
+    pub(super) role: HiddenRole,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum HiddenRole {
+    Head {
+        receiver: bool,
+    },
+    Step {
+        postfix: bool,
+    },
+    /// A propagation's operand, which its placeholder hides.
+    Operand,
 }
 
 impl<'a> ProjectionBuilder<'a> {
@@ -577,9 +670,10 @@ impl<'a> ProjectionBuilder<'a> {
             source,
             code: String::with_capacity(source.len()),
             pending: Vec::new(),
-            source_segments: Vec::new(),
+            source_segments: SegmentList::default(),
             projection_only_protocol_parents: Vec::new(),
             automatic_semicolons: crate::lexer::automatic_semicolons(tokens),
+            hidden_parts: Vec::new(),
         }
     }
 
@@ -591,8 +685,9 @@ impl<'a> ProjectionBuilder<'a> {
             tt_bindings: self.tt_bindings,
             code: self.code,
             pending: self.pending,
-            source_segments: self.source_segments,
+            source_segments: self.source_segments.into_vec(),
             projection_only_protocol_parents: self.projection_only_protocol_parents,
+            hidden_parts: self.hidden_parts,
         })
     }
 
@@ -633,7 +728,8 @@ impl<'a> ProjectionBuilder<'a> {
     ) -> Result<(), ProgramSyntaxError> {
         let owner_start = ProjectedByte(self.code.len());
         match category {
-            SyntaxCategory::Expression | SyntaxCategory::Propagation => self.code.push('('),
+            SyntaxCategory::Expression => self.code.push('('),
+            SyntaxCategory::Propagation => {}
             SyntaxCategory::Item => self.code.push_str("const "),
             SyntaxCategory::Statement => {
                 crate::ice::bug!("a statement placeholder is framed by its decision")
@@ -642,7 +738,7 @@ impl<'a> ProjectionBuilder<'a> {
         self.push_placeholder_name(category, source, core_root)?;
         match category {
             SyntaxCategory::Expression => self.code.push(')'),
-            SyntaxCategory::Propagation => self.code.push_str(");"),
+            SyntaxCategory::Propagation => self.code.push(';'),
             SyntaxCategory::Item => self.code.push_str(" = 0;"),
             SyntaxCategory::Statement => {
                 crate::ice::bug!("a statement placeholder is framed by its decision")
@@ -697,8 +793,9 @@ impl<'a> ProjectionBuilder<'a> {
     /// ending exactly at this boundary can own it.
     fn push_source_boundary(&mut self, text: &str, segments_since: usize) {
         let start = ProjectedByte(self.code.len());
-        let source = self.source_segments[segments_since..]
-            .iter()
+        let source = self
+            .source_segments
+            .since(segments_since)
             .rev()
             .find(|segment| {
                 segment.kind == ProjectionSegmentKind::Copied && segment.projected.end == start
@@ -765,30 +862,31 @@ impl<'a> ProjectionBuilder<'a> {
                         ));
                     }
                 }
-                Statement::Decision(decision) => {
-                    let start = ProjectedByte(self.code.len());
-                    self.emit_statement_decision(decision)?;
-                    if let crate::core_ir::DecisionKind::LetElse { .. } = decision.kind {
-                        let mut names = Vec::new();
-                        for arm in &decision.arms {
-                            self.pattern_names(&arm.pattern, &mut names)?;
-                        }
-                        self.tt_bindings.statements.push((
-                            ProjectedSpan {
-                                start,
-                                end: ProjectedByte(self.code.len()),
-                            },
-                            names,
-                        ));
-                    }
-                    if let crate::core_ir::DecisionKind::LetElse { exported: true, .. } =
-                        decision.kind
-                    {
-                        self.code.push_str("export {};");
-                    }
-                }
+                Statement::Decision(decision) => self.emit_body_decision(decision)?,
                 Statement::Expr(expr) => self.emit_expr(*expr)?,
             }
+        }
+        Ok(())
+    }
+
+    fn emit_body_decision(&mut self, decision: &Decision) -> Result<(), ProgramSyntaxError> {
+        let start = ProjectedByte(self.code.len());
+        self.emit_statement_decision(decision)?;
+        if let crate::core_ir::DecisionKind::LetElse { .. } = decision.kind {
+            let mut names = Vec::new();
+            for arm in &decision.arms {
+                self.pattern_names(&arm.pattern, &mut names)?;
+            }
+            self.tt_bindings.statements.push((
+                ProjectedSpan {
+                    start,
+                    end: ProjectedByte(self.code.len()),
+                },
+                names,
+            ));
+        }
+        if let crate::core_ir::DecisionKind::LetElse { exported: true, .. } = decision.kind {
+            self.code.push_str("export {};");
         }
         Ok(())
     }
@@ -810,7 +908,9 @@ impl<'a> ProjectionBuilder<'a> {
         // initializer. Project it as an expression so that header remains
         // valid TypeScript; its typed continuation decides the eventual
         // statement shape in target lowering.
-        if self.expr_contains_value_region(propagate.value) {
+        if self.expr_contains_value_region(propagate.value)
+            || self.expr_contains_propagation(propagate.value)
+        {
             return self.emit_propagate_with_shadow(
                 SyntaxCategory::Propagation,
                 self.source_span(propagate.owner)?,
@@ -818,11 +918,24 @@ impl<'a> ProjectionBuilder<'a> {
                 propagate.value,
             );
         }
+        self.hide_operand(propagate.value)?;
         self.push_placeholder(
             SyntaxCategory::Propagation,
             self.source_span(propagate.owner)?,
             CoreRoot::Propagate(propagate.node),
         )
+    }
+
+    /// Keeps an opaque propagation operand's TypeScript checked although
+    /// the propagation's placeholder stands in for it.
+    fn hide_operand(&mut self, value: ExprId) -> Result<(), ProgramSyntaxError> {
+        if let Expr::Opaque(node) = &self.core.exprs[value.index()] {
+            self.hidden_parts.push(HiddenPart {
+                source: self.source_span(*node)?,
+                role: HiddenRole::Operand,
+            });
+        }
+        Ok(())
     }
 
     fn statement_source_start(
@@ -1013,7 +1126,9 @@ impl<'a> ProjectionBuilder<'a> {
         propagate: &Propagate,
     ) -> Result<(), ProgramSyntaxError> {
         let source = self.source_span(propagate.node)?;
-        if self.expr_contains_value_region(propagate.value) {
+        if self.expr_contains_value_region(propagate.value)
+            || self.expr_contains_propagation(propagate.value)
+        {
             return self.emit_propagate_with_shadow(
                 SyntaxCategory::Expression,
                 source,
@@ -1021,6 +1136,7 @@ impl<'a> ProjectionBuilder<'a> {
                 propagate.value,
             );
         }
+        self.hide_operand(propagate.value)?;
         self.push_placeholder(SyntaxCategory::Expression, source, CoreRoot::Expr(expr))
     }
 
@@ -1037,6 +1153,30 @@ impl<'a> ProjectionBuilder<'a> {
         // placeholder hides. Project that step beside the placeholder in a
         // valid comma expression so the parent collector retains its arrow
         // or conditional boundary.
+        if let Some(head) = apply.head
+            && let Expr::Opaque(node) = &self.core.exprs[head.index()]
+        {
+            self.hidden_parts.push(HiddenPart {
+                source: self.source_span(*node)?,
+                role: HiddenRole::Head {
+                    receiver: apply.steps.first().is_some_and(|step| {
+                        matches!(step.mode, crate::core_ir::ApplyMode::Postfix { .. })
+                    }),
+                },
+            });
+        }
+        for step in &apply.steps {
+            if let Expr::Opaque(_) = &self.core.exprs[step.value.index()]
+                && step.mode != crate::core_ir::ApplyMode::Missing
+            {
+                self.hidden_parts.push(HiddenPart {
+                    source: self.source_span(step.node)?,
+                    role: HiddenRole::Step {
+                        postfix: matches!(step.mode, crate::core_ir::ApplyMode::Postfix { .. }),
+                    },
+                });
+            }
+        }
         let shadow_steps: Vec<_> = apply
             .steps
             .iter()
@@ -1201,6 +1341,10 @@ impl<'a> ProjectionBuilder<'a> {
     }
 
     fn emit_shadow_expr(&mut self, expr: ExprId) -> Result<(), ProgramSyntaxError> {
+        crate::stack::grow(|| self.emit_shadow_expr_grown(expr))
+    }
+
+    fn emit_shadow_expr_grown(&mut self, expr: ExprId) -> Result<(), ProgramSyntaxError> {
         match &self.core.exprs[expr.index()] {
             Expr::Opaque(node) => self.push_source(*node),
             Expr::Propagate(propagate) => self.emit_propagate_expr(expr, propagate),
@@ -1222,7 +1366,8 @@ impl<'a> ProjectionBuilder<'a> {
                     self.source_span(propagate.owner)?,
                     CoreRoot::Propagate(propagate.node),
                 )?,
-                Statement::Adt(_) | Statement::Import(_) | Statement::Decision(_) => {
+                Statement::Decision(decision) => self.emit_body_decision(decision)?,
+                Statement::Adt(_) | Statement::Import(_) => {
                     return Err(ProgramSyntaxError::InvalidSourceSpan {
                         start: SourceByte(0),
                         end: SourceByte(0),
@@ -1285,14 +1430,11 @@ impl<'a> ProjectionBuilder<'a> {
         self.code.push_str("})()");
         let end = ProjectedByte(self.code.len());
         let projected = ProjectedSpan { start, end };
-        self.source_segments.insert(
-            0,
-            ProjectionSourceSegment {
-                projected,
-                source,
-                kind: ProjectionSegmentKind::Placeholder,
-            },
-        );
+        self.source_segments.push_front(ProjectionSourceSegment {
+            projected,
+            source,
+            kind: ProjectionSegmentKind::Placeholder,
+        });
         self.pending[pending_index].projected = projected;
         self.pending[pending_index].synthetic_return = Some(ProjectedSpan {
             start: synthetic_return_start,
@@ -1420,14 +1562,11 @@ impl<'a> ProjectionBuilder<'a> {
         self.code.push_str("0;})()");
         let end = ProjectedByte(self.code.len());
         let projected = ProjectedSpan { start, end };
-        self.source_segments.insert(
-            0,
-            ProjectionSourceSegment {
-                projected,
-                source,
-                kind: ProjectionSegmentKind::Placeholder,
-            },
-        );
+        self.source_segments.push_front(ProjectionSourceSegment {
+            projected,
+            source,
+            kind: ProjectionSegmentKind::Placeholder,
+        });
         self.pending[pending_index].projected = projected;
         Ok(())
     }
@@ -1553,4 +1692,124 @@ impl<'a> ProjectionBuilder<'a> {
         }
         Ok(())
     }
+}
+
+fn if_tests(module: &Module, start: HostOrigin, segments: &ProjectionSegments) -> Vec<IfTestFacts> {
+    use swc_ecma_visit::{Visit, VisitWith};
+
+    struct Collect<'s> {
+        start: HostOrigin,
+        segments: &'s ProjectionSegments,
+        out: Vec<IfTestFacts>,
+    }
+    impl Visit for Collect<'_> {
+        fn visit_if_stmt(&mut self, node: &swc_ecma_ast::IfStmt) {
+            let map = |span: swc_common::Span| {
+                super::protocol::source_span_for_projection(
+                    self.segments,
+                    projected_span(span, self.start),
+                )
+            };
+            let mut test = &*node.test;
+            while let swc_ecma_ast::Expr::Paren(inner) = test {
+                test = &inner.expr;
+            }
+            if let (Some(test), Some(consequent)) = (map(test.span()), map(node.cons.span())) {
+                let alternate = node.alt.as_ref().map(|alternate| map(alternate.span()));
+                if alternate.is_none_or(|alternate| alternate.is_some()) {
+                    self.out.push(IfTestFacts {
+                        test,
+                        consequent,
+                        alternate: alternate.flatten(),
+                    });
+                }
+            }
+            node.visit_children_with(self);
+        }
+    }
+    let mut collect = Collect {
+        start,
+        segments,
+        out: Vec::new(),
+    };
+    module.visit_with(&mut collect);
+    collect.out
+}
+
+fn anonymous_functions(
+    module: &Module,
+    start: HostOrigin,
+    segments: &ProjectionSegments,
+) -> (Vec<SourceSpan>, Vec<(SourceSpan, String)>) {
+    use swc_ecma_ast::{Expr, PropName};
+    use swc_ecma_visit::{Visit, VisitWith};
+
+    fn anonymous(expr: &Expr) -> bool {
+        match expr {
+            Expr::Arrow(_) => true,
+            Expr::Fn(function) => function.ident.is_none(),
+            Expr::Class(class) => class.ident.is_none(),
+            Expr::Paren(inner) => anonymous(&inner.expr),
+            Expr::TsAs(inner) => anonymous(&inner.expr),
+            Expr::TsSatisfies(inner) => anonymous(&inner.expr),
+            Expr::TsNonNull(inner) => anonymous(&inner.expr),
+            Expr::TsTypeAssertion(inner) => anonymous(&inner.expr),
+            Expr::TsInstantiation(inner) => anonymous(&inner.expr),
+            _ => false,
+        }
+    }
+
+    struct Collect<'s> {
+        start: HostOrigin,
+        segments: &'s ProjectionSegments,
+        out: Vec<SourceSpan>,
+        named: Vec<(SourceSpan, String)>,
+    }
+    impl Collect<'_> {
+        fn source_span(&self, node: &Expr) -> Option<SourceSpan> {
+            super::protocol::source_span_for_projection(
+                self.segments,
+                projected_span(node.span(), self.start),
+            )
+        }
+    }
+    impl Visit for Collect<'_> {
+        fn visit_expr(&mut self, node: &Expr) {
+            if anonymous(node)
+                && let Some(span) = self.source_span(node)
+            {
+                self.out.push(span);
+            }
+            node.visit_children_with(self);
+        }
+        fn visit_key_value_prop(&mut self, node: &swc_ecma_ast::KeyValueProp) {
+            let name = match &node.key {
+                PropName::Ident(ident) => Some(ident.sym.to_string()),
+                PropName::Str(text) => text.value.as_str().map(str::to_owned),
+                PropName::Num(number) => Some(number.value.to_string()),
+                PropName::Computed(_) | PropName::BigInt(_) => None,
+            };
+            if let Some(name) = name
+                && anonymous(&node.value)
+                && let Some(span) = self.source_span(&node.value)
+            {
+                self.named.push((span, name));
+            }
+            node.visit_children_with(self);
+        }
+    }
+    let mut collect = Collect {
+        start,
+        segments,
+        out: Vec::new(),
+        named: Vec::new(),
+    };
+    module.visit_with(&mut collect);
+    collect.out.sort_by_key(|span| (span.start, span.end));
+    collect.out.dedup();
+    collect
+        .named
+        .sort_by_key(|(span, _)| (span.start, span.end));
+    collect.named.dedup();
+    (collect.out, collect.named)
 }

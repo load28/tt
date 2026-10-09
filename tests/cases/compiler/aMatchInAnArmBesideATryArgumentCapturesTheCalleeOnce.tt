@@ -1,0 +1,19 @@
+// @run: aMatchInAnArmBesideATryArgumentCapturesTheCalleeOnce.tt
+import * as Result from "@tt/std/result";
+import type { TResult } from "@tt/std";
+variant S { A, B }
+const s: S = S.A as S;
+function R(x: number): TResult<number, string> { return Result.Ok(x); }
+function f(...a: unknown[]) { return a.join(","); }
+function declared(): TResult<unknown, string> {
+  const r = match (s) { A => f(match (s) { A => 1, B => 2 }, try R(1)), B => 2 };
+  return Result.Ok(r);
+}
+function returned(): TResult<unknown, string> {
+  return Result.Ok(match (s) { A => f(match (s) { A => 1, B => 2 }, try R(1)), B => 2 });
+}
+function tested(): TResult<unknown, string> {
+  if (match (s) { A => f(match (s) { A => 1, B => 2 }, try R(1)), B => 2 } === "1,1") { return Result.Ok("yes"); }
+  return Result.Ok("no");
+}
+console.log(JSON.stringify([declared(), returned(), tested()]));

@@ -1,0 +1,7 @@
+//// [aPossiblyUndefinedTtValueIsReportedAsAnExpression.tt] 5 mapping(s)
+1:19 -> 25:3 len 29  "\nexport function f(v: V) {\n  "
+3:3 -> 45:3 len 14  "return \"n\" in "
+3:24 -> 29:19 len 1  "v"
+3:34 -> 32:18 len 1  "v"
+3:46 -> 45:23 len 4  ";\n}\n"
+

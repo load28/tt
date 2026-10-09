@@ -1,0 +1,7 @@
+=== signatureHelp /*open*/ signatureHelpInAnUnclosedArm.tt:4:45 ===
+  | const a = match (s) { Circle(radius) => add(
+  |                                             ^ /*open*/
+signatureHelp: active signature 0, active parameter 0
+  add(a: number, b: string): number
+    parameters: a: number | b: string
+

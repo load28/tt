@@ -1,0 +1,18 @@
+// @run: aPatternSubjectWithAPlainTemplateAfterAMatchIsLowered.tt
+variant V { A(n: number), B }
+const pick = (k: number, label: string): V => (label.length > 3 ? V.A(k) : V.B);
+function viaLetElse(k: number) {
+  const A(n) = pick(match (k) { 1 => 10, _ => 20 }, `k=${k}!`) else { return -1; };
+  return n;
+}
+function viaIfLet(k: number) {
+  if let A(n) = pick(match (k) { 1 => 10, _ => 20 }, `${k}`) {
+    return n;
+  }
+  return -2;
+}
+function viaOr(k: number, s: string) {
+  const A(n) = pick(match (k) { 1 => 10, _ => 20 }, s || `k=${k}!`) else { return -3; };
+  return n;
+}
+console.log(viaLetElse(1), viaLetElse(2), viaIfLet(1), viaOr(5, ""));

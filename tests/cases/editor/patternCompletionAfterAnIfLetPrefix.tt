@@ -1,0 +1,7 @@
+// @completions: ifLet, elseIfLet
+variant S { Alpha(x: number, yy: string), Beta, Gamma(g?: number) }
+declare const s: S;
+export function f() {
+  if let G/*ifLet*/ = s {}
+  if (s.kind === "Beta") {} else if let G/*elseIfLet*/ = s {}
+}

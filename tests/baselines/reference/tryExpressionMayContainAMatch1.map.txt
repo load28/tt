@@ -6,5 +6,5 @@
 2:42 -> 26:18 len 11  "wrap(value)"
 2:59 -> 30:17 len 5  "error"
 2:69 -> 31:18 len 13  "rewrap(error)"
-2:85 -> 43:26 len 15  "\n  return x;\n}\n"
+2:84 -> 43:25 len 16  ";\n  return x;\n}\n"
 

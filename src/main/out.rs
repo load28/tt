@@ -16,18 +16,22 @@ use std::io::{self, Write};
 
 /// Prints `text` and a newline.
 pub(super) fn line(text: &str) {
-    write(text, true);
+    write(text.as_bytes(), true);
 }
 
 /// Prints `text` with no trailing newline.
 pub(super) fn text(text: &str) {
-    write(text, false);
+    write(text.as_bytes(), false);
 }
 
-fn write(body: &str, newline: bool) {
+pub(super) fn bytes(bytes: &[u8]) {
+    write(bytes, false);
+}
+
+fn write(body: &[u8], newline: bool) {
     let stdout = io::stdout();
     let mut out = stdout.lock();
-    let wrote = out.write_all(body.as_bytes()).and_then(|()| {
+    let wrote = out.write_all(body).and_then(|()| {
         if newline {
             out.write_all(b"\n")
         } else {

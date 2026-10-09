@@ -1,0 +1,68 @@
+=== commentsAfterTtKeywordsAreKept.tt ===
+export variant /*h1*/ V /*h2*/ { A, B }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+variant /* a */ W<T> // b
+>T : (type parameter) T in type W<T>
+{ A(x: T), B }
+>A : (property) A: <T>(x: T) => W<T>
+>x : (property) x: T
+>T : (type parameter) T in type W<T>
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+declare const v: V;
+>v : const v: V
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+declare function r(): TResult<number, string>;
+>r : function r(): TResult<number, string>
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+export const m = match /*g1*/ (v) { A => 1, B => 2 };
+>m : const m: number
+>v : const v: V
+export function f(p = result /*pd*/ { const q = try r(); return q; }): TResult<number, string> {
+>f : function f(p?: TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }): TResult<number, string>
+>p : (parameter) p: TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>q : const q: number
+>r : function r(): TResult<number, string>
+>q : const q: number
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+  const a = try /*i1*/ r();
+>a : const a: number
+>r : function r(): TResult<number, string>
+  const b = try
+>b : const b: number
+    r();
+>r : function r(): TResult<number, string>
+  const w = result /*l1*/ { const q = try r(); return q; };
+>w : const w: TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>q : const q: number
+>r : function r(): TResult<number, string>
+>q : const q: number
+  const A() = v else { return { kind: "Err", error: "" }; } /*e7*/;
+>v : const v: V
+>kind : (property) kind: "Err"
+>error : (property) error: string
+  return { kind: "Ok", value: a + b };
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>a : const a: number
+>b : const b: number
+

@@ -112,7 +112,7 @@ function args(fail: boolean): TResult<number, string> {
   let $tt_v2: number;
   let $tt_v3: number;
   let $tt_v4: number;
-  const $tt_v5 = (add);
+  const $tt_v5: typeof add = (add);
   const $tt_t2 = step("x", true);
   if (!("value" in $tt_t2)) {
     return $tt_t2;
@@ -152,8 +152,7 @@ const block = (ok: boolean) => {
   const b = $tt_t6.value;
   log.push("tail");
   {
-    const $tt_a0 = { value: { kind: "Ok" as const, value: a * b } };
-    $tt_v7 = $tt_a0.value;
+    $tt_v7 = { kind: "Ok" as const, value: a * b };
     break $tt_v7;
   }
   }
@@ -184,8 +183,7 @@ function inner(ok: boolean): TResult<number, string> {
     }
     const v = $tt_t8.value;
     {
-      const $tt_a1 = { value: { kind: "Ok" as const, value: v } };
-      $tt_v8 = $tt_a1.value;
+      $tt_v8 = { kind: "Ok" as const, value: v };
       break $tt_v8;
     }
   }

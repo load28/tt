@@ -1,0 +1,9 @@
+// @completions: afterVariant, afterMatch
+// @filename: main.tt
+variant V { A, B }
+export const z = kkVa/*afterVariant*/;
+// @filename: second.tt
+export const p = match (1) { 1 => 2, _ => 3 };
+export const y = kkVa/*afterMatch*/;
+// @filename: shapes.tt
+export const kkValue = 1;

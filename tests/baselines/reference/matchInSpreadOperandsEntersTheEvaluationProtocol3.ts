@@ -5,7 +5,7 @@ consume(...match (kind) { A => [1], _ => [] });
 //// [matchInSpreadOperandsEntersTheEvaluationProtocol3.ts]
 {
   let $tt_v0: number;
-  const $tt_v1 = (consume);
+  const $tt_v1: typeof consume = (consume);
   {
     const $tt_m = kind;
     switch ($tt_m.kind) {

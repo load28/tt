@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./anInertConditionWithAnIfLetIsLowered.tt → $DIR/out/anInertConditionWithAnIfLetIsLowered.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2872]: This kind of expression is always truthy. (in code ttc generated for this construct)
+ --> anInertConditionWithAnIfLetIsLowered.tt:3:80
+  |
+3 |   const u = ((x: number) => { if let A(n) = v { return n + x; } return 0; }) ? match (k) { 1 => "one", _ => "other" } : "none";
+  |                                                                                ^^^^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+anInertConditionWithAnIfLetIsLowered.ts(10,7): error TS2872: This kind of expression is always truthy.

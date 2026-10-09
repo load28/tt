@@ -19,6 +19,7 @@
 
 mod collector;
 mod completion;
+mod parents;
 mod projection;
 mod recovery;
 pub(crate) use recovery::{editor_insertions, lost_editor_values};
@@ -52,6 +53,7 @@ use crate::host_input::{HostInput, HostOrigin};
 
 use collector::*;
 pub(crate) use completion::CompletionScope;
+use parents::{EdgeNode, ParentPath};
 #[cfg(test)]
 use projection::ProjectionBuilder;
 pub(crate) use projection::{HostOwnerSyntax, ProgramSyntax, ProgramSyntaxError};
@@ -110,7 +112,7 @@ struct OverlayEntry {
     category: SyntaxCategory,
     source: SourceSpan,
     projected: ProjectedSpan,
-    parents: Vec<AstParentKind>,
+    parents: parents::ParentPath,
     context: EvaluationContext,
     protocol: HostEvaluationProtocol,
     core_root: CoreRoot,
@@ -156,7 +158,7 @@ pub(crate) struct HostEvaluationProtocol {
     /// value. Target planning must still tie these facts to the value's
     /// innermost evaluation step before consuming the call.
     pub(crate) call_completion: Option<CallCompletionFacts>,
-    steps: Vec<HostEvaluationStep>,
+    steps: crate::chain::Chain<HostEvaluationStep>,
 }
 
 /// The syntactic facts of one completable call: a non-optional call
@@ -165,8 +167,12 @@ pub(crate) struct HostEvaluationProtocol {
 /// what licenses dispatch arms to perform the call themselves; target
 /// planning decides separately whether the authored text between the
 /// argument and the value may be re-emitted inside the arms.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CallCompletionFacts {
+    /// The authored text between the call's pieces: from the callee (and
+    /// its type arguments) to the first argument, between each argument
+    /// and the next, and from the final argument to the call's end.
+    pub(crate) gaps: Box<[SourceSpan]>,
     /// The whole call expression.
     pub(crate) call: SourceSpan,
     /// The final argument. Equal to the value's own span when the value is
@@ -188,7 +194,7 @@ pub(crate) struct CallCompletionFacts {
 }
 
 impl HostEvaluationProtocol {
-    pub(crate) fn steps(&self) -> &[HostEvaluationStep] {
+    pub(crate) fn steps(&self) -> &crate::chain::Chain<HostEvaluationStep> {
         &self.steps
     }
 }
@@ -197,7 +203,7 @@ impl HostEvaluationProtocol {
 pub(crate) struct HostEvaluationStep {
     pub(crate) parent: SourceSpan,
     pub(crate) operation: HostEvaluationOperation,
-    pub(crate) inputs: Vec<HostEvaluationInput>,
+    pub(crate) inputs: crate::chain::Segments<HostEvaluationInput>,
     /// The structure of the conditional operation this step belongs to,
     /// when [`HostEvaluationStep::operation`] is a
     /// [`HostEvaluationOperation::Conditional`] — everything lowering needs
@@ -207,6 +213,13 @@ pub(crate) struct HostEvaluationStep {
     /// Target lowering uses these spans to move the condition's statement
     /// region inside the loop without changing its evaluation count.
     pub(crate) loop_test: Option<LoopTestFacts>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct IfTestFacts {
+    pub(crate) test: SourceSpan,
+    pub(crate) consequent: SourceSpan,
+    pub(crate) alternate: Option<SourceSpan>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -244,6 +257,8 @@ pub(crate) struct ConditionalFacts {
     /// What an optional call's arguments are conditional on. `None` for
     /// other operations.
     pub(crate) optional_test: Option<OptionalCallTest>,
+    /// The authored text between the operation's pieces, in source order.
+    pub(crate) gaps: Box<[SourceSpan]>,
 }
 
 /// The link of its optional chain an optional call is skipped at. A chain
@@ -301,12 +316,14 @@ pub(crate) struct HostReferencePart {
     /// simple-copiable operand (`isSimpleCopiableExpression`). The call then
     /// keeps the reference TypeScript narrows.
     pub(crate) read_at_call: bool,
+    pub(crate) this_of_super: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EvaluationInputMode {
     Value,
     JsxChildValue,
+    JsxTagName,
     DirectReference,
     MemberReference,
     /// The value a compound assignment's target holds before its right
@@ -324,6 +341,10 @@ pub(crate) enum EvaluationInputMode {
     /// removes it, with its comma, where it was written.
     Discarded,
     LogicalAssignmentTarget,
+    ShorthandProperty,
+    SpreadElement,
+    ObjectSpread,
+    TemplateSubstitution,
 }
 
 /// What evaluating one host expression may observably do
@@ -441,6 +462,74 @@ fn object_literal_effects(node: &ObjectLit) -> Effects {
     Effects::NONE
 }
 
+/// The effects of a template substitution, its `ToString` included: an
+/// object literal that names `toString` or `valueOf`, sets its prototype,
+/// or has a computed key (`Symbol.toPrimitive`) runs its own code when the
+/// template converts it, and an array literal converts its elements.
+pub(super) fn template_substitution_effects(expression: &swc_ecma_ast::Expr) -> Effects {
+    use swc_ecma_ast::Expr as SwcExpr;
+    let converts_itself = |name: &PropName| match name {
+        PropName::Ident(ident) => matches!(&*ident.sym, "toString" | "valueOf" | "__proto__"),
+        PropName::Str(text) => matches!(
+            text.value.as_str(),
+            Some("toString" | "valueOf" | "__proto__")
+        ),
+        PropName::Computed(_) => true,
+        PropName::Num(_) | PropName::BigInt(_) => false,
+    };
+    match expression {
+        SwcExpr::Paren(inner) => template_substitution_effects(&inner.expr),
+        SwcExpr::TsAs(inner) => template_substitution_effects(&inner.expr),
+        SwcExpr::TsSatisfies(inner) => template_substitution_effects(&inner.expr),
+        SwcExpr::TsNonNull(inner) => template_substitution_effects(&inner.expr),
+        SwcExpr::TsTypeAssertion(inner) => template_substitution_effects(&inner.expr),
+        SwcExpr::Object(object)
+            if object.props.iter().any(|property| match property {
+                PropOrSpread::Spread(_) => true,
+                PropOrSpread::Prop(property) => match &**property {
+                    Prop::Shorthand(ident) => {
+                        matches!(&*ident.sym, "toString" | "valueOf" | "__proto__")
+                    }
+                    Prop::KeyValue(property) => converts_itself(&property.key),
+                    Prop::Assign(_) => true,
+                    Prop::Getter(property) => converts_itself(&property.key),
+                    Prop::Setter(property) => converts_itself(&property.key),
+                    Prop::Method(property) => converts_itself(&property.key),
+                },
+            }) =>
+        {
+            Effects::ANY
+        }
+        SwcExpr::Array(array)
+            if array.elems.iter().flatten().any(|element| {
+                element.spread.is_some() || !template_substitution_effects(&element.expr).is_inert()
+            }) =>
+        {
+            Effects::ANY
+        }
+        _ => expression_effects(expression),
+    }
+}
+
+pub(super) fn object_spread_effects(expression: &swc_ecma_ast::Expr) -> Effects {
+    use swc_ecma_ast::Expr as SwcExpr;
+    match expression {
+        SwcExpr::Paren(inner) => object_spread_effects(&inner.expr),
+        SwcExpr::TsAs(inner) => object_spread_effects(&inner.expr),
+        SwcExpr::TsSatisfies(inner) => object_spread_effects(&inner.expr),
+        SwcExpr::TsNonNull(inner) => object_spread_effects(&inner.expr),
+        SwcExpr::TsTypeAssertion(inner) => object_spread_effects(&inner.expr),
+        SwcExpr::Object(object)
+            if object.props.iter().any(|property| {
+                matches!(property, PropOrSpread::Prop(property) if matches!(&**property, Prop::Getter(_)))
+            }) =>
+        {
+            Effects::ANY
+        }
+        _ => expression_effects(expression),
+    }
+}
+
 fn array_literal_effects(node: &ArrayLit) -> Effects {
     for element in node.elems.iter().flatten() {
         // A spread iterates its operand, which runs user code.
@@ -479,6 +568,62 @@ pub(crate) fn source_expression_effects(
         Ok(_) | Err(_) => return Effects::ANY,
     };
     expression_effects(&expression)
+}
+
+pub(crate) fn source_entity_name(text: &str, source_kind: crate::SourceKind) -> bool {
+    if !entity_name_bytes(text.as_bytes()) {
+        return false;
+    }
+    if crate::lexer::host_syntax_error(text, source_kind).is_some() {
+        return false;
+    }
+    let input = HostInput::new(text);
+    let mut parser = input.parser(source_kind);
+    let expression = match parser.parse_expr() {
+        Ok(expression) if parser.take_errors().is_empty() => expression,
+        Ok(_) | Err(_) => return false,
+    };
+    input.byte(expression.span().lo) == 0
+        && input.byte(expression.span().hi) == text.len()
+        && entity_name(&expression)
+}
+
+fn entity_name_bytes(bytes: &[u8]) -> bool {
+    let mut at = 0;
+    while at < bytes.len() {
+        match bytes[at] {
+            b'/' if bytes.get(at + 1) == Some(&b'*') => {
+                match bytes[at + 2..].windows(2).position(|pair| pair == b"*/") {
+                    Some(end) => at += end + 4,
+                    None => return false,
+                }
+            }
+            b'/' if bytes.get(at + 1) == Some(&b'/') => {
+                while at < bytes.len() && bytes[at] != b'\n' {
+                    at += 1;
+                }
+            }
+            byte if byte.is_ascii_alphanumeric()
+                || matches!(byte, b'_' | b'$' | b'.' | b'\\')
+                || byte.is_ascii_whitespace()
+                || !byte.is_ascii() =>
+            {
+                at += 1;
+            }
+            _ => return false,
+        }
+    }
+    true
+}
+
+fn entity_name(expression: &swc_ecma_ast::Expr) -> bool {
+    match expression {
+        swc_ecma_ast::Expr::Ident(_) => true,
+        swc_ecma_ast::Expr::Member(member) => {
+            matches!(member.prop, swc_ecma_ast::MemberProp::Ident(_)) && entity_name(&member.obj)
+        }
+        _ => false,
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -856,7 +1001,7 @@ fn is_script(module: &Module) -> bool {
 fn global_statements(
     module: &Module,
     source_start: HostOrigin,
-) -> HashMap<ProjectedSpan, GlobalStatement> {
+) -> crate::position_hash::PositionMap<ProjectedSpan, GlobalStatement> {
     module
         .body
         .iter()
@@ -1019,6 +1164,7 @@ pub(crate) enum EvaluationOwner {
     FunctionBody,
     Constructor,
     Generator,
+    Setter,
     ParameterInitializer,
     ClassInitializer,
     ClassDefinition,
@@ -1080,12 +1226,6 @@ pub(crate) struct OverlayFacts {
     pub(crate) function_return_type: Option<SourceSpan>,
     pub(crate) function_return_awaited: bool,
     pub(crate) assertion: Option<Option<SourceSpan>>,
-    pub(crate) loop_head_reads: bool,
-    pub(crate) ambient: bool,
-    pub(crate) decorated_classes: Vec<usize>,
-    /// Indices in the path of the body edges of decision stand-in
-    /// functions, which [`evaluation_owner`] looks through.
-    pub(crate) decision_functions: Vec<usize>,
     pub(crate) value_is_owner: bool,
 }
 
@@ -1095,7 +1235,7 @@ impl EvaluationContext {
     /// and the value.
     fn from_path(
         category: SyntaxCategory,
-        parents: &[AstParentKind],
+        parents: &parents::ParentPath,
         host_owner_edge: usize,
         requires_block: bool,
         facts: OverlayFacts,
@@ -1106,14 +1246,10 @@ impl EvaluationContext {
             function_return_type,
             function_return_awaited,
             assertion,
-            loop_head_reads,
-            ambient,
-            decorated_classes,
-            decision_functions,
             value_is_owner,
         } = facts;
-        let (mut owner, owner_edge) =
-            evaluation_owner(parents, &decorated_classes, &decision_functions);
+        let path = parents.facts();
+        let (mut owner, _) = path.owner();
         // The AST path owns local positions such as parameters and class
         // initializers. Function-target metadata only refines a function
         // body into the return contracts that differ from an ordinary
@@ -1124,13 +1260,14 @@ impl EvaluationContext {
         {
             owner = function_target;
         }
-        let owner_reach = owner_reach(&parents[host_owner_edge.min(parents.len())..]);
+        let owner_reach = path.owner_reach(host_owner_edge.min(parents.len()));
+        let ambient = path.ambient();
         if !matches!(
             category,
             SyntaxCategory::Expression | SyntaxCategory::Propagation
         ) {
             return Self {
-                frequency: frequency_within_owner(parents, owner_edge),
+                frequency: path.frequency(),
                 owner_reach,
                 owner,
                 value_role: ValueRole::None,
@@ -1145,10 +1282,9 @@ impl EvaluationContext {
             };
         }
 
-        let local_path = &parents[owner_edge..];
-        let value_role = value_role(local_path);
-        let frequency = frequency_within_owner(parents, owner_edge);
-        let continuation = match host_continuation(local_path) {
+        let value_role = path.value_role();
+        let frequency = path.frequency();
+        let continuation = match path.continuation() {
             HostContinuation::ArrowReturn if !value_is_owner => HostContinuation::Compose,
             continuation => continuation,
         };
@@ -1156,11 +1292,7 @@ impl EvaluationContext {
             continuation,
             HostContinuation::Return | HostContinuation::ArrowReturn
         );
-        let asserted = local_path
-            .iter()
-            .rev()
-            .take_while(|parent| is_transparent_expression_edge(parent))
-            .any(is_assertion_edge);
+        let asserted = path.asserted();
         let (contextual_type, contextual_type_awaited) = match assertion {
             Some(assertion) if asserted => (assertion, false),
             _ if uses_function_return => (
@@ -1180,27 +1312,10 @@ impl EvaluationContext {
             contextual_type_asserted: asserted,
             requires_block,
             ambient,
-            loop_head_declarator: loop_head_declarator(local_path),
-            loop_head_binding: loop_head_reads
-                && local_path.iter().any(|parent| {
-                    matches!(parent, AstParentKind::ForStmt(fields::ForStmtField::Init))
-                }),
+            loop_head_declarator: path.loop_head_declarator(),
+            loop_head_binding: path.loop_head_binding(),
         }
     }
-}
-
-fn loop_head_declarator(parents: &[AstParentKind]) -> bool {
-    parents
-        .iter()
-        .position(|parent| matches!(parent, AstParentKind::ForStmt(fields::ForStmtField::Init)))
-        .and_then(|head| {
-            parents[head..].iter().find_map(|parent| match parent {
-                AstParentKind::VarDecl(fields::VarDeclField::Decls(index))
-                | AstParentKind::UsingDecl(fields::UsingDeclField::Decls(index)) => Some(*index),
-                _ => None,
-            })
-        })
-        .is_some_and(|index| index > 0)
 }
 
 /// Whether the statement the path `above` leads into is the unbraced body
@@ -1223,260 +1338,20 @@ fn is_unbraced_body(above: &[AstParentKind]) -> bool {
 }
 
 /// The owner a prelude for the innermost of `owners` is written before.
-/// `owners` runs from the outermost enclosing host owner to the chosen one;
-/// only an iteration statement looks through the labels naming it.
-fn prelude_anchor<'o>(
-    owners: &'o [ProjectedHostOwner],
-    parents: &[AstParentKind],
-) -> &'o ProjectedHostOwner {
-    let mut index = owners.len() - 1;
-    let owner = &owners[index];
-    let iteration = owner.kind == HostOwnerKind::Statement
-        && matches!(
-            parents.get(owner.edge),
-            Some(AstParentKind::Stmt(
-                fields::StmtField::For
-                    | fields::StmtField::ForIn
-                    | fields::StmtField::ForOf
-                    | fields::StmtField::While
-                    | fields::StmtField::DoWhile
-            ))
-        );
+/// `owners` runs from the chosen host owner out to the outermost enclosing
+/// one; only an iteration statement looks through the labels naming it.
+fn prelude_anchor(owners: &crate::chain::Chain<ProjectedHostOwner>) -> Option<&ProjectedHostOwner> {
+    let owner = owners.first()?;
+    let iteration = owner.kind == HostOwnerKind::Statement && owner.iteration;
+    let mut owners = owners;
     while iteration
-        && index > 0
-        && owners[index].edge > 0
-        && matches!(
-            parents.get(owners[index].edge - 1),
-            Some(AstParentKind::LabeledStmt(fields::LabeledStmtField::Body))
-        )
+        && let Some(rest) = owners.rest()
+        && !rest.is_empty()
+        && owners.first().is_some_and(|owner| owner.labeled)
     {
-        index -= 1;
+        owners = rest;
     }
-    &owners[index]
-}
-
-/// The evaluation regions between a value's host owner and the value.
-///
-/// Only the *header* positions of a loop can make the reach `Repeated`: a
-/// loop body is a statement, and a statement is itself a host owner, so a
-/// value in a body never sees the loop edge from its own owner.
-///
-/// Conditional edges split by who reproduces them. The ternary, logical
-/// right-hand sides, and optional call arguments become
-/// [`ConditionalBranch`] steps whose target regenerates the condition, so
-/// they leave the reach `Same`. A `switch` case test, a destructuring
-/// default, and the tail of an optional chain have no protocol step — a
-/// value behind one of them cannot be hoisted to its owner at all.
-fn owner_reach(local_path: &[AstParentKind]) -> OwnerReach {
-    let mut reach = OwnerReach::Same;
-    for (index, parent) in local_path.iter().enumerate() {
-        match parent {
-            AstParentKind::ForStmt(
-                fields::ForStmtField::Test
-                | fields::ForStmtField::Update
-                | fields::ForStmtField::Body,
-            )
-            | AstParentKind::ForInStmt(fields::ForInStmtField::Body)
-            | AstParentKind::ForOfStmt(fields::ForOfStmtField::Body)
-            | AstParentKind::WhileStmt(fields::WhileStmtField::Test | fields::WhileStmtField::Body)
-            | AstParentKind::DoWhileStmt(
-                fields::DoWhileStmtField::Test | fields::DoWhileStmtField::Body,
-            ) => return OwnerReach::Repeated,
-            // Evaluated only when no earlier case matched — and always after
-            // the discriminant, which hoisting would also reorder.
-            AstParentKind::SwitchCase(fields::SwitchCaseField::Test)
-            // A destructuring default: evaluated only when the matched
-            // property or element is undefined.
-            | AstParentKind::AssignPat(fields::AssignPatField::Right)
-            | AstParentKind::AssignPatProp(fields::AssignPatPropField::Value) => {
-                reach = OwnerReach::UnmodeledConditional;
-            }
-            // Inside an optional chain, everything but the base object, the
-            // callee, and the arguments of the chain's own optional call is
-            // skipped when the chain short-circuits. The arguments are the
-            // one position a protocol step models
-            // ([`ConditionalBranch::OptionalCallArgument`]).
-            AstParentKind::OptChainExpr(fields::OptChainExprField::Base) => {
-                let modeled = match local_path.get(index + 1) {
-                    Some(AstParentKind::OptChainBase(fields::OptChainBaseField::Call)) => {
-                        matches!(
-                            local_path.get(index + 2),
-                            Some(AstParentKind::OptCall(
-                                fields::OptCallField::Args(_) | fields::OptCallField::Callee,
-                            ))
-                        )
-                    }
-                    Some(AstParentKind::OptChainBase(fields::OptChainBaseField::Member)) => {
-                        matches!(
-                            local_path.get(index + 2),
-                            Some(AstParentKind::MemberExpr(fields::MemberExprField::Obj))
-                        )
-                    }
-                    _ => false,
-                };
-                if !modeled {
-                    reach = OwnerReach::UnmodeledConditional;
-                }
-            }
-            _ => {}
-        }
-    }
-    reach
-}
-
-fn evaluation_owner(
-    parents: &[AstParentKind],
-    decorated_classes: &[usize],
-    decision_functions: &[usize],
-) -> (EvaluationOwner, usize) {
-    for (index, parent) in parents.iter().enumerate().rev() {
-        if decision_functions.contains(&index) {
-            continue;
-        }
-        match parent {
-            AstParentKind::Class(
-                fields::ClassField::Decorators(_) | fields::ClassField::Body(_),
-            ) => {
-                return (EvaluationOwner::ClassDefinition, index + 1);
-            }
-            AstParentKind::Class(fields::ClassField::SuperClass)
-                if decorated_classes.contains(&index) =>
-            {
-                return (EvaluationOwner::ClassDefinition, index + 1);
-            }
-            AstParentKind::Function(fields::FunctionField::Params(_))
-            | AstParentKind::ArrowExpr(fields::ArrowExprField::Params(_))
-            | AstParentKind::Constructor(fields::ConstructorField::Params(_)) => {
-                return (EvaluationOwner::ParameterInitializer, index + 1);
-            }
-            AstParentKind::Function(fields::FunctionField::Body)
-            | AstParentKind::ArrowExpr(fields::ArrowExprField::Body)
-            | AstParentKind::Constructor(fields::ConstructorField::Body) => {
-                return (EvaluationOwner::FunctionBody, index + 1);
-            }
-            AstParentKind::ClassProp(fields::ClassPropField::Value)
-            | AstParentKind::PrivateProp(fields::PrivatePropField::Value)
-            | AstParentKind::AutoAccessor(fields::AutoAccessorField::Value) => {
-                return (EvaluationOwner::ClassInitializer, index + 1);
-            }
-            AstParentKind::StaticBlock(fields::StaticBlockField::Body) => {
-                return (EvaluationOwner::StaticBlock, index + 1);
-            }
-            AstParentKind::TsEnumMember(fields::TsEnumMemberField::Init) => {
-                return (EvaluationOwner::EnumInitializer, index + 1);
-            }
-            _ => {}
-        }
-    }
-    (EvaluationOwner::Module, 0)
-}
-
-fn frequency_within_owner(parents: &[AstParentKind], owner_edge: usize) -> EvaluationFrequency {
-    let mut frequency = EvaluationFrequency::Once;
-    for parent in &parents[owner_edge..] {
-        if matches!(
-            parent,
-            AstParentKind::ForStmt(
-                fields::ForStmtField::Test
-                    | fields::ForStmtField::Update
-                    | fields::ForStmtField::Body
-            ) | AstParentKind::ForInStmt(fields::ForInStmtField::Body)
-                | AstParentKind::ForOfStmt(fields::ForOfStmtField::Body)
-                | AstParentKind::WhileStmt(
-                    fields::WhileStmtField::Test | fields::WhileStmtField::Body
-                )
-                | AstParentKind::DoWhileStmt(
-                    fields::DoWhileStmtField::Test | fields::DoWhileStmtField::Body
-                )
-        ) {
-            return EvaluationFrequency::Repeated;
-        }
-        if matches!(parent, AstParentKind::BinExpr(fields::BinExprField::Right)) {
-            frequency = EvaluationFrequency::Indeterminate;
-        }
-        if matches!(
-            parent,
-            AstParentKind::CondExpr(fields::CondExprField::Cons | fields::CondExprField::Alt)
-                | AstParentKind::IfStmt(fields::IfStmtField::Cons | fields::IfStmtField::Alt)
-                | AstParentKind::SwitchCase(fields::SwitchCaseField::Cons(_))
-        ) {
-            frequency = EvaluationFrequency::Conditional;
-        }
-    }
-    frequency
-}
-
-fn value_role(parents: &[AstParentKind]) -> ValueRole {
-    if parents.iter().rev().any(|parent| {
-        matches!(
-            parent,
-            AstParentKind::AssignExpr(fields::AssignExprField::Left)
-                | AstParentKind::AssignTarget(_)
-                | AstParentKind::SimpleAssignTarget(_)
-        )
-    }) {
-        ValueRole::AssignmentTarget
-    } else if parents.iter().rev().any(|parent| {
-        matches!(
-            parent,
-            AstParentKind::Pat(_)
-                | AstParentKind::ArrayPat(_)
-                | AstParentKind::ObjectPat(_)
-                | AstParentKind::AssignPat(fields::AssignPatField::Left)
-        )
-    }) {
-        ValueRole::Pattern
-    } else {
-        ValueRole::Value
-    }
-}
-
-fn host_continuation(parents: &[AstParentKind]) -> HostContinuation {
-    if parents
-        .iter()
-        .any(|parent| matches!(parent, AstParentKind::ForStmt(fields::ForStmtField::Init)))
-    {
-        return HostContinuation::ForInitialize;
-    }
-    let significant = parents
-        .iter()
-        .rev()
-        .find(|parent| !is_transparent_expression_edge(parent));
-    match significant {
-        Some(AstParentKind::ReturnStmt(fields::ReturnStmtField::Arg)) => HostContinuation::Return,
-        Some(AstParentKind::ArrowFunctionBody(fields::ArrowFunctionBodyField::Expr))
-        | Some(AstParentKind::ArrowExpr(fields::ArrowExprField::Body)) => {
-            HostContinuation::ArrowReturn
-        }
-        Some(AstParentKind::VarDeclarator(fields::VarDeclaratorField::Init)) => {
-            HostContinuation::Initialize
-        }
-        Some(AstParentKind::ExprStmt(fields::ExprStmtField::Expr)) => HostContinuation::Discard,
-        _ => HostContinuation::Compose,
-    }
-}
-
-fn is_assertion_edge(parent: &AstParentKind) -> bool {
-    matches!(
-        parent,
-        AstParentKind::TsAsExpr(fields::TsAsExprField::Expr)
-            | AstParentKind::TsSatisfiesExpr(fields::TsSatisfiesExprField::Expr)
-            | AstParentKind::TsTypeAssertion(fields::TsTypeAssertionField::Expr)
-    )
-}
-
-fn is_transparent_expression_edge(parent: &AstParentKind) -> bool {
-    matches!(
-        parent,
-        AstParentKind::Expr(_)
-            | AstParentKind::ExprOrSpread(fields::ExprOrSpreadField::Expr)
-            | AstParentKind::ParenExpr(fields::ParenExprField::Expr)
-            | AstParentKind::TsAsExpr(fields::TsAsExprField::Expr)
-            | AstParentKind::TsSatisfiesExpr(fields::TsSatisfiesExprField::Expr)
-            | AstParentKind::TsNonNullExpr(fields::TsNonNullExprField::Expr)
-            | AstParentKind::TsTypeAssertion(fields::TsTypeAssertionField::Expr)
-            | AstParentKind::TsInstantiation(fields::TsInstantiationField::Expr)
-    )
+    owners.first()
 }
 
 /// Parsing policy is explicit: editor recovery never weakens build validation.

@@ -6,6 +6,6 @@
 3:17 -> 10:20 len 1  "e"
 4:11 -> 17:13 len 1  "n"
 4:19 -> 13:22 len 4  "g(x)"
-4:24 -> 17:30 len 25  "\n    return Result.Ok(n);"
+4:23 -> 17:29 len 26  ";\n    return Result.Ok(n);"
 6:4 -> 20:4 len 26  "\n  return Result.Ok(0);\n}\n"
 

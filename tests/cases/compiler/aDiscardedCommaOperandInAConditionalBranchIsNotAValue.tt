@@ -1,0 +1,14 @@
+// @run: aDiscardedCommaOperandInAConditionalBranchIsNotAValue.tt
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+function r(): R { return { kind: "Ok", value: 7 }; }
+const c = true;
+variant S { A(n: number), B }
+const s: S = S.A(3) as S;
+function f(): R {
+  const a = c ? (try r(), 1) : 2;
+  const b = c && (match (s) { A(n) => n, B => 0 }, 1);
+  const i = !c || (try r(), 4);
+  const z = (try r(), 5);
+  return { kind: "Ok", value: a + +b + +i + z };
+}
+console.log(JSON.stringify(f()));

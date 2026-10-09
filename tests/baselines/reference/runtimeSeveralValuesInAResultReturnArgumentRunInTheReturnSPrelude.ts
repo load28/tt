@@ -85,7 +85,7 @@ $tt_v0: {
     break $tt_v0;
   }
   $tt_v2 = $tt_t1.value;
-  { const $tt_a0 = { value: { kind: "Ok" as const, value: ($tt_v1) + ($tt_v2) } }; $tt_v0 = $tt_a0.value; break $tt_v0; }
+  { $tt_v0 = { kind: "Ok" as const, value: ($tt_v1) + ($tt_v2) }; break $tt_v0; }
 }
 return $tt_v0; }
 function listed(x: number, y: number) { let $tt_v3: ({
@@ -110,7 +110,7 @@ $tt_v3: {
     break $tt_v3;
   }
   $tt_v5 = $tt_t3.value;
-  { const $tt_a1 = { value: { kind: "Ok" as const, value: [$tt_v4, $tt_v5] } }; $tt_v3 = $tt_a1.value; break $tt_v3; }
+  { const $tt_a0 = { value: { kind: "Ok" as const, value: [$tt_v4, $tt_v5] } }; $tt_v3 = $tt_a0.value; break $tt_v3; }
 }
 return $tt_v3; }
 function keyed(x: number, y: number) { let $tt_v6: ({
@@ -138,7 +138,7 @@ $tt_v6: {
     break $tt_v6;
   }
   $tt_v8 = $tt_t5.value;
-  { const $tt_a2 = { value: { kind: "Ok" as const, value: { x: $tt_v7, y: $tt_v8 } } }; $tt_v6 = $tt_a2.value; break $tt_v6; }
+  { $tt_v6 = { kind: "Ok" as const, value: { x: $tt_v7, y: $tt_v8 } }; break $tt_v6; }
 }
 return $tt_v6; }
 function called(x: number, y: number) { let $tt_v9: ({
@@ -151,7 +151,7 @@ function called(x: number, y: number) { let $tt_v9: ({
 $tt_v9: {
   let $tt_v10: number;
   let $tt_v11: number;
-  const $tt_v12 = (pair);
+  const $tt_v12: typeof pair = (pair);
   const $tt_t6 = r(x);
   if (!("value" in $tt_t6)) {
     $tt_v9 = $tt_t6;
@@ -164,7 +164,7 @@ $tt_v9: {
     break $tt_v9;
   }
   $tt_v11 = $tt_t7.value;
-  { const $tt_a3 = { value: { kind: "Ok" as const, value: $tt_v12($tt_v10, $tt_v11) } }; $tt_v9 = $tt_a3.value; break $tt_v9; }
+  { $tt_v9 = { kind: "Ok" as const, value: $tt_v12($tt_v10, $tt_v11) }; break $tt_v9; }
 }
 return $tt_v9; }
 function matched(k: K, y: number) { let $tt_v13: ({
@@ -199,7 +199,7 @@ $tt_v13: {
     break $tt_v13;
   }
   $tt_v15 = $tt_t8.value;
-  { const $tt_a4 = { value: { kind: "Ok" as const, value: $tt_v14 + ($tt_v15) } }; $tt_v13 = $tt_a4.value; break $tt_v13; }
+  { $tt_v13 = { kind: "Ok" as const, value: $tt_v14 + ($tt_v15) }; break $tt_v13; }
 }
 return $tt_v13; }
 function piped(x: number, y: number) { let $tt_v16: ({
@@ -218,7 +218,7 @@ $tt_v16: {
     break $tt_v16;
   }
   $tt_v18 = $tt_t9.value;
-  { const $tt_a5 = { value: { kind: "Ok" as const, value: ($tt_v19) + ($tt_v18) } }; $tt_v16 = $tt_a5.value; break $tt_v16; }
+  { $tt_v16 = { kind: "Ok" as const, value: ($tt_v19) + ($tt_v18) }; break $tt_v16; }
 }
 return $tt_v16; }
 function chosen(x: number, y: number) { let $tt_v20: ({
@@ -248,17 +248,17 @@ $tt_v20: {
     $tt_v24 = 0;
   }
   
-  { const $tt_a6 = { value: { kind: "Ok" as const, value: $tt_v24 } }; $tt_v20 = $tt_a6.value; break $tt_v20; }
+  { $tt_v20 = { kind: "Ok" as const, value: $tt_v24 }; break $tt_v20; }
 }
 return $tt_v20; }
 function guarded(c: boolean, x: number, y: number) {
-  let $tt_v25: ({
+  let $tt_v25: {
     kind: "Err";
     error: string;
-}) | ({
+} | {
     kind: "Ok";
     value: number;
-});
+};
   $tt_v25: {
     if (c) {
       let $tt_v26: number;
@@ -275,8 +275,8 @@ function guarded(c: boolean, x: number, y: number) {
         break $tt_v25;
       }
       $tt_v27 = $tt_t13.value;
-      { const $tt_a7 = { value: { kind: "Ok" as const, value: ($tt_v26) + ($tt_v27) } }; $tt_v25 = $tt_a7.value; break $tt_v25; }
-    } { const $tt_a8 = { value: { kind: "Ok" as const, value: 0 } }; $tt_v25 = $tt_a8.value; break $tt_v25; }
+      { $tt_v25 = { kind: "Ok" as const, value: ($tt_v26) + ($tt_v27) }; break $tt_v25; }
+    } { $tt_v25 = { kind: "Ok" as const, value: 0 }; break $tt_v25; }
   }
   return $tt_v25;
 }

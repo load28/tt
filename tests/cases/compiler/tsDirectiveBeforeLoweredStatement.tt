@@ -41,10 +41,8 @@ function letElse(s: S) {
 }
 function laterLine(s: S) {
   // @ts-expect-error -- the declaration, on the first line, is a string
-  const u: number = match (s) {
-    A(n) => n,
-    B => 0,
-  } + "";
+  const u: number = match (s) { A(n) => n, B => 0 }
+    + "";
   return u;
 }
 /** The documented value. */

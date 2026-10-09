@@ -1,4 +1,4 @@
-methods: check, closeDocument, completion, completionResolve, declarations, definition, dependencies, documentSemanticTokens, documentSymbols, emitMap, hover, openDocument, patternCompletions, prepareRename, print, references, reloadProjects, rename, semanticTokens, signatureHelp, tsDiagnostics, ttCompletions, ttHints, ttSymbol, typedCheck, updateDocument
+methods: check, closeDocument, completion, completionResolve, declarations, definition, dependencies, documentSemanticTokens, documentSymbols, emitMap, hover, openDocument, patternCompletions, patternSymbol, prepareRename, print, references, reloadProjects, rename, semanticTokens, signatureHelp, tsDiagnostics, ttCompletions, ttHints, ttSymbol, typedCheck, updateDocument
 params read: banner, filename, includeTypes, isRetrigger, label, member, path, position, probe, rewriteImports, scope, source, sourceMap, text, triggerCharacter, triggerKind, verify
 
 → check {
@@ -455,6 +455,18 @@ params read: banner, filename, includeTypes, isRetrigger, label, member, path, p
         range: null
       }]
     }
+  }
+
+→ patternSymbol {
+    path: string
+    position: {
+      character: number
+      line: number
+    }
+  }
+← {
+    id: number
+    result: null
   }
 
 → documentSemanticTokens {

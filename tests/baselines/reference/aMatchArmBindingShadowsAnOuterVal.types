@@ -1,0 +1,76 @@
+=== aMatchArmBindingShadowsAnOuterVal.tt ===
+variant O { Some(value: { a: number }), None }
+>O : type O = {
+>       kind: "Some";
+>       value: {
+>           a: number;
+>       };
+>   } | {
+>       kind: "None";
+>   }
+>Some : (property) Some: (value: {
+>       a: number;
+>   }) => O
+>value : (property) value: {
+>       a: number;
+>   }
+>a : (property) a: number
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+val const x = { a: 1 };
+>x : const x: {
+>       a: number;
+>   }
+>a : (property) a: number
+export function f(o: O) {
+>f : function f(o: O): number
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "Some";
+>       value: {
+>           a: number;
+>       };
+>   } | {
+>       kind: "None";
+>   }
+  return match (o) { Some(value: x) => { x.a = 1; return 1; }, None => 0 };
+>o : (parameter) o: O
+>value : (property) value: {
+>       a: number;
+>   }
+>x : const x: {
+>       a: number;
+>   }
+>x : const x: {
+>       a: number;
+>   }
+>a : (property) a: number
+export function g(o: O) {
+>g : function g(o: O): number
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "Some";
+>       value: {
+>           a: number;
+>       };
+>   } | {
+>       kind: "None";
+>   }
+  return match (o) { Some(value: y) => y.a, None => x.a = 3 };
+>o : (parameter) o: O
+>value : (property) value: {
+>       a: number;
+>   }
+>y : const y: {
+>       a: number;
+>   }
+>y : const y: {
+>       a: number;
+>   }
+>a : (property) a: number
+>x : const x: {
+>       a: number;
+>   }
+>a : (property) a: number
+

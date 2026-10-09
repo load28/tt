@@ -1,0 +1,19 @@
+==== ttc --out-dir (exit 1) ====
+error[verify-failed]: generated TypeScript failed to parse: await isn't allowed in non-async function. This is either invalid TypeScript passed through from the source or a ttc bug.
+ --> ./anAwaitOutsideAnAsyncFunctionInAResultBoundaryIsLocated.tt:4:15
+  |
+4 |   const { a = result { const z = try await g(); return z; } } = p;
+  |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: use --no-verify to bypass
+
+
+==== ttc --check-types (exit 1) ====
+error[verify-failed]: generated TypeScript failed to parse: await isn't allowed in non-async function. This is either invalid TypeScript passed through from the source or a ttc bug.
+ --> anAwaitOutsideAnAsyncFunctionInAResultBoundaryIsLocated.tt:4:15
+  |
+4 |   const { a = result { const z = try await g(); return z; } } = p;
+  |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

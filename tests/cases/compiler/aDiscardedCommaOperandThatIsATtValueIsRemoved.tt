@@ -1,0 +1,11 @@
+// @run: aDiscardedCommaOperandThatIsATtValueIsRemoved.tt
+import * as Result from "@tt/std/result";
+import type { TResult } from "@tt/std";
+variant V { A(n: number), B }
+const seen: number[] = [];
+const r = (n: number): TResult<number, string> => { seen.push(n); return n > 0 ? Result.Ok(n) : Result.Err(`bad ${n}`); };
+function f(k: number, v: V): TResult<string, string> {
+  const q = match ((try r(k), match (v) { A(n) => n, B => 0 }) as number) { 1 => "one", _ => "other" };
+  return Result.Ok(q);
+}
+console.log(JSON.stringify([f(1, V.A(1)), f(2, V.B), f(0, V.A(1))]), seen.join(","));

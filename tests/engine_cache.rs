@@ -17,6 +17,24 @@ use std::fs;
 use common::Workspace;
 use ttc::engine::{CheckRequest, Engine, ProjectOptions};
 
+#[test]
+fn source_walk_skips_the_package_folders_typescript_include_skips() {
+    let dir = Workspace::new("cache-package-folders");
+    let source = dir.join("ok.tt");
+    fs::write(&source, "export const ok = 1;\n").unwrap();
+    for folder in ["node_modules", "bower_components", "jspm_packages"] {
+        fs::create_dir_all(dir.join(folder)).unwrap();
+        fs::write(
+            dir.join(folder).join("vendored.tt"),
+            "export const v = 1;\n",
+        )
+        .unwrap();
+    }
+    let mut collected = Vec::new();
+    ttc::engine::collect_sources(&dir, false, &mut collected).unwrap();
+    assert_eq!(collected, vec![source]);
+}
+
 #[cfg(unix)]
 #[test]
 fn source_walk_skips_excluded_names_before_following_links() {
@@ -30,7 +48,7 @@ fn source_walk_skips_excluded_names_before_following_links() {
 
     let mut collected = Vec::new();
     ttc::engine::collect_sources(&dir, false, &mut collected).unwrap();
-    assert_eq!(collected, vec![hidden_source.clone(), source.clone()]);
+    assert_eq!(collected, vec![source.clone()]);
 
     let engine = Engine::new(None);
     let project = engine
@@ -39,12 +57,13 @@ fn source_walk_skips_excluded_names_before_following_links() {
             &ProjectOptions::default(),
         )
         .unwrap();
-    let mut expected = vec![
-        hidden_source.canonicalize().unwrap(),
-        source.canonicalize().unwrap(),
-    ];
-    expected.sort();
-    assert_eq!(project.scan().unwrap(), expected);
+    assert_eq!(
+        project.scan().unwrap(),
+        vec![source.canonicalize().unwrap()]
+    );
+    let mut named = Vec::new();
+    ttc::engine::collect_sources(&hidden_source, false, &mut named).unwrap();
+    assert_eq!(named, vec![hidden_source.clone()]);
 }
 
 #[test]

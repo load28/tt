@@ -21,13 +21,25 @@ pub(super) fn parse_variant<'t>(
     exported: bool,
     declared: bool,
 ) -> Claim<(Cursor<'t>, usize, VariantDecl)> {
+    let owner = cur
+        .idx
+        .checked_sub(1 + usize::from(exported) + usize::from(declared));
+    parse_variant_owned(cur, exported, declared, owner)
+}
+
+fn parse_variant_owned<'t>(
+    cur: Cursor<'t>,
+    exported: bool,
+    declared: bool,
+    owner: Option<usize>,
+) -> Claim<(Cursor<'t>, usize, VariantDecl)> {
     if cur.line_break_before() {
         return Claim::NotTt;
     }
     if let Some(parsed) = parse_variant_complete(cur, exported, declared) {
         return Claim::Parsed(parsed);
     }
-    if variant_committed(cur) {
+    if variant_committed(cur, owner) {
         let keyword = cur
             .idx
             .checked_sub(1)
@@ -100,7 +112,7 @@ pub(super) fn parse_default_variant(
         return Claim::NotTt;
     };
     let keyword = cur.tokens[cur.idx - 1].span.start;
-    match parse_variant(cur, false, false) {
+    match parse_variant_owned(cur, false, false, cur.idx.checked_sub(3)) {
         Claim::Parsed((_, end, decl)) => Claim::Malformed {
             error: crate::error::TtError::span(
                 default.start,
@@ -148,7 +160,13 @@ pub(super) fn parse_default_variant(
     }
 }
 
-fn variant_committed(cur: Cursor<'_>) -> bool {
+fn variant_committed(cur: Cursor<'_>, owner: Option<usize>) -> bool {
+    let at_declaration = owner
+        .and_then(|owner| cur.tokens.get(owner))
+        .is_some_and(|owner| owner.facts.statement_start() || owner.facts.modified());
+    if !at_declaration {
+        return false;
+    }
     let Some(name) = cur.tokens.get(cur.idx) else {
         return false;
     };
@@ -197,6 +215,7 @@ fn parse_variant_complete<'t>(
 
     let byte_end = cur.tokens[close].span.end;
     cur.idx = close + 1;
+    let enclosing = enclosing_block(cur.tokens, keyword_index);
     Some((
         cur,
         byte_end,
@@ -213,8 +232,31 @@ fn parse_variant_complete<'t>(
             generics: generics.to_string(),
             generics_off,
             cases,
+            scope: enclosing.filter(|_| !exported),
+            module_level: enclosing.is_none(),
         },
     ))
+}
+
+fn enclosing_block(tokens: &[crate::lexer::Token], keyword: usize) -> Option<Span> {
+    let mut depth = 0usize;
+    for k in (0..keyword).rev() {
+        let token = &tokens[k];
+        if token.closes_bracket() {
+            depth += 1;
+        } else if token.opens_bracket() {
+            if depth > 0 {
+                depth -= 1;
+            } else if matches!(token.kind, TokenKind::Punct(b'{')) {
+                let close = super::cursor::find_close_at(tokens, k)?;
+                return Some(Span {
+                    start: token.span.start,
+                    end: tokens[close].span.end,
+                });
+            }
+        }
+    }
+    None
 }
 
 fn parse_variant_cases(mut cur: Cursor, body_start: usize) -> Option<Vec<VariantCase>> {
@@ -324,12 +366,27 @@ fn parse_fields(mut cur: Cursor, list_start: usize) -> Option<Vec<Field>> {
                 .map(|(comment, _)| comment)
                 .collect(),
         };
+        let imports = (cur.idx..stop_idx)
+            .filter(|&index| {
+                matches!(cur.tokens[index].kind, TokenKind::Ident)
+                    && cur.text(&cur.tokens[index]) == "import"
+                    && !super::cursor::dotted_at(cur.tokens, 0, index)
+            })
+            .filter_map(|index| {
+                super::imports::parse_tt_import(
+                    Cursor::new(cur.parser, cur.tokens, index + 1, ty_end),
+                    "import",
+                )
+                .map(|(_, decl)| decl)
+            })
+            .collect();
         fields.push(Field {
             name: name.to_string(),
             name_off: name_span.start,
             optional,
             ty: ty.to_string(),
             ty_off,
+            imports,
             comments,
         });
         extents.push(Span {

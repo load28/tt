@@ -1,0 +1,29 @@
+=== shape.tt ===
+export variant Shape { Circle(r: number), Point }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Point";
+>   }
+>Circle : (property) Circle: (r: number) => Shape
+>r : (property) r: number
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+
+=== a.tt ===
+declare const s: Shape;
+>s : const s: Shape
+>Shape : (alias) type Shape = {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Point";
+>   }
+export const n = match (s) { Circle(r) => r };
+>n : const n: number
+>s : const s: Shape
+>r : const r: number
+>r : const r: number
+

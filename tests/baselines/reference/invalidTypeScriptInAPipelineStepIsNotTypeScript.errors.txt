@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+error[source-not-typescript]: the TypeScript here does not parse: Expected ident. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> ./invalidTypeScriptInAPipelineStepIsNotTypeScript.tt:1:57
+  |
+1 | export function f(r: number) { const x = r |> ((q) => q.); return x; }
+  |                                                         ^
+
+
+==== ttc --check-types (exit 1) ====
+error[source-not-typescript]: the TypeScript here does not parse: Expected ident. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> invalidTypeScriptInAPipelineStepIsNotTypeScript.tt:1:57
+  |
+1 | export function f(r: number) { const x = r |> ((q) => q.); return x; }
+  |                                                         ^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

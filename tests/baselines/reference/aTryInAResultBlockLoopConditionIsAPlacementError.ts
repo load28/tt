@@ -1,0 +1,22 @@
+//// [aTryInAResultBlockLoopConditionIsAPlacementError.tt] ////
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+declare function r(): R<number>;
+declare let k: number;
+declare const o: { a?: number };
+
+export function loops() {
+    return result {
+        while (try r()) { k++; }
+        do { k++; } while (try r());
+        for (;; k += try r()) { break; }
+        return 1;
+    };
+}
+
+export function defaults() {
+    return result {
+        const { a = try r() } = o;
+        return a;
+    };
+}
+

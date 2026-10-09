@@ -1,0 +1,57 @@
+=== aVariantDeclaredInAFunctionIsNotVisibleOutsideIt.tt ===
+variant A { X, Y, Z }
+>A : type A = {
+>       kind: "X";
+>   } | {
+>       kind: "Y";
+>   } | {
+>       kind: "Z";
+>   }
+>X : (property) X: {
+>       readonly kind: "X";
+>   }
+>Y : (property) Y: {
+>       readonly kind: "Y";
+>   }
+>Z : (property) Z: {
+>       readonly kind: "Z";
+>   }
+function f() {
+>f : function f(): (v: Q) => number
+  variant Q { X, Y }
+>Q : type Q = {
+>       kind: "X";
+>   } | {
+>       kind: "Y";
+>   }
+>X : (property) X: {
+>       readonly kind: "X";
+>   }
+>Y : (property) Y: {
+>       readonly kind: "Y";
+>   }
+  const inner = (v: Q) => match (v) { X => 1 };
+>inner : const inner: (v: Q) => number
+>v : (parameter) v: Q
+>Q : type Q = {
+>       kind: "X";
+>   } | {
+>       kind: "Y";
+>   }
+>v : (parameter) v: Q
+  return inner;
+>inner : const inner: (v: Q) => number
+export const g = (v: A) => match (v) { X => 1, Y => 2 };
+>g : const g: (v: A) => number
+>v : (parameter) v: A
+>A : type A = {
+>       kind: "X";
+>   } | {
+>       kind: "Y";
+>   } | {
+>       kind: "Z";
+>   }
+>v : (parameter) v: A
+export { f };
+>f : (alias) function f(): (v: Q) => number
+

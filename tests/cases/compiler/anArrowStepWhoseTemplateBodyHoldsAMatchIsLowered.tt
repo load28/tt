@@ -1,0 +1,4 @@
+// @run: anArrowStepWhoseTemplateBodyHoldsAMatchIsLowered.tt
+variant V { A(n: number), B }
+const label = (v: V) => v |> (w => `value: ${match (w) { A(n) => n, B => "none" }}`);
+console.log(label(V.A(3)), label(V.B));

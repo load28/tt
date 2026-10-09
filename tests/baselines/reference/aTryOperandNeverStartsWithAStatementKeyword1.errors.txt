@@ -4,6 +4,8 @@ error[verify-failed]: `try` here did not parse as a tt `try`, so it was passed t
   |
 2 | function g() { const x = try if (f()) {}; }
   |                          ^^^
+  |
+  = help: use --no-verify to bypass
 
 
 ==== ttc --check-types (exit 1) ====

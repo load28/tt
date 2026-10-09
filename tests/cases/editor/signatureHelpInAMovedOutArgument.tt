@@ -1,0 +1,12 @@
+// @signatureHelp: firstArgument, operand, tryKeyword, tryEnd, scrutinee, pattern
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+variant S { A, B }
+declare const s: S;
+declare function g(): R;
+declare function add(a: number, b: number, c?: number): R;
+export function f(v: number): R {
+  return add(v/*firstArgument*/, try/*tryKeyword*/ g()/*tryEnd*/);
+}
+export function h(): R {
+  return add(1 + /*operand*/2, match (/*scrutinee*/s) { A/*pattern*/ => 1, B => 2 }, 3);
+}

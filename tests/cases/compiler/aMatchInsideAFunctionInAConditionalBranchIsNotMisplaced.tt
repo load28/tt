@@ -1,0 +1,7 @@
+// @run: aMatchInsideAFunctionInAConditionalBranchIsNotMisplaced.tt
+variant S { A(n: number), B }
+const s: S = S.A(3) as S; const c = true;
+const v = c ? match (s) { A(n) => n, B => 0 } : () => match (s) { A => 1, B => 2 };
+const w = !c ? match (s) { A(n) => n, B => 0 } : () => match (s) { A => 1, B => 2 };
+const x = c ? (function () { return match (s) { A => 10, B => 20 }; })() : match (s) { A(n) => n * 2, B => 0 };
+console.log(v, typeof w === "function" ? (w as () => number)() : w, x);

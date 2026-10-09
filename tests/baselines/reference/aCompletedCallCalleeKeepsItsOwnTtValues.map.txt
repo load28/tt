@@ -1,0 +1,19 @@
+//// [aCompletedCallCalleeKeepsItsOwnTtValues.tt] 17 mapping(s)
+1:1 -> 19:1 len 75  "const h = (x: number) => x + 1;\nfunction f2(...a"...
+3:18 -> 22:21 len 6  "number"
+3:18 -> 25:10 len 6  "number"
+3:30 -> 27:3 len 29  "\nexport function F(v: V) {\n  "
+5:3 -> 67:3 len 7  "return "
+5:10 -> 31:30 len 2  "f2"
+5:14 -> 32:28 len 15  "(w: number) => "
+5:29 -> 32:76 len 1  "w"
+5:34 -> 32:79 len 1  "h"
+5:44 -> 34:19 len 1  "v"
+5:51 -> 37:17 len 1  "n"
+5:57 -> 38:25 len 1  "n"
+5:65 -> 42:25 len 2  "-1"
+5:79 -> 52:19 len 1  "v"
+5:89 -> 55:33 len 1  "1"
+5:97 -> 59:33 len 1  "2"
+5:101 -> 67:16 len 28  ";\n}\nconsole.log(F(V.A(1)));\n"
+

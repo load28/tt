@@ -1,0 +1,5 @@
+// @completions: opt, res
+import type { TOption, TResult as R } from "@tt/std";
+export variant Outer { Opt(o: TOption<number>), Res(r: R<number, string>), Bare }
+declare const o: Outer;
+export const x = match (o) { Opt(o: /*opt*/) => 1, Res(r: /*res*/) => 3, _ => 2 };

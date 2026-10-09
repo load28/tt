@@ -1,0 +1,5 @@
+variant V { A(n: number), B }
+export function f(k: number, v: V) {
+  const u = ((x: number) => { if let A(n) = v { return n + x; } return 0; }) ? match (k) { 1 => "one", _ => "other" } : "none";
+  return u;
+}

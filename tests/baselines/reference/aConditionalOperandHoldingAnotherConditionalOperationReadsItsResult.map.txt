@@ -1,0 +1,23 @@
+//// [aConditionalOperandHoldingAnotherConditionalOperationReadsItsResult.tt] 21 mapping(s)
+1:1 -> 19:1 len 71  "type R<T> = { kind: \"Ok\"; value: T } | { kind: \""...
+2:19 -> 26:3 len 233  "\nconst ok = (value: number): R<number> => { cons"...
+7:5 -> 70:5 len 10  "const v = "
+7:16 -> 34:18 len 1  "c"
+7:25 -> 36:22 len 1  "r"
+7:38 -> 52:23 len 1  "g"
+7:48 -> 55:22 len 2  "10"
+7:57 -> 59:22 len 2  "20"
+7:61 -> 70:21 len 124  ";\n    return { kind: \"Ok\", value: Number(v) };\n}"...
+12:5 -> 97:5 len 10  "const v = "
+12:16 -> 77:9 len 1  "c"
+12:24 -> 78:22 len 1  "d"
+12:28 -> 84:17 len 1  "0"
+12:33 -> 88:17 len 1  "2"
+12:41 -> 90:22 len 1  "e"
+12:42 -> 97:22 len 116  ";\n    return { kind: \"Ok\", value: v };\n}\n\nfuncti"...
+17:5 -> 130:5 len 10  "const v = "
+17:16 -> 105:19 len 1  "c"
+17:25 -> 107:22 len 1  "r"
+17:35 -> 120:22 len 1  "s"
+17:36 -> 130:22 len 449  ";\n    return { kind: \"Ok\", value: Number(v) };\n}"...
+

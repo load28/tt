@@ -1,0 +1,10 @@
+=== references /*keyword*/ referencesInsideARecoveredMatch.tt:2:18 ===
+  | export const r = match (s) { 1 => 2;
+  |                  ^ /*keyword*/
+references: 0 location(s)
+
+=== references /*scrutinee*/ referencesInsideARecoveredMatch.tt:2:25 ===
+  | export const r = match (s) { 1 => 2;
+  |                         ^ /*scrutinee*/
+references: 0 location(s)
+

@@ -238,6 +238,21 @@ impl Severity {
 ///
 /// The result carries no trailing newline.
 pub fn render(report: &Report<'_>, source: Option<&str>, styles: Styles) -> String {
+    render_measured(
+        report,
+        source.map(crate::lines::LineMap::ecma).as_ref(),
+        styles,
+    )
+}
+
+/// [`render`] against a text whose ECMA-262 lines were measured once, so a
+/// consumer drawing many diagnostics over one file does not measure it
+/// again for each.
+pub fn render_measured(
+    report: &Report<'_>,
+    source: Option<&crate::lines::LineMap<'_>>,
+    styles: Styles,
+) -> String {
     let mut out = String::new();
     let severity = styles.severity(report.severity);
     let header = match report.code {
@@ -252,7 +267,7 @@ pub fn render(report: &Report<'_>, source: Option<&str>, styles: Styles) -> Stri
     );
 
     // A snippet needs both a place to point at and the text to quote.
-    let Some((span, source)) = report.span.zip(source) else {
+    let Some((span, lines)) = report.span.zip(source) else {
         // No span, or no text to quote it from: name the file (and the
         // position, when there is one) and stop.
         let arrow = styles.paint(styles.gutter, "-->");
@@ -274,10 +289,6 @@ pub fn render(report: &Report<'_>, source: Option<&str>, styles: Styles) -> Stri
         return out;
     };
 
-    let line_map = crate::lines::LineMap::ecma(source);
-    let lines: Vec<&str> = (0..line_map.len())
-        .filter_map(|line| line_map.line_text(line))
-        .collect();
     let start = span.start;
     let end = span.end.unwrap_or(Position {
         line: start.line,
@@ -342,13 +353,13 @@ pub fn render(report: &Report<'_>, source: Option<&str>, styles: Styles) -> Stri
 
     if !inline.is_empty() {
         write_annotated(
-            &mut out, &lines, width, start, end, &inline, severity, styles,
+            &mut out, lines, width, start, end, &inline, severity, styles,
         );
     } else if end_line == start.line {
-        write_single_line(&mut out, &lines, width, start, end, severity, styles);
+        write_single_line(&mut out, lines, width, start, end, severity, styles);
     } else {
         write_multi_line(
-            &mut out, &lines, width, start, end_line, end.col, severity, styles,
+            &mut out, lines, width, start, end_line, end.col, severity, styles,
         );
     }
 
@@ -463,6 +474,22 @@ pub fn engine_diagnostic(
     path: &str,
     styles: Styles,
 ) -> String {
+    engine_diagnostic_measured(
+        diagnostic,
+        source.map(crate::lines::LineMap::ecma).as_ref(),
+        path,
+        styles,
+    )
+}
+
+/// [`engine_diagnostic`] against a text whose ECMA-262 lines were measured
+/// once — see [`render_measured`].
+pub fn engine_diagnostic_measured(
+    diagnostic: &crate::engine::Diagnostic,
+    source: Option<&crate::lines::LineMap<'_>>,
+    path: &str,
+    styles: Styles,
+) -> String {
     let at = |(line, col): (usize, usize)| Position { line, col };
     let span = diagnostic.position.map(|start| Span {
         start: at(start),
@@ -486,7 +513,7 @@ pub fn engine_diagnostic(
             path: path.as_deref(),
         })
         .collect();
-    render(
+    render_measured(
         &Report {
             // Every diagnostic a checked project reports stops the build;
             // the severity space exists for tt rules that do not yet.
@@ -504,8 +531,8 @@ pub fn engine_diagnostic(
 }
 
 /// The text of a 1-based line, with tabs expanded.
-fn shown_line(lines: &[&str], line: usize) -> String {
-    let raw = lines.get(line.wrapping_sub(1)).copied().unwrap_or("");
+fn shown_line(lines: &crate::lines::LineMap<'_>, line: usize) -> String {
+    let raw = lines.line_text(line.wrapping_sub(1)).unwrap_or("");
     raw.replace('\t', &" ".repeat(TAB_WIDTH))
 }
 
@@ -514,8 +541,8 @@ fn shown_line(lines: &[&str], line: usize) -> String {
 /// columns for a wide or fullwidth character, none for a combining mark).
 /// Columns past the end of the line clamp to just past it, so a span that
 /// outruns a stale buffer still points somewhere real.
-fn display_col(lines: &[&str], line: usize, col: usize) -> usize {
-    let raw = lines.get(line.wrapping_sub(1)).copied().unwrap_or("");
+fn display_col(lines: &crate::lines::LineMap<'_>, line: usize, col: usize) -> usize {
+    let raw = lines.line_text(line.wrapping_sub(1)).unwrap_or("");
     let mut at = 1;
     for (index, ch) in raw.chars().enumerate() {
         if index + 1 >= col {
@@ -533,7 +560,7 @@ fn display_col(lines: &[&str], line: usize, col: usize) -> usize {
 /// `12 | match (shape) {` and the caret run beneath it.
 fn write_single_line(
     out: &mut String,
-    lines: &[&str],
+    lines: &crate::lines::LineMap<'_>,
     width: usize,
     start: Position,
     end: Position,
@@ -566,7 +593,7 @@ fn write_single_line(
 #[allow(clippy::too_many_arguments)]
 fn write_multi_line(
     out: &mut String,
-    lines: &[&str],
+    lines: &crate::lines::LineMap<'_>,
     width: usize,
     start: Position,
     end_line: usize,
@@ -641,7 +668,7 @@ fn write_multi_line(
 #[allow(clippy::too_many_arguments)]
 fn write_annotated(
     out: &mut String,
-    lines: &[&str],
+    lines: &crate::lines::LineMap<'_>,
     width: usize,
     start: Position,
     end: Position,

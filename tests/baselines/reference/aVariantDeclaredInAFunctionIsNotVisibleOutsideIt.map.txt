@@ -1,0 +1,11 @@
+//// [aVariantDeclaredInAFunctionIsNotVisibleOutsideIt.tt] 9 mapping(s)
+1:22 -> 27:3 len 18  "\nfunction f() {\n  "
+3:21 -> 35:5 len 27  "\n  const inner = (v: Q) => "
+4:34 -> 39:21 len 1  "v"
+4:44 -> 42:20 len 1  "1"
+4:47 -> 51:4 len 47  ";\n  return inner;\n}\nexport const g = (v: A) => "
+7:35 -> 57:19 len 1  "v"
+7:45 -> 60:18 len 1  "1"
+7:53 -> 64:18 len 1  "2"
+7:56 -> 73:2 len 16  ";\nexport { f };\n"
+

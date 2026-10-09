@@ -1,0 +1,6 @@
+=== aCommentOnlyMatchScrutineeIsMalformed.tt ===
+export function f() { const v = match (/*c*/) { _ => 1 }; return v; }
+>f : function f(): any
+>v : const v: any
+>v : const v: any
+

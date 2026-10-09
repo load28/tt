@@ -1,0 +1,8 @@
+// @run: aConditionHoldingAPipelinedMatchIsReadFromItsSlot.tt
+const L: unknown[] = [];
+function log<T>(x: T): T { L.push(x); return x; }
+const h = (x: number) => x;
+export function scrutinee() {
+  return match ((match (log(1)) { 1 => 1, _ => 2 } |> h) ? match (log(2)) { _ => 1 } : 0) { _ => "ok" };
+}
+console.log(scrutinee(), L.join());

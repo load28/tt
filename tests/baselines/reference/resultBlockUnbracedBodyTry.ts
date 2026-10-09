@@ -122,10 +122,10 @@ const S = {
 const ok = (n: number): TResult<number, string> => Result.Ok(n);
 const bad = (e: string): TResult<number, string> => Result.Err(e);
 function early(c: boolean, r: TResult<number, string>) {
-  let $tt_v0: (Result.TErr<string>) | ({
+  let $tt_v0: Result.TErr<string> | {
     kind: "Ok";
     value: number;
-});
+};
   $tt_v0: {
     if (c) {
       const $tt_t0 = r;
@@ -133,23 +133,21 @@ function early(c: boolean, r: TResult<number, string>) {
         $tt_v0 = $tt_t0;
         break $tt_v0;
       }
-      const $tt_a0 = { value: { kind: "Ok" as const, value: $tt_t0.value } };
-      $tt_v0 = $tt_a0.value;
+      $tt_v0 = { kind: "Ok" as const, value: $tt_t0.value };
       break $tt_v0;
     }
     {
-      const $tt_a1 = { value: { kind: "Ok" as const, value: 0 } };
-      $tt_v0 = $tt_a1.value;
+      $tt_v0 = { kind: "Ok" as const, value: 0 };
       break $tt_v0;
     }
   }
   return $tt_v0;
 }
 function paren(c: boolean, r: TResult<number, string>) {
-  let $tt_v1: (Result.TErr<string>) | ({
+  let $tt_v1: Result.TErr<string> | {
     kind: "Ok";
     value: number;
-});
+};
   $tt_v1: {
     if (c) {
       const $tt_t1 = r;
@@ -157,13 +155,11 @@ function paren(c: boolean, r: TResult<number, string>) {
         $tt_v1 = $tt_t1;
         break $tt_v1;
       }
-      const $tt_a2 = { value: { kind: "Ok" as const, value: ($tt_t1.value) } };
-      $tt_v1 = $tt_a2.value;
+      $tt_v1 = { kind: "Ok" as const, value: ($tt_t1.value) };
       break $tt_v1;
     }
     {
-      const $tt_a3 = { value: { kind: "Ok" as const, value: 0 } };
-      $tt_v1 = $tt_a3.value;
+      $tt_v1 = { kind: "Ok" as const, value: 0 };
       break $tt_v1;
     }
   }
@@ -183,18 +179,17 @@ function statement(c: boolean, r: TResult<number, string>) {
       }
     }
     {
-      const $tt_a4 = { value: { kind: "Ok" as const, value: 1 } };
-      $tt_v2 = $tt_a4.value;
+      $tt_v2 = { kind: "Ok" as const, value: 1 };
       break $tt_v2;
     }
   }
   return $tt_v2;
 }
 function elseBody(c: boolean, r: TResult<number, string>) {
-  let $tt_v3: (Result.TErr<string>) | ({
+  let $tt_v3: Result.TErr<string> | {
     kind: "Ok";
     value: number;
-});
+};
   $tt_v3: {
     if (c) {} else {
       const $tt_t3 = r;
@@ -202,25 +197,23 @@ function elseBody(c: boolean, r: TResult<number, string>) {
         $tt_v3 = $tt_t3;
         break $tt_v3;
       }
-      const $tt_a5 = { value: { kind: "Ok" as const, value: $tt_t3.value } };
-      $tt_v3 = $tt_a5.value;
+      $tt_v3 = { kind: "Ok" as const, value: $tt_t3.value };
       break $tt_v3;
     }
     {
-      const $tt_a6 = { value: { kind: "Ok" as const, value: 2 } };
-      $tt_v3 = $tt_a6.value;
+      $tt_v3 = { kind: "Ok" as const, value: 2 };
       break $tt_v3;
     }
   }
   return $tt_v3;
 }
 function elseIf(c: boolean, d: boolean, r: TResult<number, string>) {
-  let $tt_v4: ({
+  let $tt_v4: Result.TErr<string> | {
     kind: "Ok";
     value: number;
-}) | (Result.TErr<string>);
+};
   $tt_v4: {
-    if (c) { const $tt_a7 = { value: { kind: "Ok" as const, value: 3 } }; $tt_v4 = $tt_a7.value; break $tt_v4; }
+    if (c) { $tt_v4 = { kind: "Ok" as const, value: 3 }; break $tt_v4; }
     else if (d) {
       const $tt_t4 = r;
       if (!("value" in $tt_t4)) {
@@ -234,23 +227,21 @@ function elseIf(c: boolean, d: boolean, r: TResult<number, string>) {
         $tt_v4 = $tt_t5;
         break $tt_v4;
       }
-      const $tt_a8 = { value: { kind: "Ok" as const, value: $tt_t5.value } };
-      $tt_v4 = $tt_a8.value;
+      $tt_v4 = { kind: "Ok" as const, value: $tt_t5.value };
       break $tt_v4;
     }
     {
-      const $tt_a9 = { value: { kind: "Ok" as const, value: 4 } };
-      $tt_v4 = $tt_a9.value;
+      $tt_v4 = { kind: "Ok" as const, value: 4 };
       break $tt_v4;
     }
   }
   return $tt_v4;
 }
 function nestedIf(c: boolean, d: boolean, r: TResult<number, string>) {
-  let $tt_v5: (Result.TErr<string>) | ({
+  let $tt_v5: Result.TErr<string> | {
     kind: "Ok";
     value: number;
-});
+};
   $tt_v5: {
     if (c) if (d) {
       const $tt_t6 = r;
@@ -264,13 +255,11 @@ function nestedIf(c: boolean, d: boolean, r: TResult<number, string>) {
         $tt_v5 = $tt_t7;
         break $tt_v5;
       }
-      const $tt_a10 = { value: { kind: "Ok" as const, value: $tt_t7.value } };
-      $tt_v5 = $tt_a10.value;
+      $tt_v5 = { kind: "Ok" as const, value: $tt_t7.value };
       break $tt_v5;
     }
     {
-      const $tt_a11 = { value: { kind: "Ok" as const, value: 5 } };
-      $tt_v5 = $tt_a11.value;
+      $tt_v5 = { kind: "Ok" as const, value: 5 };
       break $tt_v5;
     }
   }
@@ -288,8 +277,7 @@ function loopBody(r: TResult<number, string>) {
         $tt_v6 = $tt_t8;
         break $tt_v6;
       }
-      const $tt_a12 = { value: { kind: "Ok" as const, value: $tt_t8.value } };
-      $tt_v6 = $tt_a12.value;
+      $tt_v6 = { kind: "Ok" as const, value: $tt_t8.value };
       break $tt_v6;
     }
   }
@@ -310,8 +298,7 @@ function whileBody(r: TResult<number, string>) {
       }
     }
     {
-      const $tt_a13 = { value: { kind: "Ok" as const, value: turns } };
-      $tt_v7 = $tt_a13.value;
+      $tt_v7 = { kind: "Ok" as const, value: turns };
       break $tt_v7;
     }
   }
@@ -329,18 +316,17 @@ function labelBody(r: TResult<number, string>) {
         $tt_v8 = $tt_t10;
         break $tt_v8;
       }
-      const $tt_a14 = { value: { kind: "Ok" as const, value: $tt_t10.value } };
-      $tt_v8 = $tt_a14.value;
+      $tt_v8 = { kind: "Ok" as const, value: $tt_t10.value };
       break $tt_v8;
     }
   }
   return $tt_v8;
 }
 function returnedMatch(c: boolean, s: S, r: TResult<number, string>) {
-  let $tt_v9: (Result.TErr<string>) | ({
+  let $tt_v9: Result.TErr<string> | {
     kind: "Ok";
     value: number;
-});
+};
   $tt_v9: {
     const $tt_t11 = r;
     if (!("value" in $tt_t11)) {
@@ -354,13 +340,11 @@ function returnedMatch(c: boolean, s: S, r: TResult<number, string>) {
         switch ($tt_m.kind) {
           case "A": {
             const { n } = $tt_m;
-            const $tt_a15 = { value: { kind: "Ok" as const, value: n + base } };
-            $tt_v9 = $tt_a15.value;
+            $tt_v9 = { kind: "Ok" as const, value: n + base };
             break;
           }
           case "B": {
-            const $tt_a16 = { value: { kind: "Ok" as const, value: -1 } };
-            $tt_v9 = $tt_a16.value;
+            $tt_v9 = { kind: "Ok" as const, value: -1 };
             break;
           }
           default: {
@@ -371,8 +355,7 @@ function returnedMatch(c: boolean, s: S, r: TResult<number, string>) {
       break $tt_v9;
     }
     {
-      const $tt_a17 = { value: { kind: "Ok" as const, value: 6 } };
-      $tt_v9 = $tt_a17.value;
+      $tt_v9 = { kind: "Ok" as const, value: 6 };
       break $tt_v9;
     }
   }

@@ -1,0 +1,8 @@
+import type { TResult } from "@tt/std";
+declare function r(): TResult<number, string>;
+export function f(): TResult<number, string> {
+  try r() /* validated */;
+  try r() // note
+  ;
+  return { kind: "Ok", value: 1 };
+}

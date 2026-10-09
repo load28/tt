@@ -331,6 +331,36 @@ fn symbol_of_local_case(
     }
 }
 
+/// The case written at `start..end` of the variant the checker identified
+/// at that pattern position — the one visible variant that has every tag
+/// in `tags` — rendered as [`tt_symbol_at`] renders a case.
+pub(super) fn owned_case_symbol(
+    path: &Path,
+    source: &str,
+    texts: Texts<'_>,
+    tags: &[String],
+    (start, end): (usize, usize),
+) -> Option<TtSymbol> {
+    let locals = crate::variant_symbols_with_kind(
+        source,
+        crate::SourceKind::from_path(path).unwrap_or_default(),
+    );
+    let analyses = super::language::analyses_for(path, source, texts);
+    let declared = super::completions::sole_owner(&analyses.declarations, tags)?;
+    let tag = source.get(start..end)?;
+    let constructor = declared.constructors.iter().find(|c| c.tag == tag)?;
+    Some(TtSymbol {
+        kind: TtSymbolKind::Case,
+        range: super::language::span_range(source, start, end),
+        name: tag.to_string(),
+        variant_name: declared.name.clone(),
+        signature: case_signature(&declared.name, constructor),
+        detail: case_detail(declared, constructor),
+        definition: case_definition(path, source, &locals, declared, tag, texts),
+        binds: false,
+    })
+}
+
 /// Where a case is declared: this file when the variant is local, the imported
 /// file when the analysis found it there, and nowhere for a built-in (whose
 /// declaration is the compiler's own).

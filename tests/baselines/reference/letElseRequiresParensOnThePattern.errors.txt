@@ -1,13 +1,15 @@
 ==== ttc --out-dir (exit 1) ====
-error[verify-failed]: generated TypeScript failed to parse: Expected a semicolon. This is either invalid TypeScript passed through from the source or a ttc bug; use --no-verify to bypass.
+error[verify-failed]: generated TypeScript failed to parse: Expected a semicolon. This is either invalid TypeScript passed through from the source or a ttc bug.
  --> ./letElseRequiresParensOnThePattern.tt:2:24
   |
 2 |   const Point = find() else { return 0; };
   |                        ^
+  |
+  = help: use --no-verify to bypass
 
 
 ==== ttc --check-types (exit 1) ====
-error[verify-failed]: generated TypeScript failed to parse: Expected a semicolon. This is either invalid TypeScript passed through from the source or a ttc bug; use --no-verify to bypass.
+error[verify-failed]: generated TypeScript failed to parse: Expected a semicolon. This is either invalid TypeScript passed through from the source or a ttc bug.
  --> letElseRequiresParensOnThePattern.tt:2:24
   |
 2 |   const Point = find() else { return 0; };

@@ -48,7 +48,7 @@ use crate::lexer::{Token, TokenKind};
 use scanner::*;
 
 pub(crate) use syntax::{
-    FunctionTarget, FunctionTargets, function_depth_at, in_function_body, user_function_depth_at,
+    FunctionBodies, FunctionTarget, FunctionTargets, function_depth_at, user_function_depth_at,
 };
 #[cfg(test)]
 use syntax::{function_target_at, user_function_target_at};

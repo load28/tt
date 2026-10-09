@@ -1,0 +1,6 @@
+//// [f.tt] 1 mapping(s)
+1:1 -> 1:1 len 19  "export const f = 1;"
+
+//// [g.tt] 1 mapping(s)
+1:1 -> 1:1 len 85  "import { f } from \"./f.\\x74t\";\nexport const h = "...
+

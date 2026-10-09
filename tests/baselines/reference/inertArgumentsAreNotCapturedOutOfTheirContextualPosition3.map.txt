@@ -1,5 +1,5 @@
 //// [inertArgumentsAreNotCapturedOutOfTheirContextualPosition3.tt] 6 mapping(s)
-1:1 -> 2:19 len 7  "consume"
+1:1 -> 2:35 len 7  "consume"
 1:9 -> 3:19 len 15  "{run: (n) => n}"
 1:33 -> 5:19 len 1  "x"
 1:40 -> 8:17 len 1  "v"

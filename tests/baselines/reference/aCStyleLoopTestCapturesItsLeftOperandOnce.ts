@@ -17,7 +17,7 @@ let j = 0;
 const seen: number[] = [];
 for (; ; ) {
   let $tt_v0: number;
-  const $tt_v1 = (j);
+  const $tt_v1: typeof j = (j);
   {
     const $tt_m = xs[0];
     switch ($tt_m) {
@@ -34,7 +34,7 @@ for (; ; ) {
   if (!($tt_v1 < $tt_v0)) break; { seen.push(j); j++; }}
 for (let k = 0; ; k++) {
   let $tt_v2: number;
-  const $tt_v3 = (k);
+  const $tt_v3: typeof k = (k);
   {
     const $tt_m = xs[0];
     switch ($tt_m) {

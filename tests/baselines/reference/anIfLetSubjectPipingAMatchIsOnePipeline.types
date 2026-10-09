@@ -1,0 +1,92 @@
+=== anIfLetSubjectPipingAMatchIsOnePipeline.tt ===
+variant V { A(n: number), B }
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => V
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const bump = (v: V): V => match (v) { A(n) => V.A(n + 1), B => V.B };
+>bump : const bump: (v: V) => V
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>v : (parameter) v: V
+>n : const n: number
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => V
+>n : const n: number
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+function f(x: V) {
+>f : function f(x: V): number
+>x : (parameter) x: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  if let A(n) = match (x) { A(n) => x, B => V.A(0) } |> bump { return n; }
+>n : const n: number
+>x : (parameter) x: V
+>n : const n: number
+>x : (parameter) x: V
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => V
+>bump : const bump: (v: V) => V
+>n : const n: number
+console.log(f(V.A(1)), f(V.B));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>f : function f(x: V): number
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => V
+>f : function f(x: V): number
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+

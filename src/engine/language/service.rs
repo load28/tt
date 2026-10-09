@@ -4,7 +4,9 @@ mod presentation;
 mod targets;
 
 pub(super) use presentation::{docs_text, parameter_span, split_hover};
-pub(super) use targets::{TargetUse, map_shared_target, map_target, source_edit};
+pub(super) use targets::{
+    TargetUse, map_shared_target, map_target, restated_target, source_byte_span, source_edit,
+};
 
 use super::*;
 use crate::lines::LineMap;
@@ -16,6 +18,8 @@ pub(super) fn projection_accepts_diagnostics(code: &str, source_kind: crate::Sou
 pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
     if crate::engine::project::is_host_source(path) {
         return ServiceDoc {
+            source_utf16: std::sync::OnceLock::new(),
+            code_utf16: std::sync::OnceLock::new(),
             coordinates: CoordinateSpace::Projected,
             identity_mapping: EmitMapping {
                 src: 0,
@@ -33,13 +37,17 @@ pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
             declared_names: Vec::new(),
             shared_bindings: Vec::new(),
             destructured_lists: Vec::new(),
+            relocated_operands: Vec::new(),
             completion_scopes: Vec::new(),
             recovered: Vec::new(),
             syntax_repairs: Vec::new(),
             tt_diagnostics: Vec::new(),
             generated_names: HashSet::new(),
+            restatements: Vec::new(),
             inserted: Vec::new(),
             faithful: true,
+            source_lines: Default::default(),
+            code_lines: Default::default(),
         };
     }
     let options = crate::Options {
@@ -62,6 +70,8 @@ pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
         ),
     };
     ServiceDoc {
+        source_utf16: std::sync::OnceLock::new(),
+        code_utf16: std::sync::OnceLock::new(),
         coordinates: CoordinateSpace::Projected,
         identity_mapping: EmitMapping {
             src: 0,
@@ -69,6 +79,8 @@ pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
             len: text.len(),
         },
         faithful,
+        source_lines: Default::default(),
+        code_lines: Default::default(),
         source: text,
         code: emit.code,
         mappings: emit.mappings,
@@ -76,11 +88,13 @@ pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
         declared_names: emit.declared_names,
         shared_bindings: emit.shared_bindings,
         destructured_lists: emit.destructured_lists,
+        relocated_operands: emit.relocated_operands,
         completion_scopes: emit.completion_scopes,
         recovered,
         syntax_repairs: report.syntax_repairs,
         tt_diagnostics: report.diagnostics,
         generated_names: emit.generated_names,
+        restatements: emit.restatements,
         inserted: emit.inserted,
     }
 }
@@ -277,6 +291,11 @@ pub(super) fn ts_completions(
     for item in items {
         let label = item["label"].as_str().unwrap_or_default().to_string();
         if generated_names.contains(&label)
+            || (label.starts_with("$tt_")
+                && session
+                    .docs
+                    .values()
+                    .any(|doc| doc.generated_names.contains(&label)))
             || imports_from_runtime(&item)
             || (item["data"]["source"].as_str() == Some(SWITCH_CASES_SOURCE) && generated_switch())
         {
@@ -287,20 +306,31 @@ pub(super) fn ts_completions(
             (path.to_path_buf(), at, label.clone(), source.clone()),
             item.clone(),
         );
-        let replaced = ["replace", "range"]
+        let replaced_range = ["replace", "range"]
             .iter()
             .map(|key| &item["textEdit"][*key])
-            .find(|range| range.is_object())
-            .and_then(|range| {
-                source_edit(
-                    code,
-                    text.mappings,
-                    text.inserted,
-                    text.source,
-                    text.splice,
-                    &serde_json::json!({ "range": range, "newText": "" }),
-                )
-            });
+            .find(|range| range.is_object());
+        let insert_text = item["insertText"]
+            .as_str()
+            .or_else(|| item["textEdit"]["newText"].as_str());
+        if let Some(range) = replaced_range
+            && let Some((start, _)) =
+                source_byte_span(code, text.mappings, text.inserted, text.splice, range)
+            && pipe_step_dot(text.source, kind, start)
+            && !insert_text.is_some_and(|text| text.starts_with('.') || text.starts_with("?."))
+        {
+            continue;
+        }
+        let replaced = replaced_range.and_then(|range| {
+            source_edit(
+                code,
+                text.mappings,
+                text.inserted,
+                text.source,
+                text.splice,
+                &serde_json::json!({ "range": range, "newText": "" }),
+            )
+        });
         entries.push(CompletionItem {
             kind: item["kind"]
                 .as_u64()
@@ -315,10 +345,7 @@ pub(super) fn ts_completions(
                 })
                 .collect(),
             sort_text: item["sortText"].as_str().unwrap_or(&label).to_string(),
-            insert_text: item["insertText"]
-                .as_str()
-                .or_else(|| item["textEdit"]["newText"].as_str())
-                .map(str::to_owned),
+            insert_text: insert_text.map(str::to_owned),
             filter_text: item["filterText"].as_str().map(str::to_owned),
             snippet: item["insertTextFormat"].as_u64() == Some(2),
             range: replaced.map(|edit| edit.range),
@@ -344,6 +371,31 @@ pub(super) fn ts_completions(
 }
 
 const SWITCH_CASES_SOURCE: &str = "SwitchCases/";
+
+fn pipe_step_dot(source: &str, kind: crate::SourceKind, at: usize) -> bool {
+    use crate::lexer::{TokenKind, TplPart};
+    fn search(tokens: &[crate::lexer::Token], at: usize) -> bool {
+        tokens.iter().enumerate().any(|(index, token)| {
+            (token.span.start == at
+                && matches!(token.kind, TokenKind::Punct(b'.'))
+                && index
+                    .checked_sub(1)
+                    .is_some_and(|previous| matches!(tokens[previous].kind, TokenKind::PipeOp)))
+                || match &token.kind {
+                    TokenKind::Template(parts) => parts.iter().any(|part| match part {
+                        TplPart::Interp { tokens, .. } => search(tokens, at),
+                        TplPart::Raw(_) => false,
+                    }),
+                    _ => false,
+                }
+        })
+    }
+    source.as_bytes().get(at) == Some(&b'.')
+        && search(
+            &crate::lexer::lex_with_kind(source, 0, source.len(), kind),
+            at,
+        )
+}
 
 fn module_specifier_at(source: &str, kind: crate::SourceKind, at: usize) -> Option<(usize, usize)> {
     use crate::lexer::TokenKind;
@@ -581,7 +633,7 @@ pub(in super::super) fn imported_variants(
         if matches!(import.names, crate::TtImportNames::None) {
             continue; // a re-export brings nothing into scope
         }
-        let target = match crate::engine::paths::canonical(&dir.join(&import.specifier)) {
+        let target = match crate::engine::normalize_document_path(&dir.join(import.path())) {
             Ok(target) => target,
             Err(_) => continue, // unresolvable — tsc's TS2307, not ours
         };
@@ -676,17 +728,45 @@ pub(super) fn build_probe(path: &Path, source: &str, at: usize, version: u64) ->
         return None;
     }
     let spliced = format!("{}{}{}", &source[..at], PROBE_NAME, &source[at..]);
-    let report = crate::compile_projection_report(
-        &spliced,
-        &crate::Options {
-            filename: path.to_str(),
-            source_kind: crate::SourceKind::from_path(path).unwrap_or_default(),
-            defer_to_checker: true,
-            rewrite_imports: crate::ImportRewrite::Off,
-            ..crate::Options::default()
-        },
-    );
-    let emit = report.emit.or(report.withheld)?;
+    let options = crate::Options {
+        filename: path.to_str(),
+        source_kind: crate::SourceKind::from_path(path).unwrap_or_default(),
+        defer_to_checker: true,
+        rewrite_imports: crate::ImportRewrite::Off,
+        ..crate::Options::default()
+    };
+    let probe_end = at + PROBE_NAME.len();
+    let report = crate::compile_projection_report(&spliced, &options);
+    let mut closers = Vec::new();
+    let mended = report
+        .recovered
+        .iter()
+        .find(|&&(start, end)| start <= at && probe_end <= end)
+        .and_then(|&(start, _)| {
+            closed_at(&spliced, start, probe_end, options.source_kind)
+                .or_else(|| arm_closed(&spliced, at, options.source_kind))
+        });
+    let report = match mended {
+        Some((closed, inserted)) => {
+            let mended = crate::compile_projection_report(&closed, &options);
+            if mended
+                .recovered
+                .iter()
+                .any(|&(start, end)| start <= at && probe_end <= end)
+            {
+                report
+            } else {
+                closers = inserted;
+                mended
+            }
+        }
+        None => report,
+    };
+    let mut emit = report.emit.or(report.withheld)?;
+    emit.mappings = without_closers(&emit.mappings, &closers);
+    for glue in &mut emit.inserted {
+        glue.src = without_closer_at(glue.src, &closers);
+    }
     let out = mapper::to_output_inclusive(&emit.mappings, at)?;
     Some(ProbeDoc {
         path: path.to_path_buf(),
@@ -701,21 +781,205 @@ pub(super) fn build_probe(path: &Path, source: &str, at: usize, version: u64) ->
     })
 }
 
+/// `text` with an arm that the probe at `at` is written in, and that has no
+/// `=>` yet, given one and a body, as the parser needs every arm to have.
+/// `None` when the probe is not in such an arm.
+fn arm_closed(
+    text: &str,
+    at: usize,
+    source_kind: crate::SourceKind,
+) -> Option<(String, Vec<(usize, usize)>)> {
+    const ARM_TAIL: &str = " => 0";
+    let tokens = crate::lexer::lex_with_kind(text, 0, text.len(), source_kind);
+    let index = tokens.partition_point(|token| token.span.start < at);
+    let end = crate::parser::arrowless_arm_end(text, &tokens, index)?;
+    let mut closed = String::with_capacity(text.len() + ARM_TAIL.len());
+    closed.push_str(&text[..end]);
+    closed.push_str(ARM_TAIL);
+    closed.push_str(&text[end..]);
+    Some((closed, vec![(end, ARM_TAIL.len())]))
+}
+
+/// `text` with the brackets its construct starting at `start` leaves open
+/// before `at` closed where TypeScript's parser ends them, for a probe
+/// written where the whole construct was recovered because it never
+/// closes. A statement keyword directly in an open argument list or index
+/// ends that list and every expression bracket around it up to the
+/// enclosing block (`abortParsingListOrMoveToNextToken`: a token that
+/// starts a statement in an enclosing context ends the lists inside it), so
+/// those close before the keyword; a match body is such a bracket, since an
+/// arm list holds no statements. What is still open at `at` closes there,
+/// as `parseExpected` assumes of a missing closer. `None` when nothing is
+/// open.
+pub(super) fn closed_at(
+    text: &str,
+    start: usize,
+    at: usize,
+    source_kind: crate::SourceKind,
+) -> Option<(String, Vec<(usize, usize)>)> {
+    use crate::lexer::TokenKind;
+    let tokens = crate::lexer::lex_with_kind(text, start, at, source_kind);
+    let mut open: Vec<(char, bool)> = Vec::new();
+    let mut inserted: Vec<(usize, String)> = Vec::new();
+    for (index, token) in tokens.iter().enumerate() {
+        if matches!(open.last(), Some((')' | ']', _)))
+            && crate::lexer::statement_keyword_at(text, &tokens, index)
+        {
+            let mut closers = String::new();
+            while let Some(&(closer, expression)) = open.last() {
+                if !expression {
+                    break;
+                }
+                closers.push(closer);
+                open.pop();
+            }
+            inserted.push((token.span.start, closers));
+        }
+        if token.opens_bracket() {
+            open.push(match token.kind {
+                TokenKind::Punct(b'(') => (')', true),
+                TokenKind::Punct(b'[') => (']', true),
+                TokenKind::Punct(b'{') => {
+                    ('}', crate::parser::opens_match_body(text, &tokens, index))
+                }
+                _ => ('>', true),
+            });
+        } else if token.closes_bracket() {
+            open.pop();
+        }
+    }
+    if open.is_empty() && inserted.is_empty() {
+        return None;
+    }
+    inserted.push((
+        at,
+        open.into_iter().rev().map(|(closer, _)| closer).collect(),
+    ));
+    let mut out = String::with_capacity(text.len() + inserted.len());
+    let mut closers = Vec::new();
+    let mut copied = 0;
+    for (position, written) in inserted {
+        out.push_str(&text[copied..position]);
+        if !written.is_empty() {
+            closers.push((out.len(), written.len()));
+        }
+        out.push_str(&written);
+        copied = position;
+    }
+    out.push_str(&text[copied..]);
+    Some((out, closers))
+}
+
+/// `mappings` of a text with `closers` (start, length) inserted, as
+/// mappings of the text without them: a chunk loses the bytes a closer
+/// occupies and moves back by the closers before it.
+fn without_closers(mappings: &[EmitMapping], closers: &[(usize, usize)]) -> Vec<EmitMapping> {
+    if closers.is_empty() {
+        return mappings.to_vec();
+    }
+    let mut out = Vec::with_capacity(mappings.len());
+    for mapping in mappings {
+        let (mut src, mut emitted, end) = (mapping.src, mapping.out, mapping.src + mapping.len);
+        for &(at, len) in closers {
+            if at >= end || at + len <= src {
+                continue;
+            }
+            if src < at {
+                out.push(EmitMapping {
+                    src: without_closer_at(src, closers),
+                    out: emitted,
+                    len: at - src,
+                });
+            }
+            let skip = (at + len).max(src);
+            emitted += skip - src;
+            src = skip;
+        }
+        if src < end {
+            out.push(EmitMapping {
+                src: without_closer_at(src, closers),
+                out: emitted,
+                len: end - src,
+            });
+        }
+    }
+    out
+}
+
+/// A byte of a text with `closers` inserted, in the text without them.
+fn without_closer_at(byte: usize, closers: &[(usize, usize)]) -> usize {
+    let before: usize = closers
+        .iter()
+        .filter(|&&(at, _)| at < byte)
+        .map(|&(at, len)| len.min(byte - at))
+        .sum();
+    byte - before
+}
+
 pub(super) fn signature_position(
     code: &str,
     mappings: &[EmitMapping],
+    relocated: &[crate::RelocatedOperand],
     source_kind: crate::SourceKind,
     at: usize,
 ) -> usize {
     let tokens = crate::lexer::lex_with_kind(code, 0, code.len(), source_kind);
     let mut at = at;
-    while let Some(opener) = innermost_invocation(&tokens, at) {
-        if mapper::to_source(mappings, opener).is_some() {
+    for _ in 0..=relocated.len() {
+        let mut invocation = innermost_invocation(&tokens, at);
+        while let Some(opener) = invocation {
+            if mapper::to_source(mappings, opener).is_some() {
+                break;
+            }
+            at = opener;
+            invocation = innermost_invocation(&tokens, at);
+        }
+        let Some(source_at) = mapper::to_source_inclusive(mappings, at) else {
+            break;
+        };
+        let Some(operand) = relocated
+            .iter()
+            .filter(|operand| {
+                operand.src <= source_at
+                    && source_at <= operand.src_end
+                    && !(operand.out <= at && at <= operand.out_end)
+            })
+            .min_by_key(|operand| operand.src_end - operand.src)
+        else {
+            break;
+        };
+        let inside = invocation
+            .and_then(|opener| mapper::to_source(mappings, opener))
+            .is_some_and(|opener| operand.src <= opener && opener < operand.src_end);
+        let read = if source_at == operand.src {
+            operand.out
+        } else {
+            operand.out_end
+        };
+        if inside || innermost_invocation(&tokens, read).is_none() {
             break;
         }
-        at = opener;
+        at = read;
     }
     at
+}
+
+/// Where to ask about an unmapped cursor inside an operand moved out of its
+/// place: the end of the operand's read, when that read is an argument of a
+/// call. `None` when no operand holds the cursor or its read is not in a
+/// call (a call that moved with the operand is read whole).
+pub(super) fn relocated_read_end(
+    code: &str,
+    relocated: &[crate::RelocatedOperand],
+    source_kind: crate::SourceKind,
+    at: usize,
+) -> Option<usize> {
+    let operand = relocated
+        .iter()
+        .filter(|operand| operand.src < at && at < operand.src_end)
+        .min_by_key(|operand| operand.src_end - operand.src)?;
+    let tokens = crate::lexer::lex_with_kind(code, 0, code.len(), source_kind);
+    innermost_invocation(&tokens, operand.out_end).map(|_| operand.out_end)
 }
 
 pub(super) fn signature_question(
@@ -850,18 +1114,33 @@ pub(super) fn serve_doc_only(
     overlays: &HashMap<PathBuf, String>,
     path: &Path,
 ) -> Option<Arc<ServiceDoc>> {
-    let text = match overlays.get(path) {
-        Some(text) => text.clone(),
-        None => std::fs::read_to_string(path).ok()?,
-    };
-    match session.docs.get(path) {
-        Some(doc) if doc.source == text => Some(doc.clone()),
-        _ => {
-            let doc = Arc::new(service_doc(path, text));
-            session.docs.insert(path.to_path_buf(), doc.clone());
-            Some(doc)
-        }
+    if let Some(doc) = session
+        .answering
+        .as_ref()
+        .and_then(|answering| answering.get(path))
+    {
+        return Some(doc.clone());
     }
+    let read;
+    let text = match overlays.get(path) {
+        Some(text) => text,
+        None => {
+            read = std::fs::read_to_string(path).ok()?;
+            &read
+        }
+    };
+    let doc = match session.docs.get(path) {
+        Some(doc) if doc.source == *text => doc.clone(),
+        _ => {
+            let doc = Arc::new(service_doc(path, text.clone()));
+            session.docs.insert(path.to_path_buf(), doc.clone());
+            doc
+        }
+    };
+    if let Some(answering) = session.answering.as_mut() {
+        answering.insert(path.to_path_buf(), doc.clone());
+    }
+    Some(doc)
 }
 
 /// A tt position translated into the served text for a question about the
@@ -870,9 +1149,9 @@ pub(super) fn serve_doc_only(
 /// starting at the cursor wins over the one ending there.
 pub(super) fn to_service(doc: &ServiceDoc, position: Position) -> Option<usize> {
     if doc.coordinates == CoordinateSpace::Authored {
-        return Some(u16_offset(&doc.source, position));
+        return Some(doc.source_offset(position));
     }
-    let byte = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
+    let byte = doc.source_utf16().to_byte(doc.source_offset(position));
     let affinity = match doc.source.as_bytes().get(byte) {
         Some(&b) if crate::scanner::is_ident_start(b) || b == b'#' || !b.is_ascii() => {
             mapper::Affinity::Following
@@ -880,21 +1159,25 @@ pub(super) fn to_service(doc: &ServiceDoc, position: Position) -> Option<usize> 
         _ => mapper::Affinity::Preceding,
     };
     let out = mapper::cursor_to_output(&doc.mappings, byte, affinity)?;
-    Some(mapper::to_utf16(&doc.code, out))
+    Some(doc.code_utf16().to_utf16(out))
 }
 
 /// A tt position translated into the served text for a question about what
 /// is being typed before the cursor (completion, signature help).
 pub(super) fn to_service_typed(doc: &ServiceDoc, position: Position) -> Option<usize> {
-    let byte = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
+    let byte = doc.source_utf16().to_byte(doc.source_offset(position));
     let out = mapper::typed_cursor_to_output(&doc.mappings, &doc.anchors, &doc.source, byte)?;
     if doc.coordinates == CoordinateSpace::Authored {
-        return Some(u16_offset(&doc.source, position));
+        return Some(doc.source_offset(position));
     }
-    Some(mapper::to_utf16(&doc.code, out))
+    Some(doc.code_utf16().to_utf16(out))
 }
 
 pub(super) fn to_service_name(doc: &ServiceDoc, position: Position) -> Option<usize> {
+    let at = doc.source_offset(position);
+    if recovery_intersects(doc, at, at + 1) {
+        return None;
+    }
     if doc.coordinates == CoordinateSpace::Authored {
         let byte = source_byte(&doc.source, position);
         for binding in &doc.shared_bindings {
@@ -915,14 +1198,14 @@ pub(super) fn to_service_name(doc: &ServiceDoc, position: Position) -> Option<us
     if let Some(at) = to_service(doc, position) {
         return Some(at);
     }
-    let byte = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
+    let byte = doc.source_utf16().to_byte(doc.source_offset(position));
     doc.shared_bindings.iter().find_map(|binding| {
         let occurrence = binding
             .occurrences
             .iter()
             .find(|occurrence| occurrence.src <= byte && byte <= occurrence.src_end)?;
         let within = (byte - occurrence.src).min(binding.out_end - binding.out);
-        Some(mapper::to_utf16(&doc.code, binding.out + within))
+        Some(doc.code_utf16().to_utf16(binding.out + within))
     })
 }
 
@@ -934,7 +1217,11 @@ pub(super) fn to_service_names(doc: &ServiceDoc, position: Position) -> Vec<usiz
     if let Some(at) = to_service_name(doc, position) {
         return vec![at];
     }
-    let byte = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
+    let at = doc.source_offset(position);
+    if recovery_intersects(doc, at, at + 1) {
+        return Vec::new();
+    }
+    let byte = doc.source_utf16().to_byte(doc.source_offset(position));
     doc.declared_names
         .iter()
         .filter(|name| name.src <= byte && byte <= name.src_end)
@@ -949,14 +1236,14 @@ pub(super) fn to_service_names(doc: &ServiceDoc, position: Position) -> Vec<usiz
 
 /// The source span (UTF-16) of the glue-declared name covering `position`.
 pub(super) fn declared_name_at(doc: &ServiceDoc, position: Position) -> Option<(usize, usize)> {
-    let byte = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
+    let byte = doc.source_utf16().to_byte(doc.source_offset(position));
     doc.declared_names
         .iter()
         .find(|name| name.src <= byte && byte <= name.src_end)
         .map(|name| {
             (
-                mapper::to_utf16(&doc.source, name.src),
-                mapper::to_utf16(&doc.source, name.src_end),
+                doc.source_utf16().to_utf16(name.src),
+                doc.source_utf16().to_utf16(name.src_end),
             )
         })
 }
@@ -965,37 +1252,55 @@ pub(super) fn declared_name_at(doc: &ServiceDoc, position: Position) -> Option<(
 /// ttc wrote (a generated binding, the type and constructor a `variant`
 /// becomes) is not the user's, and its mapped children take its place.
 pub(super) fn source_symbols(doc: &ServiceDoc, items: &[serde_json::Value]) -> Vec<DocumentSymbol> {
-    crate::stack::grow(|| source_symbols_grown(doc, items))
+    let code_lines = doc.service_lines();
+    let source_lines = doc.source_lines();
+    crate::stack::grow(|| source_symbols_grown(doc, items, &code_lines, &source_lines))
 }
 
-fn source_symbols_grown(doc: &ServiceDoc, items: &[serde_json::Value]) -> Vec<DocumentSymbol> {
+fn source_symbols_grown(
+    doc: &ServiceDoc,
+    items: &[serde_json::Value],
+    code_lines: &LineMap<'_>,
+    source_lines: &LineMap<'_>,
+) -> Vec<DocumentSymbol> {
     let mut out = Vec::new();
     for item in items {
-        let children = source_symbols(
-            doc,
-            item["children"]
-                .as_array()
-                .map(Vec::as_slice)
-                .unwrap_or_default(),
-        );
-        let offset = |value: &serde_json::Value| u16_offset(doc.service_code(), position_of(value));
+        let children = crate::stack::grow(|| {
+            source_symbols_grown(
+                doc,
+                item["children"]
+                    .as_array()
+                    .map(Vec::as_slice)
+                    .unwrap_or_default(),
+                code_lines,
+                source_lines,
+            )
+        });
+        let byte = |value: &serde_json::Value| byte_at(code_lines, position_of(value));
         let selection = &item["selectionRange"];
-        let Some((name_start, name_end)) =
-            from_service_span(doc, offset(&selection["start"]), offset(&selection["end"]))
-        else {
+        let name = match doc.coordinates {
+            CoordinateSpace::Authored => Some((byte(&selection["start"]), byte(&selection["end"]))),
+            CoordinateSpace::Projected => {
+                let (start, end) = (byte(&selection["start"]), byte(&selection["end"]));
+                mapper::to_source_span(&doc.mappings, start, end).or_else(|| {
+                    doc.shared_bindings
+                        .iter()
+                        .find(|binding| binding.out <= start && end <= binding.out_end)
+                        .and_then(|binding| binding.occurrences.first())
+                        .map(|occurrence| (occurrence.src, occurrence.src_end))
+                })
+            }
+        };
+        let Some((name_start, name_end)) = name else {
             out.extend(children);
             continue;
         };
         // The declaration's ends are the user's even when glue sits inside
         // it (a `match` in a function body); an end that is not keeps the
         // range to the name.
-        let point = |value: &serde_json::Value| {
-            if doc.coordinates == CoordinateSpace::Authored {
-                return Some(offset(value));
-            }
-            let byte = mapper::from_utf16(&doc.code, offset(value));
-            mapper::to_source_inclusive(&doc.mappings, byte)
-                .map(|source| mapper::to_utf16(&doc.source, source))
+        let point = |value: &serde_json::Value| match doc.coordinates {
+            CoordinateSpace::Authored => Some(byte(value)),
+            CoordinateSpace::Projected => mapper::to_source_inclusive(&doc.mappings, byte(value)),
         };
         let start = point(&item["range"]["start"]).map_or(name_start, |at| at.min(name_start));
         let end = point(&item["range"]["end"]).map_or(name_end, |at| at.max(name_end));
@@ -1003,16 +1308,54 @@ fn source_symbols_grown(doc: &ServiceDoc, items: &[serde_json::Value]) -> Vec<Do
             name: item["name"].as_str().unwrap_or_default().to_string(),
             detail: item["detail"].as_str().unwrap_or_default().to_string(),
             kind: item["kind"].as_u64().unwrap_or(13) as u32,
-            range: source_range(&doc.source, start, end),
-            selection_range: source_range(&doc.source, name_start, name_end),
+            range: Range {
+                start: byte_position(source_lines, start),
+                end: byte_position(source_lines, end),
+            },
+            selection_range: Range {
+                start: byte_position(source_lines, name_start),
+                end: byte_position(source_lines, name_end),
+            },
             children,
         });
     }
     // Lowering can move a declaration ahead of the text around it (a
-    // pattern binding hoisted above its `match`); the outline follows the
-    // source.
+    // pattern binding hoisted above its `match`, a local a `result` block
+    // declares); the outline follows the source. A declaration written
+    // inside another's source is that one's child, as TypeScript's
+    // navigation tree places what an initializer holds under its variable.
     out.sort_by_key(|symbol| (symbol.range.start.line, symbol.range.start.character));
-    out
+    let mut nested: Vec<DocumentSymbol> = Vec::with_capacity(out.len());
+    for symbol in out {
+        match nested.last_mut() {
+            Some(parent) if encloses(&parent.range, &symbol.range) => adopt(parent, symbol),
+            _ => nested.push(symbol),
+        }
+    }
+    in_source_order(&mut nested);
+    nested
+}
+
+/// Whether `outer` holds all of `inner` and more.
+fn encloses(outer: &Range, inner: &Range) -> bool {
+    let at = |position: &Position| (position.line, position.character);
+    outer != inner && at(&outer.start) <= at(&inner.start) && at(&inner.end) <= at(&outer.end)
+}
+
+/// Places `symbol` under the innermost of `parent`'s descendants holding it.
+fn adopt(parent: &mut DocumentSymbol, symbol: DocumentSymbol) {
+    match parent.children.last_mut() {
+        Some(child) if encloses(&child.range, &symbol.range) => adopt(child, symbol),
+        _ => parent.children.push(symbol),
+    }
+}
+
+/// Puts every level of `symbols` in source order.
+fn in_source_order(symbols: &mut [DocumentSymbol]) {
+    symbols.sort_by_key(|symbol| (symbol.range.start.line, symbol.range.start.character));
+    for symbol in symbols {
+        in_source_order(&mut symbol.children);
+    }
 }
 
 pub(super) fn source_tokens(
@@ -1023,6 +1366,7 @@ pub(super) fn source_tokens(
     let code_lines = LineMap::lsp(doc.service_code());
     let source_lines = LineMap::lsp(&doc.source);
     let mut out: Vec<ClassifiedToken> = Vec::new();
+    let mut seen = std::collections::HashSet::new();
     let (mut line, mut character) = (0u64, 0u64);
     for &[delta_line, delta_start, length, kind, bits] in data.as_chunks::<5>().0 {
         if delta_line > 0 {
@@ -1064,7 +1408,16 @@ pub(super) fn source_tokens(
                 token_type: token_type.clone(),
                 modifiers: modifiers.clone(),
             };
-            if !out.contains(&classified) {
+            let key = (
+                (
+                    classified.range.start.line,
+                    classified.range.start.character,
+                ),
+                (classified.range.end.line, classified.range.end.character),
+                classified.token_type.clone(),
+                classified.modifiers.clone(),
+            );
+            if seen.insert(key) {
                 out.push(classified);
             }
         }
@@ -1097,15 +1450,25 @@ fn token_sources(doc: &ServiceDoc, start: usize, end: usize) -> Vec<(usize, usiz
         .collect()
 }
 
+type RangeKey = ((u32, u32), (u32, u32));
+
 pub(super) fn merge_tokens(
     own: Vec<crate::engine::tokens::SemanticToken>,
     service: Vec<ClassifiedToken>,
 ) -> Vec<ClassifiedToken> {
-    let overlaps = |a: &Range, b: &Range| {
-        a.start.line == b.start.line
-            && a.start.character < b.end.character
-            && b.start.character < a.end.character
+    let key = |range: &Range| {
+        (
+            (range.start.line, range.start.character),
+            (range.end.line, range.end.character),
+        )
     };
+    // The service's modifiers for each range and type, first answer first.
+    let mut service_modifiers: HashMap<(RangeKey, &str), &[String]> = HashMap::new();
+    for other in &service {
+        service_modifiers
+            .entry((key(&other.range), other.token_type.as_str()))
+            .or_insert(&other.modifiers);
+    }
     let mut out: Vec<ClassifiedToken> = own
         .into_iter()
         .map(|token| {
@@ -1116,11 +1479,8 @@ pub(super) fn merge_tokens(
                 .iter()
                 .map(|m| m.to_string())
                 .collect();
-            if let Some(other) = service
-                .iter()
-                .find(|other| other.range == token.range && other.token_type == token_type)
-            {
-                for modifier in &other.modifiers {
+            if let Some(others) = service_modifiers.get(&(key(&token.range), token_type.as_str())) {
+                for modifier in *others {
                     if !modifiers.contains(modifier) {
                         modifiers.push(modifier.clone());
                     }
@@ -1133,12 +1493,37 @@ pub(super) fn merge_tokens(
             }
         })
         .collect();
-    let owned = out.len();
+    // tt's own tokens claim their columns: a service token on a line a tt
+    // token shares is kept only where no tt token overlaps it.
+    // Per line, tt's tokens by start column with the furthest end reached so
+    // far: a range overlaps one of them exactly when some token starting
+    // before the range's end ends after its start.
+    let mut owned_on: HashMap<u32, Vec<(u32, u32)>> = HashMap::new();
+    for own in &out {
+        owned_on
+            .entry(own.range.start.line)
+            .or_default()
+            .push((own.range.start.character, own.range.end.character));
+    }
+    for columns in owned_on.values_mut() {
+        columns.sort_unstable();
+        let mut furthest = 0;
+        for column in columns.iter_mut() {
+            furthest = furthest.max(column.1);
+            column.1 = furthest;
+        }
+    }
+    let overlaps_own = |range: &Range| {
+        owned_on.get(&range.start.line).is_some_and(|columns| {
+            crate::work::tick("token merge comparisons");
+            let before = columns.partition_point(|&(start, _)| start < range.end.character);
+            before
+                .checked_sub(1)
+                .is_some_and(|last| range.start.character < columns[last].1)
+        })
+    };
     for token in service {
-        if !out[..owned]
-            .iter()
-            .any(|own| overlaps(&own.range, &token.range))
-        {
+        if !overlaps_own(&token.range) {
             out.push(token);
         }
     }
@@ -1160,12 +1545,12 @@ pub(super) fn from_service_span(
 }
 
 fn from_projected_span(doc: &ServiceDoc, start: usize, end: usize) -> Option<(usize, usize)> {
-    let sb = mapper::from_utf16(&doc.code, start);
-    let eb = mapper::from_utf16(&doc.code, end);
+    let sb = doc.code_utf16().to_byte(start);
+    let eb = doc.code_utf16().to_byte(end);
     let (ss, se) = mapper::to_source_span(&doc.mappings, sb, eb)?;
     Some((
-        mapper::to_utf16(&doc.source, ss),
-        mapper::to_utf16(&doc.source, se),
+        doc.source_utf16().to_utf16(ss),
+        doc.source_utf16().to_utf16(se),
     ))
 }
 
@@ -1174,16 +1559,10 @@ pub(super) fn declared_name_span(
     start: usize,
     end: usize,
 ) -> Option<(usize, usize)> {
-    let sb = mapper::from_utf16(&doc.code, start);
-    let eb = mapper::from_utf16(&doc.code, end);
-    let name = doc
-        .declared_names
+    doc.declared_names
         .iter()
-        .find(|name| name.out == sb && name.out_end == eb)?;
-    Some((
-        mapper::to_utf16(&doc.source, name.src),
-        mapper::to_utf16(&doc.source, name.src_end),
-    ))
+        .find(|name| name.out == start && name.out_end == end)
+        .map(|name| (name.src, name.src_end))
 }
 
 /// A TypeScript diagnostic span translated back to source UTF-16 offsets.
@@ -1193,7 +1572,7 @@ pub(super) fn declared_name_span(
 /// the language service follows the same policy.
 /// The construct whose glue a served-text UTF-16 offset falls in.
 pub(super) fn glue_anchor(doc: &ServiceDoc, utf16_start: usize) -> Option<crate::EmitAnchor> {
-    let out = mapper::from_utf16(&doc.code, utf16_start);
+    let out = doc.code_utf16().to_byte(utf16_start);
     doc.anchors
         .iter()
         .find(|a| a.out <= out && out < a.end)
@@ -1227,8 +1606,8 @@ pub(super) fn projected_service_diagnostics(
             let tags = item["tags"].as_array();
             EditorDiagnostic {
                 file: module.clone(),
-                start: u16_offset(&doc.code, position_of(&item["range"]["start"])),
-                end: u16_offset(&doc.code, position_of(&item["range"]["end"])),
+                start: doc.code_offset(position_of(&item["range"]["start"])),
+                end: doc.code_offset(position_of(&item["range"]["end"])),
                 code: item["code"].as_u64().unwrap_or(0) as u32,
                 message: item["message"].as_str().unwrap_or_default().to_string(),
                 category: match item["severity"].as_u64() {
@@ -1247,11 +1626,8 @@ pub(super) fn projected_service_diagnostics(
                     .filter(|entry| entry["location"]["uri"].as_str() == Some(served.as_str()))
                     .map(|entry| RelatedInformation {
                         file: module.clone(),
-                        start: u16_offset(
-                            &doc.code,
-                            position_of(&entry["location"]["range"]["start"]),
-                        ),
-                        end: u16_offset(&doc.code, position_of(&entry["location"]["range"]["end"])),
+                        start: doc.code_offset(position_of(&entry["location"]["range"]["start"])),
+                        end: doc.code_offset(position_of(&entry["location"]["range"]["end"])),
                         message: entry["message"].as_str().unwrap_or_default().to_string(),
                     })
                     .collect(),
@@ -1265,8 +1641,11 @@ pub(super) fn diagnostic_source_span(
     start: usize,
     end: usize,
 ) -> Option<(usize, usize, mapper::DiagnosticOrigin)> {
-    let sb = mapper::from_utf16(&doc.code, start);
-    let eb = mapper::from_utf16(&doc.code, end);
+    let sb = doc.code_utf16().to_byte(start);
+    let eb = doc.code_utf16().to_byte(end);
+    if crate::engine::projection::restated(&doc.restatements, sb, eb) {
+        return None;
+    }
     let origin = match doc
         .destructured_lists
         .iter()
@@ -1276,9 +1655,19 @@ pub(super) fn diagnostic_source_span(
             start: list.src,
             end: list.src_end,
         },
-        None => {
-            mapper::diagnostic_origin(&doc.mappings, &doc.anchors, sb, eb, &doc.code, &doc.source)?
-        }
+        None => match mapper::shared_binding_origin(&doc.shared_bindings, sb, eb)
+            .or_else(|| mapper::relocated_origin(&doc.mappings, &doc.relocated_operands, sb, eb))
+        {
+            Some(origin) => origin,
+            None => mapper::diagnostic_origin(
+                &doc.mappings,
+                &doc.anchors,
+                sb,
+                eb,
+                &doc.code,
+                &doc.source,
+            )?,
+        },
     };
     let (start, end) = match origin {
         mapper::DiagnosticOrigin::Exact { start, end } => (start, end),
@@ -1286,8 +1675,8 @@ pub(super) fn diagnostic_source_span(
         mapper::DiagnosticOrigin::Nearest { start } => (start, start.saturating_add(1)),
     };
     Some((
-        mapper::to_utf16(&doc.source, start),
-        mapper::to_utf16(&doc.source, end),
+        doc.source_utf16().to_utf16(start),
+        doc.source_utf16().to_utf16(end),
         origin,
     ))
 }
@@ -1295,8 +1684,8 @@ pub(super) fn diagnostic_source_span(
 pub(super) fn recovery_intersects(doc: &ServiceDoc, start: usize, end: usize) -> bool {
     let end = end.max(start + 1);
     doc.recovered.iter().any(|&(recovery_start, recovery_end)| {
-        let recovery_start = mapper::to_utf16(&doc.source, recovery_start);
-        let recovery_end = mapper::to_utf16(&doc.source, recovery_end);
+        let recovery_start = doc.source_utf16().to_utf16(recovery_start);
+        let recovery_end = doc.source_utf16().to_utf16(recovery_end);
         start < recovery_end && recovery_start < end
     })
 }
@@ -1508,6 +1897,22 @@ pub(super) struct Discriminant {
     value: crate::ast::LiteralValue,
 }
 
+impl Discriminant {
+    /// The literal `true` or `false`, which TypeScript completes only as a
+    /// keyword whatever the type.
+    pub(super) fn boolean(value: bool) -> Discriminant {
+        Discriminant {
+            label: value.to_string(),
+            written: value.to_string(),
+            value: crate::ast::LiteralValue::Bool(value),
+        }
+    }
+
+    pub(super) fn label(&self) -> &str {
+        &self.label
+    }
+}
+
 pub(super) fn discriminant(
     label: &str,
     family: crate::engine::completions::PatternFamily,
@@ -1552,6 +1957,7 @@ pub(super) fn arm_candidates(
     typed: Vec<Discriminant>,
     covered: &[String],
     literals: &[crate::ast::LiteralValue],
+    wildcard: bool,
 ) -> Vec<crate::engine::TtCompletion> {
     use crate::engine::TtCompletionKind;
     use crate::engine::completions::PatternFamily;
@@ -1586,7 +1992,9 @@ pub(super) fn arm_candidates(
         };
         out.push(item);
     }
-    out.push(crate::engine::completions::wildcard());
+    if wildcard {
+        out.push(crate::engine::completions::wildcard());
+    }
     out
 }
 
@@ -1604,12 +2012,23 @@ pub(super) fn is_payload_field(label: &str, written: &[String]) -> bool {
         )
 }
 
+/// The payload fields to offer: the parse-only ones, and, when TypeScript
+/// answered for the scrutinee's own type, exactly the fields it lists — a
+/// declaration the pattern's tag resembles is not the scrutinee's type.
 pub(super) fn field_candidates(
     parsed: Vec<crate::engine::TtCompletion>,
-    typed: Vec<String>,
+    typed: Option<Vec<String>>,
     written: &[String],
 ) -> Vec<crate::engine::TtCompletion> {
-    let mut out = parsed;
+    let Some(typed) = typed else {
+        return parsed;
+    };
+    let mut out: Vec<crate::engine::TtCompletion> = parsed
+        .into_iter()
+        .filter(|item| {
+            item.kind != crate::engine::TtCompletionKind::Field || typed.contains(&item.label)
+        })
+        .collect();
     for name in typed {
         if !is_payload_field(&name, written) || out.iter().any(|item| item.label == name) {
             continue;

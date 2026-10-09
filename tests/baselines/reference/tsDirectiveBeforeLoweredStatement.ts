@@ -41,10 +41,8 @@ function letElse(s: S) {
 }
 function laterLine(s: S) {
   // @ts-expect-error -- the declaration, on the first line, is a string
-  const u: number = match (s) {
-    A(n) => n,
-    B => 0,
-  } + "";
+  const u: number = match (s) { A(n) => n, B => 0 }
+    + "";
   return u;
 }
 /** The documented value. */
@@ -120,7 +118,7 @@ function tryOperand(r: (n: number) => TResult<string, string>): TResult<string, 
 }
 const block = (r: TResult<string, string>) => {
   // @ts-expect-error -- a string where a number is declared
-  let $tt_v2: (Result.TErr<string>) | ({ kind: "Ok"; value: string; }); $tt_v2: { const $tt_t2 = r; if (!("value" in $tt_t2)) { $tt_v2 = $tt_t2; break $tt_v2; } const v = $tt_t2.value; { const $tt_a0 = { value: { kind: "Ok" as const, value: v } }; $tt_v2 = $tt_a0.value; break $tt_v2; } } const w: number = $tt_v2.kind === "Ok" ? "ok" : 0;
+  let $tt_v2: (Result.TErr<string>) | ({ kind: "Ok"; value: string; }); $tt_v2: { const $tt_t2 = r; if (!("value" in $tt_t2)) { $tt_v2 = $tt_t2; break $tt_v2; } const v = $tt_t2.value; { $tt_v2 = { kind: "Ok" as const, value: v }; break $tt_v2; } } const w: number = $tt_v2.kind === "Ok" ? "ok" : 0;
   return w;
 };
 function letElse(s: S) {
@@ -130,7 +128,8 @@ function letElse(s: S) {
 }
 function laterLine(s: S) {
   // @ts-expect-error -- the declaration, on the first line, is a string
-  let $tt_v3: number; { const $tt_m = s; switch ($tt_m.kind) { case "A": { const { n } = $tt_m; $tt_v3 = n; break; } case "B": { $tt_v3 = 0; break; } default: { throw new Error("tt match: unexpected case " + $tt_show($tt_m)); } } } const u: number = $tt_v3 + "";
+  let $tt_v3: number; { const $tt_m = s; switch ($tt_m.kind) { case "A": { const { n } = $tt_m; $tt_v3 = n; break; } case "B": { $tt_v3 = 0; break; } default: { throw new Error("tt match: unexpected case " + $tt_show($tt_m)); } } } const u: number = $tt_v3
+    + "";
   return u;
 }
 let $tt_v4: number;

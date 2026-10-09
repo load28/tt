@@ -15,6 +15,7 @@ pub(super) struct Emitter<'a> {
     pub(super) core: &'a CoreFile,
     pub(super) source: &'a str,
     pub(super) source_kind: SourceKind,
+    pub(super) tokens: &'a [crate::lexer::Token],
     pub(super) direct_apply_inputs: HashSet<ExprId>,
     pub(super) member_apply_steps: HashMap<ExprId, crate::program_syntax::MemberCallee>,
     pub(super) reference_apply_steps: HashSet<ExprId>,
@@ -35,6 +36,7 @@ pub(super) struct Emitter<'a> {
     pub(super) loop_test_rewrites: Vec<LoopTestRewrite>,
     pub(super) loop_body_index: crate::span_index::SpanIndex,
     pub(super) active_capture_sources: RefCell<Vec<SourceSpan>>,
+    pub(super) rebuilt_sources: RefCell<Vec<SourceSpan>>,
     /// The values of the conditional operation being written that are
     /// already in their slots: a later capture in the same branch reads a
     /// value there instead of evaluating it again. Outside the operation its
@@ -42,6 +44,19 @@ pub(super) struct Emitter<'a> {
     pub(super) delivered_conditional_values: RefCell<HashSet<ExprId>>,
     pub(super) source_replacements: Vec<SourceReplacement>,
     pub(super) replacement_index: crate::span_index::SpanIndex,
+    pub(super) replacement_order: crate::span_index::NestedOrder,
+    pub(super) claim_order: (crate::span_index::NestedOrder, Vec<usize>),
+    pub(super) value_order: std::cell::OnceCell<(crate::span_index::NestedOrder, Vec<ExprId>)>,
+    pub(super) slot_value_order: std::cell::OnceCell<(crate::span_index::NestedOrder, Vec<ExprId>)>,
+    pub(super) nested_input_order:
+        std::cell::OnceCell<(crate::span_index::NestedOrder, Vec<NestedInput>)>,
+    pub(super) piped_steps: std::cell::OnceCell<HashMap<usize, (ExprId, usize)>>,
+    pub(super) deferred_arm_values: std::cell::OnceCell<HashSet<ExprId>>,
+    pub(super) slots_named:
+        std::cell::OnceCell<HashMap<String, Vec<crate::evaluation_ir::ValueSlotId>>>,
+    pub(super) statement_order:
+        std::cell::OnceCell<(crate::span_index::NestedOrder, Vec<(usize, usize)>)>,
+    pub(super) claimed_frames: std::collections::BTreeMap<usize, Vec<(usize, usize)>>,
     pub(super) consumed_exprs: HashSet<ExprId>,
     pub(super) arrow_return_rewrites: Vec<ArrowReturnRewrite>,
     pub(super) arrow_returns_by_expr: HashMap<ExprId, usize>,
@@ -62,6 +77,12 @@ pub(super) struct Emitter<'a> {
     pub(super) expression_boundary_name: String,
     pub(super) match_raise_name: String,
     pub(super) match_show_name: String,
+    pub(super) spread_name: String,
+    pub(super) guarded_if_tests: HashMap<SourceSpan, crate::program_syntax::IfTestFacts>,
+    pub(super) anonymous_functions: Vec<SourceSpan>,
+    pub(super) function_names: Vec<(SourceSpan, String)>,
+    pub(super) discarded_values: HashSet<ExprId>,
+    pub(super) if_test_closings: RefCell<Vec<(usize, String)>>,
     pub(super) host_error: String,
     pub(super) host_json: String,
     pub(super) host_string: String,
@@ -85,6 +106,7 @@ pub(super) struct Emitter<'a> {
     pub(super) ambient_items: HashSet<NodeId>,
     pub(super) used_match_raise: Cell<bool>,
     pub(super) used_match_show: Cell<bool>,
+    pub(super) used_spread: Cell<bool>,
     pub(super) used_host_error: Cell<bool>,
     /// How many conditional-operation regions are being emitted right now.
     /// Inside one, the operation's own host replacement does not apply —
@@ -126,6 +148,28 @@ impl<'a> Emitter<'a> {
     /// ([`crate::core_ir::DecisionArm::gap`]), each on a line of its own at
     /// `depth`, and says whether there were any. A line comment there ends
     /// its line, so what follows starts on the next one.
+    pub(super) fn keyword_gap(
+        &self,
+        node: NodeId,
+        keyword: &str,
+        operand: ExprId,
+    ) -> Option<SourceSpan> {
+        let start = self.span(node).start;
+        if !self.source[start..].starts_with(keyword) {
+            return None;
+        }
+        let end = super::structured_expr_span(self.semantic, self.core, operand)
+            .map(|span| span.start)
+            .or_else(|| match &self.core.exprs[operand.index()] {
+                Expr::Opaque(node) => Some(self.span(*node).start),
+                _ => None,
+            })?;
+        (start + keyword.len() < end).then_some(SourceSpan {
+            start: start + keyword.len(),
+            end,
+        })
+    }
+
     pub(super) fn push_gap_comments(
         &self,
         gap: Option<crate::hir::Span>,
@@ -151,13 +195,50 @@ impl<'a> Emitter<'a> {
         depth: u16,
         out: &mut Rope<'a>,
     ) -> bool {
+        let arrow = self.arm_arrow_end(arm);
         let mut written = false;
-        for comment in head_comments(self.comments, &arm.head) {
+        for comment in head_comments(self.comments, &arm.head)
+            .filter(|comment| arrow.is_none_or(|arrow| comment.start < arrow))
+        {
             out.push_break(depth);
             out.push_src(&self.source[comment.start..comment.end], comment.start);
             written = true;
         }
         written
+    }
+
+    pub(super) fn push_arrow_comments(
+        &self,
+        arm: &crate::core_ir::DecisionArm,
+        depth: u16,
+        out: &mut Rope<'a>,
+    ) -> bool {
+        let Some(arrow) = self.arm_arrow_end(arm) else {
+            return false;
+        };
+        let mut written = false;
+        for comment in
+            head_comments(self.comments, &arm.head).filter(|comment| comment.start >= arrow)
+        {
+            out.push_src(&self.source[comment.start..comment.end], comment.start);
+            out.push_break(depth);
+            written = true;
+        }
+        written
+    }
+
+    fn arm_arrow_end(&self, arm: &crate::core_ir::DecisionArm) -> Option<usize> {
+        let span = arm.head.last()?;
+        let bytes = self.source.as_bytes();
+        let mut at = span.start;
+        while at < span.end {
+            let (token, _) = crate::scanner::skip_trivia(bytes, at, span.end);
+            if bytes[token..span.end].starts_with(b"=>") {
+                return Some(token + 2);
+            }
+            at = token + 1;
+        }
+        None
     }
 
     pub(super) fn relocated_documentation(&self, statement: usize) -> Option<Rope<'a>> {
@@ -193,6 +274,49 @@ impl Emitter<'_> {
     }
 }
 
+/// One source input a nested schedule captures, or the comma after a
+/// discarded one.
+pub(super) struct NestedInput {
+    pub(super) step: PlannedEvaluationStep,
+    pub(super) input: PlannedEvaluationInput,
+    pub(super) comma: bool,
+}
+
+/// The slots one emission has captured, and the input segments whose
+/// captures it has written: a segment's inputs are all captured once it is
+/// written, so a later step that shares it has nothing left to write there.
+#[derive(Default)]
+pub(super) struct CapturedSlots {
+    slots: HashSet<crate::evaluation_ir::ValueSlotId>,
+    written: HashSet<usize>,
+}
+
+impl CapturedSlots {
+    pub(super) fn unwritten<'s>(
+        &mut self,
+        inputs: &'s crate::chain::Segments<PlannedEvaluationInput>,
+    ) -> (usize, Vec<&'s PlannedEvaluationInput>) {
+        let (segments, unwritten) = inputs.unseen(&self.written);
+        self.written.extend(segments);
+        let skipped = inputs.len() - unwritten.len();
+        (skipped, unwritten)
+    }
+}
+
+impl std::ops::Deref for CapturedSlots {
+    type Target = HashSet<crate::evaluation_ir::ValueSlotId>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.slots
+    }
+}
+
+impl std::ops::DerefMut for CapturedSlots {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.slots
+    }
+}
+
 /// A recursion stack whose guard never holds a `RefCell` borrow while target
 /// emission calls back into itself. This state belongs to the emitter rather
 /// than a single Core walk because opaque source scanning and structured
@@ -200,28 +324,74 @@ impl Emitter<'_> {
 #[derive(Default)]
 pub(super) struct ActiveExprStack {
     exprs: RefCell<Vec<ExprId>>,
+    counts: RefCell<HashMap<ExprId, usize>>,
+    anchors: RefCell<std::collections::BTreeMap<(usize, usize), usize>>,
 }
 
 impl ActiveExprStack {
     fn contains(&self, expr: ExprId) -> bool {
-        self.exprs.borrow().contains(&expr)
+        self.counts.borrow().contains_key(&expr)
     }
 
-    fn enter(&self, expr: ExprId) -> ActiveExprGuard<'_> {
+    fn enter_anchored(&self, expr: ExprId, anchor: Option<(usize, usize)>) -> ActiveExprGuard<'_> {
         self.exprs.borrow_mut().push(expr);
-        ActiveExprGuard { stack: self, expr }
+        *self.counts.borrow_mut().entry(expr).or_default() += 1;
+        if let Some(anchor) = anchor {
+            *self.anchors.borrow_mut().entry(anchor).or_default() += 1;
+        }
+        ActiveExprGuard {
+            stack: self,
+            expr,
+            anchor,
+        }
+    }
+
+    pub(super) fn innermost_anchor_end(&self, at: usize) -> Option<usize> {
+        self.anchors
+            .borrow()
+            .range(..=(at, usize::MAX))
+            .rev()
+            .find(|((_, end), _)| *end > at)
+            .map(|((_, end), _)| *end)
+    }
+
+    pub(super) fn any_anchor_within(&self, start: usize, end: usize) -> bool {
+        start <= end
+            && self
+                .anchors
+                .borrow()
+                .range((start, 0)..=(end, usize::MAX))
+                .rev()
+                .any(|((_, anchor_end), _)| *anchor_end <= end)
     }
 }
 
-struct ActiveExprGuard<'stack> {
+pub(super) struct ActiveExprGuard<'stack> {
     stack: &'stack ActiveExprStack,
     expr: ExprId,
+    anchor: Option<(usize, usize)>,
 }
 
 impl Drop for ActiveExprGuard<'_> {
     fn drop(&mut self) {
         let popped = self.stack.exprs.borrow_mut().pop();
         debug_assert_eq!(popped, Some(self.expr));
+        let mut counts = self.stack.counts.borrow_mut();
+        if let Some(count) = counts.get_mut(&self.expr) {
+            *count -= 1;
+            if *count == 0 {
+                counts.remove(&self.expr);
+            }
+        }
+        if let Some(anchor) = self.anchor {
+            let mut anchors = self.stack.anchors.borrow_mut();
+            if let Some(count) = anchors.get_mut(&anchor) {
+                *count -= 1;
+                if *count == 0 {
+                    anchors.remove(&anchor);
+                }
+            }
+        }
     }
 }
 
@@ -278,7 +448,8 @@ enum ValueDestination<'name> {
     /// slot) that seeds the region's exit label when a rewritten exit sits
     /// inside a `break`-capturing statement.
     Invoke {
-        prefix: &'name str,
+        prefix: &'name AuthoredText,
+        close: &'name AuthoredText,
         /// The authored literal the value sits inside, split at the value.
         /// Each arm re-emits both halves around its own value, as source, so
         /// the arm value lands in the consumer's contextual position and the
@@ -337,7 +508,8 @@ impl<'name> ValueContinuation<'name> {
     }
 
     fn invoke(
-        prefix: &'name str,
+        prefix: &'name AuthoredText,
+        close: &'name AuthoredText,
         frame: Option<(SourceSpan, SourceSpan)>,
         result: Option<&'name str>,
         label: &'name str,
@@ -345,6 +517,7 @@ impl<'name> ValueContinuation<'name> {
         Self {
             destination: ValueDestination::Invoke {
                 prefix,
+                close,
                 frame,
                 result,
                 label,
@@ -391,7 +564,7 @@ impl<'name> ValueContinuation<'name> {
     /// This builds a string, so it can carry no source mapping. A framed
     /// completion has authored bytes to place and is refused for any match
     /// that reaches this path (`all_arms_are_expressions`).
-    fn assignment_prefix(&self, grouped: bool) -> String {
+    fn assignment_prefix(&self, source: &str, grouped: bool) -> String {
         if let ValueDestination::Invoke { frame: Some(_), .. } = self.destination {
             crate::ice::bug!("a framed completion cannot rewrite an exit")
         }
@@ -402,12 +575,12 @@ impl<'name> ValueContinuation<'name> {
                 prefix,
                 result: Some(result),
                 ..
-            } => format!("{result} = {prefix}"),
+            } => format!("{result} = {}", prefix.text(source)),
             ValueDestination::Invoke {
                 prefix,
                 result: None,
                 ..
-            } => prefix.to_owned(),
+            } => prefix.text(source),
             ValueDestination::Expression => {
                 crate::ice::bug!("inline expression continuation cannot rewrite an exit")
             }
@@ -425,7 +598,13 @@ impl<'name> ValueContinuation<'name> {
         prefix
     }
 
-    fn assignment_suffix(&self, grouped: bool) -> String {
+    /// Whether the delivery gives an anonymous function definition a name:
+    /// an assignment to the slot, or the `value` property of a wrapper.
+    fn names_value(&self) -> bool {
+        matches!(self.destination, ValueDestination::Assign(_)) || !self.wrappers.is_empty()
+    }
+
+    fn assignment_suffix(&self, source: &str, grouped: bool) -> String {
         let mut suffix = String::new();
         if grouped {
             suffix.push(')');
@@ -433,8 +612,8 @@ impl<'name> ValueContinuation<'name> {
         for _ in self.wrappers.iter().rev() {
             suffix.push_str(" }");
         }
-        if matches!(self.destination, ValueDestination::Invoke { .. }) {
-            suffix.push(')');
+        if let ValueDestination::Invoke { close, .. } = self.destination {
+            suffix.push_str(&close.text(source));
         }
         suffix
     }
@@ -464,6 +643,26 @@ fn push_control_break(out: &mut Rope<'_>, depth: u16, label: Option<&str>) {
     match label {
         Some(label) => out.push_lit(format!("break {label};")),
         None => out.push_lit("break;"),
+    }
+}
+
+impl<'a> Emitter<'a> {
+    /// `if (<test>) {` for a propagation, its test anchored as the `try`'s.
+    pub(super) fn push_failure_test(&self, propagate: &Propagate, temp: &str, out: &mut Rope<'a>) {
+        let span = self.span(propagate.node);
+        let mut test = Rope::new();
+        test.push_lit(result_failure_test(temp, propagate.layout));
+        out.push_lit("if (");
+        out.anchored(AnchorKind::TryTest, span.start, span.end, span.end, test);
+        out.push_lit(") {");
+    }
+
+    /// `exit` anchored as the early exit of a propagation's failure.
+    pub(super) fn anchored_failure_exit(&self, propagate: &Propagate, exit: Rope<'a>) -> Rope<'a> {
+        let span = self.span(propagate.node);
+        let mut out = Rope::new();
+        out.anchored(AnchorKind::TryExit, span.start, span.end, span.end, exit);
+        out
     }
 }
 
@@ -516,7 +715,12 @@ pub(super) fn gap_comments(
     comments: &[crate::ast::Span],
     gap: Option<crate::hir::Span>,
 ) -> impl Iterator<Item = &crate::ast::Span> {
-    comments.iter().filter(move |comment| {
-        gap.is_some_and(|gap| gap.start <= comment.start && comment.end <= gap.end)
-    })
+    let within = gap.map_or(&comments[..0], |gap| {
+        let first = comments.partition_point(|comment| comment.start < gap.start);
+        let last = first + comments[first..].partition_point(|comment| comment.start < gap.end);
+        &comments[first..last]
+    });
+    within
+        .iter()
+        .filter(move |comment| gap.is_some_and(|gap| comment.end <= gap.end))
 }

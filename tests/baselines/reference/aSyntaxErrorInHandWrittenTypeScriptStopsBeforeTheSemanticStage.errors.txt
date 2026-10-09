@@ -1,10 +1,12 @@
 ==== ttc --out-dir (exit 1) ====
 ttc: ./a.tt → $DIR/out/a.ts
-error[verify-failed]: generated TypeScript failed to parse: unbalanced TypeScript delimiter. This is either invalid TypeScript passed through from the source or a ttc bug; use --no-verify to bypass.
+error[verify-failed]: generated TypeScript failed to parse: unbalanced TypeScript delimiter. This is either invalid TypeScript passed through from the source or a ttc bug.
  --> ./b.ts:1:18
   |
 1 | export const y = (1;
   |                  ^
+  |
+  = help: use --no-verify to bypass
 
 
 ==== ttc --check-types (exit 1) ====

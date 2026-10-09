@@ -1,0 +1,38 @@
+=== aDirectiveAboveAMultiLineMatchGovernsItsFirstLineOnly.tt ===
+variant S { A(n: number), B }
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => S
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+declare const s: S;
+>s : const s: S
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+export function f() {
+>f : function f(): (string | number)[]
+  const v: string = match (s) {
+>v : const v: string
+>s : const s: S
+    A(n) => n,
+>n : const n: number
+>n : const n: number
+  const w: number = match (s) { A(n) => n, B => "b" };
+>w : const w: number
+>s : const s: S
+>n : const n: number
+>n : const n: number
+  return [v, w];
+>v : const v: string
+>w : const w: number
+

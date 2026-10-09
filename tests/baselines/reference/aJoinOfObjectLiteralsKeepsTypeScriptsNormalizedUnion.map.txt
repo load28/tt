@@ -1,0 +1,17 @@
+//// [main.tt] 15 mapping(s)
+1:18 -> 20:21 len 6  "number"
+1:18 -> 23:10 len 6  "number"
+1:30 -> 25:3 len 22  "\nfunction f(o: O) {\n  "
+3:3 -> 45:3 len 10  "const x = "
+3:20 -> 29:19 len 1  "o"
+3:27 -> 32:17 len 1  "n"
+3:33 -> 33:18 len 10  "({ a: n })"
+3:50 -> 37:18 len 12  "({ b: \"x\" })"
+3:64 -> 45:19 len 46  ";\n  return [x.a, x.b];\n}\nfunction g(o: O) {\n  "
+7:3 -> 67:3 len 10  "const y = "
+7:20 -> 51:19 len 1  "o"
+7:27 -> 54:17 len 1  "n"
+7:33 -> 55:18 len 21  "({ inner: { p: n } })"
+7:61 -> 59:18 len 23  "({ inner: { q: \"y\" } })"
+7:86 -> 67:19 len 106  ";\n  return [y.inner.p, y.inner.q];\n}\nconsole.log"...
+

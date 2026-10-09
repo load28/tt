@@ -209,11 +209,16 @@ fn apply(emit: &mut MappedEmit, edits: &[Edit]) {
         }
         mapping.out = shifted(edits, mapping.out, true);
     }
+    debug_assert!(crate::typescript::mapper::in_output_order(&emit.mappings));
     for mark in &mut emit.scrutinee_temps {
         mark.out = shifted(edits, mark.out, true);
     }
     for mark in &mut emit.payload_temps {
         mark.out = shifted(edits, mark.out, true);
+        mark.tag = (
+            shifted(edits, mark.tag.0, true),
+            shifted(edits, mark.tag.1, false),
+        );
     }
     for mark in &mut emit.result_return_temps {
         mark.out = shifted(edits, mark.out, true);
@@ -231,6 +236,10 @@ fn apply(emit: &mut MappedEmit, edits: &[Edit]) {
         list.out = shifted(edits, list.out, true);
         list.out_end = shifted(edits, list.out_end, false);
     }
+    for operand in &mut emit.relocated_operands {
+        operand.out = shifted(edits, operand.out, true);
+        operand.out_end = shifted(edits, operand.out_end, false);
+    }
     for glue in &mut emit.inserted {
         glue.out = shifted(edits, glue.out, true);
         glue.out_end = shifted(edits, glue.out_end, false);
@@ -238,6 +247,10 @@ fn apply(emit: &mut MappedEmit, edits: &[Edit]) {
     for anchor in &mut emit.anchors {
         anchor.out = shifted(edits, anchor.out, true);
         anchor.end = shifted(edits, anchor.end, false);
+    }
+    for (start, end) in &mut emit.restatements {
+        *start = shifted(edits, *start, true);
+        *end = shifted(edits, *end, false);
     }
     for (slot, annotation) in &mut emit.asserted_slots {
         *slot = shifted(edits, *slot, true);
@@ -273,7 +286,9 @@ struct StorageWrite {
 /// it is given, so the `any` of undeclared storage would change it.
 ///
 /// The checker consults the contextual type in typing an object literal
-/// (its properties, and `this` in its methods), an array literal (its
+/// (the properties whose values it types from context, and `this` in its
+/// methods and accessors; a property of any other value is typed as it is
+/// without one, since `any` keeps no literal type), an array literal (its
 /// elements) and a function or arrow function (its parameters, and its
 /// return expressions); `getContextualType` passes a position's contextual
 /// type on to the operand of parentheses, `as const`, a non-null assertion
@@ -290,7 +305,17 @@ fn typed_by_context(value: &Expr) -> bool {
 fn typed_by_context_grown(value: &Expr) -> bool {
     use swc_ecma_ast::BinaryOp;
     match value {
-        Expr::Object(_) | Expr::Array(_) | Expr::Fn(_) | Expr::Arrow(_) => true,
+        Expr::Object(object) => object.props.iter().any(|prop| match prop {
+            swc_ecma_ast::PropOrSpread::Spread(_) => false,
+            swc_ecma_ast::PropOrSpread::Prop(prop) => match &**prop {
+                swc_ecma_ast::Prop::KeyValue(property) => typed_by_context(&property.value),
+                swc_ecma_ast::Prop::Getter(_)
+                | swc_ecma_ast::Prop::Setter(_)
+                | swc_ecma_ast::Prop::Method(_) => true,
+                swc_ecma_ast::Prop::Shorthand(_) | swc_ecma_ast::Prop::Assign(_) => false,
+            },
+        }),
+        Expr::Array(_) | Expr::Fn(_) | Expr::Arrow(_) => true,
         Expr::Paren(inner) => typed_by_context(&inner.expr),
         Expr::TsConstAssertion(inner) => typed_by_context(&inner.expr),
         Expr::TsNonNull(inner) => typed_by_context(&inner.expr),

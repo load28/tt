@@ -121,6 +121,8 @@ function optional(o: O | undefined, k: K) {
 >   }
   const s: string | undefined = o?.id(match (pick(k)) { A => o.name, B => "b" });
 >s : const s: string | undefined
+>o : (parameter) o: O | undefined
+>id : (method) id<string>(x: string): string
 >pick : function pick(k: K): K
 >k : (parameter) k: K
 >o : (parameter) o: O

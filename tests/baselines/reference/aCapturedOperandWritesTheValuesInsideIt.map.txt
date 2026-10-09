@@ -1,0 +1,20 @@
+//// [aCapturedOperandWritesTheValuesInsideIt.tt] 18 mapping(s)
+1:1 -> 1:1 len 352  "import * as Result from \"@tt/std/result\";\nimport"...
+7:3 -> 29:3 len 7  "return "
+7:10 -> 8:33 len 5  "apply"
+7:15 -> 29:16 len 2  "(("
+7:25 -> 9:20 len 16  "((w: number) => "
+7:41 -> 19:12 len 1  "("
+7:57 -> 17:13 len 1  "z"
+7:65 -> 12:22 len 4  "r(w)"
+7:69 -> 17:29 len 2  "; "
+7:78 -> 17:72 len 5  "z * 2"
+7:86 -> 19:19 len 1  ")"
+7:87 -> 20:4 len 1  ")"
+7:88 -> 29:24 len 3  "), "
+7:106 -> 27:11 len 1  "z"
+7:114 -> 22:20 len 4  "r(k)"
+7:118 -> 27:27 len 2  "; "
+7:127 -> 27:70 len 1  "z"
+7:131 -> 29:33 len 30  ");\n}\nconsole.log(f(3), f(0));\n"
+

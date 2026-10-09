@@ -1,0 +1,30 @@
+=== definition /*named*/ use.tt:1:28 ===
+  | import { Shape } from "./shape.tt";
+  |                            ^ /*named*/
+definition: 1 location(s)
+  shape.tt 1:1-1:1 ""
+
+=== definition /*dynamic*/ use.tt:2:30 ===
+  | export const q = import("./shape.tt");
+  |                              ^ /*dynamic*/
+definition: 1 location(s)
+  shape.tt 1:1-1:1 ""
+
+=== definition /*typeQuery*/ use.tt:3:36 ===
+  | export type T = typeof import("./shape.tt");
+  |                                    ^ /*typeQuery*/
+definition: 1 location(s)
+  shape.tt 1:1-2:20 "export variant Shape { Circle(radius: number), Point }\nexport const k = 1;"
+
+=== definition /*reexport*/ use.tt:4:24 ===
+  | export { k } from "./shape.tt";
+  |                        ^ /*reexport*/
+definition: 1 location(s)
+  shape.tt 1:1-2:20 "export variant Shape { Circle(radius: number), Point }\nexport const k = 1;"
+
+=== definition /*fromTs*/ use.ts:1:28 ===
+  | import { Shape } from "./shape.tt";
+  |                            ^ /*fromTs*/
+definition: 1 location(s)
+  shape.tt 1:1-1:1 ""
+

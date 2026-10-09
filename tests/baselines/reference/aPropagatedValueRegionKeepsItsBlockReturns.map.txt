@@ -3,18 +3,18 @@
 6:11 -> 37:11 len 1  "q"
 6:34 -> 31:13 len 1  "w"
 6:42 -> 26:22 len 6  "Ok(10)"
-6:49 -> 31:30 len 1  " "
+6:48 -> 31:29 len 2  "; "
 6:57 -> 31:73 len 5  "w + 1"
-6:66 -> 37:28 len 74  "\n    return Ok(q * 2);\n}\nfunction product(fail: "...
+6:65 -> 37:27 len 75  ";\n    return Ok(q * 2);\n}\nfunction product(fail:"...
 10:5 -> 56:5 len 11  "const q = ("
 10:35 -> 49:13 len 1  "w"
 10:43 -> 44:22 len 27  "(fail ? Err(\"no\") : Ok(10))"
-10:71 -> 49:30 len 1  " "
+10:70 -> 49:29 len 2  "; "
 10:79 -> 49:73 len 5  "w + 1"
 10:87 -> 56:22 len 65  ") * 2;\n    return Ok(q);\n}\nfunction discarded():"...
 14:24 -> 67:13 len 1  "w"
 14:32 -> 62:22 len 12  "Err(\"inner\")"
-14:45 -> 67:30 len 1  " "
+14:44 -> 67:29 len 2  "; "
 14:53 -> 67:73 len 1  "w"
 14:58 -> 72:6 len 67  "\n    return Ok(0);\n}\nfunction matched(b: boolean"...
 18:5 -> 98:5 len 11  "const q = ("
@@ -33,7 +33,7 @@
 22:78 -> 114:22 len 5  "Ok(1)"
 22:86 -> 132:21 len 84  ";\n    return Ok(Number(q) + 1000);\n}\nfunction ar"...
 26:5 -> 159:5 len 10  "const q = "
-26:15 -> 137:21 len 6  "String"
+26:15 -> 137:36 len 6  "String"
 26:21 -> 159:21 len 1  "("
 26:33 -> 140:21 len 1  "b"
 26:38 -> 142:14 len 4  "true"
@@ -46,14 +46,14 @@
 30:23 -> 165:17 len 1  "5"
 30:47 -> 174:15 len 1  "w"
 30:55 -> 169:25 len 5  "Ok(3)"
-30:61 -> 174:33 len 1  " "
+30:60 -> 174:32 len 2  "; "
 30:69 -> 174:76 len 5  "w + 1"
 30:78 -> 183:22 len 56  ";\n    return Ok(q);\n}\nfunction piped(): R<string"...
 34:5 -> 209:5 len 10  "const q = "
 34:15 -> 205:17 len 1  "("
 34:35 -> 198:15 len 1  "w"
 34:43 -> 193:25 len 5  "Ok(3)"
-34:49 -> 198:33 len 1  " "
+34:48 -> 198:32 len 2  "; "
 34:57 -> 198:76 len 5  "w + 1"
 34:65 -> 205:25 len 1  ")"
 34:70 -> 206:17 len 6  "String"
@@ -69,9 +69,9 @@
 41:31 -> 254:9 len 1  "q"
 41:54 -> 247:11 len 1  "w"
 41:62 -> 242:21 len 5  "Ok(3)"
-41:68 -> 247:29 len 1  " "
+41:67 -> 247:28 len 2  "; "
 41:76 -> 247:72 len 5  "w + 1"
-41:85 -> 254:27 len 1  " "
+41:84 -> 254:26 len 2  "; "
 41:93 -> 254:70 len 5  "q * 2"
 41:101 -> 256:23 len 293  ";\nconsole.log(JSON.stringify([statement(), produ"...
 

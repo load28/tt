@@ -1,0 +1,72 @@
+==== ttc --out-dir (exit 1) ====
+error[val-pass]: cannot pass val binding `x` to mutable parameter `p` of `bad` (the parameter is not declared with `val`, so the function may mutate through it)
+ --> ./aValBindingPassedThroughAWrappedCalleeIsReported.tt:3:7
+  |
+3 | (bad)(x);
+  |       ^
+
+error[val-pass]: cannot pass val binding `x` to mutable parameter `p` of `bad` (the parameter is not declared with `val`, so the function may mutate through it)
+ --> ./aValBindingPassedThroughAWrappedCalleeIsReported.tt:4:6
+  |
+4 | bad!(x);
+  |      ^
+
+error[val-pass]: cannot pass val binding `x` to mutable parameter `p` of `bad` (the parameter is not declared with `val`, so the function may mutate through it)
+ --> ./aValBindingPassedThroughAWrappedCalleeIsReported.tt:5:7
+  |
+5 | bad?.(x);
+  |       ^
+
+error[val-pass]: cannot pass val binding `x` to mutable parameter `p` of `bad` (the parameter is not declared with `val`, so the function may mutate through it)
+ --> ./aValBindingPassedThroughAWrappedCalleeIsReported.tt:6:10
+  |
+6 | ((bad))!(x);
+  |          ^
+
+error[val-pass]: cannot pass val binding `x` to mutable parameter `p` of `bad` (the parameter is not declared with `val`, so the function may mutate through it)
+ --> ./aValBindingPassedThroughAWrappedCalleeIsReported.tt:7:1
+  |
+7 | x |> (bad);
+  | ^
+
+error[val-pass]: cannot pass val binding `x` to mutable parameter `p` of `bad` (the parameter is not declared with `val`, so the function may mutate through it)
+ --> ./aValBindingPassedThroughAWrappedCalleeIsReported.tt:8:1
+  |
+8 | x |> bad!;
+  | ^
+
+
+==== ttc --check-types (exit 1) ====
+error[val-pass]: cannot pass val binding `x` to mutable parameter `p` of `bad` (the parameter is not declared with `val`, so the function may mutate through it)
+ --> aValBindingPassedThroughAWrappedCalleeIsReported.tt:3:7
+  |
+3 | (bad)(x);
+  |       ^
+error[val-pass]: cannot pass val binding `x` to mutable parameter `p` of `bad` (the parameter is not declared with `val`, so the function may mutate through it)
+ --> aValBindingPassedThroughAWrappedCalleeIsReported.tt:4:6
+  |
+4 | bad!(x);
+  |      ^
+error[val-pass]: cannot pass val binding `x` to mutable parameter `p` of `bad` (the parameter is not declared with `val`, so the function may mutate through it)
+ --> aValBindingPassedThroughAWrappedCalleeIsReported.tt:5:7
+  |
+5 | bad?.(x);
+  |       ^
+error[val-pass]: cannot pass val binding `x` to mutable parameter `p` of `bad` (the parameter is not declared with `val`, so the function may mutate through it)
+ --> aValBindingPassedThroughAWrappedCalleeIsReported.tt:6:10
+  |
+6 | ((bad))!(x);
+  |          ^
+error[val-pass]: cannot pass val binding `x` to mutable parameter `p` of `bad` (the parameter is not declared with `val`, so the function may mutate through it)
+ --> aValBindingPassedThroughAWrappedCalleeIsReported.tt:7:1
+  |
+7 | x |> (bad);
+  | ^
+error[val-pass]: cannot pass val binding `x` to mutable parameter `p` of `bad` (the parameter is not declared with `val`, so the function may mutate through it)
+ --> aValBindingPassedThroughAWrappedCalleeIsReported.tt:8:1
+  |
+8 | x |> bad!;
+  | ^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

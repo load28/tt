@@ -1,0 +1,15 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./aCaseNarrowedAwayBeforeTheMatchOwnsItsBindingErrors.tt → $DIR/out/aCaseNarrowedAwayBeforeTheMatchOwnsItsBindingErrors.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2678]: this pattern's case is not one the value can be (ts2678: Type '"Rect"' is not comparable to type '"Circle"'.)
+ --> aCaseNarrowedAwayBeforeTheMatchOwnsItsBindingErrors.tt:4:38
+  |
+4 |   return match (s) { Circle(r) => r, Rect(w) => w };
+  |                                      ^^^^
+  |
+  = help: the value is narrowed before the match, so this case cannot occur here; cover the cases it can no longer be with a final `_` arm instead of naming them
+
+==== tsc on the emitted TypeScript (exit 2) ====
+aCaseNarrowedAwayBeforeTheMatchOwnsItsBindingErrors.ts(37,12): error TS2678: Type '"Rect"' is not comparable to type '"Circle"'.
+aCaseNarrowedAwayBeforeTheMatchOwnsItsBindingErrors.ts(38,17): error TS2339: Property 'w' does not exist on type '{ kind: "Circle"; r: number; }'.

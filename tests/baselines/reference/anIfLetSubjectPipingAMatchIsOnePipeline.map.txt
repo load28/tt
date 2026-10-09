@@ -1,0 +1,18 @@
+//// [anIfLetSubjectPipingAMatchIsOnePipeline.tt] 16 mapping(s)
+1:18 -> 20:21 len 6  "number"
+1:18 -> 23:10 len 6  "number"
+1:30 -> 25:3 len 27  "\nconst bump = (v: V): V => "
+2:34 -> 29:19 len 1  "v"
+2:41 -> 32:17 len 1  "n"
+2:47 -> 33:18 len 10  "V.A(n + 1)"
+2:64 -> 37:18 len 3  "V.B"
+2:69 -> 46:2 len 23  ";\nfunction f(x: V) {\n  "
+4:12 -> 73:15 len 1  "n"
+4:24 -> 53:23 len 1  "x"
+4:31 -> 56:21 len 1  "n"
+4:37 -> 57:22 len 1  "x"
+4:45 -> 61:22 len 6  "V.A(0)"
+4:57 -> 69:16 len 4  "bump"
+4:64 -> 74:7 len 9  "return n;"
+4:75 -> 76:4 len 48  "\n  return -1;\n}\nconsole.log(f(V.A(1)), f(V.B));\n"
+

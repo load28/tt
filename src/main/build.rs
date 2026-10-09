@@ -21,13 +21,14 @@ pub(super) enum SourceMapMode {
     Inline,
 }
 
+#[derive(Clone)]
 pub(super) struct BuildOptions {
     pub(super) banner: bool,
     pub(super) print: bool,
     pub(super) check: bool,
     pub(super) verify: bool,
     pub(super) rewrite_imports: ImportRewrite,
-    pub(super) jsx_preserve: bool,
+    pub(super) jsx_preserve: JsxPreserve,
     pub(super) source_map: SourceMapMode,
     /// Output root, when `-o` was given — also where the standard library
     /// module is written if an input imports it.
@@ -35,31 +36,43 @@ pub(super) struct BuildOptions {
     /// Worker threads for the parallel phases (`--jobs`); `None` means one
     /// per available core.
     pub(super) jobs: Option<usize>,
+    pub(super) node: Option<PathBuf>,
 }
+
+pub(super) type JsxPreserve = std::collections::BTreeMap<PathBuf, bool>;
 
 pub(super) fn project_jsx_preserve(
     rewrite: ImportRewrite,
     files: &[PathBuf],
     project: Option<&Path>,
-) -> Result<bool, String> {
+) -> Result<JsxPreserve, String> {
+    let mut preserve = JsxPreserve::new();
     if rewrite != ImportRewrite::Js {
-        return Ok(false);
+        return Ok(preserve);
     }
-    match ttc::engine::jsx_preserve(files, project) {
-        Ok(preserve) => Ok(preserve),
-        Err(_)
-            if !files
-                .iter()
-                .any(|file| file.extension().is_some_and(|extension| extension == "ttx")) =>
-        {
-            Ok(false)
+    let names_ttx = |file: &PathBuf| {
+        file.extension().is_some_and(|extension| extension == "ttx")
+            || std::fs::read_to_string(file).is_ok_and(|source| {
+                ttc::tt_imports(&source)
+                    .iter()
+                    .any(|import| import.specifier.ends_with(".ttx"))
+            })
+    };
+    for file in files {
+        match ttc::engine::jsx_preserve(std::slice::from_ref(file), project) {
+            Ok(value) => {
+                preserve.insert(file.clone(), value);
+            }
+            Err(_) if !names_ttx(file) => {}
+            Err(error) => {
+                return Err(format!(
+                    "cannot read the project's `jsx` option, which names a .ttx import's output: \
+                     {error}"
+                ));
+            }
         }
-        Err(error) => Err(format!(
-            "cannot read the project's `jsx` option, which names a .ttx import's output: \
-             {error} (name the configuration with --project, or choose --rewrite-imports \
-             ts or off)"
-        )),
     }
+    Ok(preserve)
 }
 
 /// The directory that holds the generated `tt/` package: the output root
@@ -96,18 +109,62 @@ pub(super) fn support_commonjs_dir(std_dir: &Path) -> PathBuf {
     std_dir.join(ttc::STD_PACKAGE_COMMONJS_DIR)
 }
 
+pub(super) fn support_module_dir(std_dir: &Path) -> PathBuf {
+    std_dir.join("esm")
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum SupportForm {
+    Module,
+    Commonjs,
+    ExplicitModule,
+}
+
+pub(super) fn package_is_module(dir: &Path) -> bool {
+    normalized_absolute(dir)
+        .ancestors()
+        .find_map(|ancestor| {
+            let text = fs::read_to_string(ancestor.join("package.json")).ok()?;
+            let manifest: serde_json::Value = serde_json::from_str(&text).ok()?;
+            Some(manifest["type"].as_str() == Some("module"))
+        })
+        .unwrap_or(false)
+}
+
+fn support_form(commonjs: bool, out_path: &Path, module_package: bool) -> SupportForm {
+    if commonjs {
+        SupportForm::Commonjs
+    } else if !module_package && out_path.extension().is_some_and(|ext| ext == "mts") {
+        SupportForm::ExplicitModule
+    } else {
+        SupportForm::Module
+    }
+}
+
+/// The deepest directory every input is inside, a directory input counting
+/// as itself and a file as its parent — what `-o` mirrors the inputs under.
+pub(super) fn input_root(inputs: &[String]) -> Option<PathBuf> {
+    deepest_shared_directory(inputs.iter().map(Path::new).filter_map(|path| {
+        let absolute = normalized_absolute(path);
+        if path.is_dir() {
+            Some(absolute)
+        } else {
+            absolute.parent().map(Path::to_path_buf)
+        }
+    }))
+}
+
 /// The deepest directory every output shares.
 pub(super) fn common_ancestor(jobs: &[Job]) -> Option<PathBuf> {
-    let shared = deepest_shared_directory(jobs.iter().map(|job| {
-        job.out_path
-            .parent()
-            .unwrap_or(Path::new("."))
-            .to_path_buf()
-    }))?;
-    Some(if shared.as_os_str().is_empty() {
-        PathBuf::from(".")
-    } else {
-        shared
+    let shared = deepest_shared_directory(
+        jobs.iter()
+            .map(|job| normalized_absolute(job.out_path.parent().unwrap_or(Path::new(".")))),
+    )?;
+    let cwd = normalized_absolute(Path::new("."));
+    Some(match shared.strip_prefix(&cwd) {
+        Ok(relative) if relative.as_os_str().is_empty() => PathBuf::from("."),
+        Ok(relative) => relative.to_path_buf(),
+        Err(_) => shared,
     })
 }
 
@@ -166,18 +223,10 @@ pub(super) fn build_jobs(
     out_dir: Option<&Path>,
     include_ts: bool,
 ) -> Result<Vec<Job>, String> {
-    // Named files mirror under the deepest directory they are all inside,
-    // so a relative import between two of them still resolves in the output
-    // tree. A directory input keeps mirroring under itself, which is what
-    // decides whether two inputs claim one output.
-    let named_file_root = deepest_shared_directory(
-        inputs
-            .iter()
-            .map(Path::new)
-            .filter(|path| path.is_file())
-            .filter_map(|path| normalized_absolute(path).parent().map(Path::to_path_buf)),
-    );
+    let input_root = input_root(inputs);
     let mut jobs: Vec<Job> = Vec::new();
+    let mut claimed: std::collections::HashSet<(PathBuf, PathBuf)> =
+        std::collections::HashSet::new();
     for input in inputs {
         let input_path = Path::new(input);
         if !input_path.exists() {
@@ -203,13 +252,9 @@ pub(super) fn build_jobs(
             };
             let out_path = match out_dir {
                 Some(dir) => {
-                    let root = if is_dir {
-                        normalized_absolute(input_path)
-                    } else {
-                        named_file_root
-                            .clone()
-                            .ok_or_else(|| format!("ttc: no output root for {}", file.display()))?
-                    };
+                    let root = input_root
+                        .clone()
+                        .ok_or_else(|| format!("ttc: no output root for {}", file.display()))?;
                     let mirrored = normalized_absolute(&out_name);
                     let rel = mirrored.strip_prefix(&root).map_err(|_| {
                         format!(
@@ -223,24 +268,27 @@ pub(super) fn build_jobs(
                 None => out_name,
             };
             // One source/output identity owns exactly one emission job.
-            if !jobs.iter().any(|job| {
-                same_file(&job.file, &file)
-                    && normalized_absolute(&job.out_path) == normalized_absolute(&out_path)
-            }) {
+            if claimed.insert((file_identity(&file), normalized_absolute(&out_path))) {
                 jobs.push(Job { file, out_path });
             }
         }
     }
-    let compiled_outputs: Vec<PathBuf> = jobs
+    let identities: Vec<(PathBuf, PathBuf)> = jobs
         .iter()
-        .filter(|job| !same_file(&job.file, &job.out_path))
-        .map(|job| job.out_path.clone())
+        .map(|job| (file_identity(&job.file), file_identity(&job.out_path)))
         .collect();
+    let compiled_outputs: std::collections::HashSet<&PathBuf> = identities
+        .iter()
+        .filter(|(file, out)| file != out)
+        .map(|(_, out)| out)
+        .collect();
+    let mut index = 0;
     jobs.retain(|job| {
-        !(same_file(&job.file, &job.out_path)
-            && compiled_outputs
-                .iter()
-                .any(|output| same_file(output, &job.file)))
+        let (file, out) = &identities[index];
+        index += 1;
+        !(file == out
+            && compiled_outputs.contains(file)
+            && ttc::ownership::record(&job.file).is_some())
     });
     Ok(jobs)
 }
@@ -274,14 +322,32 @@ fn output_tree_inside(input: &Path, out_dir: &Path) -> bool {
 /// yet, so the parents are compared canonically and the file names
 /// literally.
 pub(super) fn same_file(a: &Path, b: &Path) -> bool {
-    if normalized_absolute(a) == normalized_absolute(b) {
-        return true;
+    file_identity(a) == file_identity(b)
+}
+
+#[cfg(test)]
+thread_local! {
+    pub(super) static IDENTITIES_MEASURED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// What [`same_file`] compares, measured once per path so that a set of
+/// paths is compared by hashing rather than pair by pair: the canonical
+/// path of a file that exists, the canonical directory and name of one
+/// that does not yet, and the lexically normalized path when its
+/// directory does not exist either.
+pub(super) fn file_identity(path: &Path) -> PathBuf {
+    #[cfg(test)]
+    IDENTITIES_MEASURED.with(|count| count.set(count.get() + 1));
+    if let Ok(real) = path.canonicalize() {
+        return real;
     }
-    if a.file_name() != b.file_name() {
-        return false;
+    if let (Some(name), Ok(parent)) = (
+        path.file_name(),
+        path.parent().unwrap_or(Path::new(".")).canonicalize(),
+    ) {
+        return parent.join(name);
     }
-    let canon = |p: &Path| p.parent().unwrap_or(Path::new(".")).canonicalize();
-    matches!((canon(a), canon(b)), (Ok(x), Ok(y)) if x == y)
+    normalized_absolute(path)
 }
 
 /// What compiling one job produced: the diagnostics it wants printed (in
@@ -297,11 +363,13 @@ pub(super) struct Outcome {
 /// One job's emitted output, not yet written.
 struct Emitted {
     code: String,
+    bytes: Option<Vec<u8>>,
     /// The `--source-map file` document that goes beside the output.
     map: Option<String>,
     /// The compiler support modules `code` imports.
     support_imports: Vec<StdModule>,
     commonjs: bool,
+    in_place: bool,
 }
 
 /// Compiles every job. Returns true if any of them failed.
@@ -316,56 +384,20 @@ struct Emitted {
 /// printed in job order, so the output of a parallel run is identical to a
 /// sequential one.
 pub(super) fn compile_jobs(jobs: &[Job], support_root: Option<&Path>, opts: &BuildOptions) -> bool {
-    if !opts.check && !opts.print {
-        let mut claims: HashMap<&Path, &Path> = HashMap::with_capacity(jobs.len());
-        let mut outputs: Vec<(&Path, &Path)> = Vec::with_capacity(jobs.len());
-        let mut conflicted = false;
-        for job in jobs {
-            if let Some(first) = claims.get(job.out_path.as_path()) {
-                if !same_file(first, &job.file) {
-                    eprintln!(
-                        "ttc: {}: multiple inputs claim this output: {} and {}",
-                        job.out_path.display(),
-                        first.display(),
-                        job.file.display()
-                    );
-                    conflicted = true;
-                }
-            } else {
-                claims.insert(&job.out_path, &job.file);
-            }
-            // The other half of the same contract: overlapping input roots
-            // give one source two outputs, so the build would write it
-            // twice, at two paths, and say nothing. Both sides are compared
-            // by identity — the same source reached through two roots is
-            // spelled differently on each.
-            match outputs
-                .iter()
-                .find(|(source, _)| same_file(source, &job.file))
-            {
-                Some((_, first)) if !same_file(first, &job.out_path) => {
-                    eprintln!(
-                        "ttc: {}: one input claims two outputs: {} and {} (overlapping input roots)",
-                        job.file.display(),
-                        first.display(),
-                        job.out_path.display()
-                    );
-                    conflicted = true;
-                }
-                Some(_) => {}
-                None => outputs.push((job.file.as_path(), job.out_path.as_path())),
-            }
-        }
-        for job in jobs {
+    if !opts.print {
+        let (mut conflicted, contested) = claim_conflicts(jobs);
+        for job in jobs.iter().filter(|job| {
+            !same_file(&job.file, &job.out_path) && !contested.contains(job.out_path.as_path())
+        }) {
             if let Err(error) = check_output_owner(&job.out_path, OutputOwner::Source(&job.file)) {
-                eprintln!("{error}");
+                eprintln!("ttc: {error}");
                 conflicted = true;
             }
             if opts.source_map == SourceMapMode::File
                 && let Err(error) =
                     check_output_owner(&map_path(&job.out_path), OutputOwner::Source(&job.file))
             {
-                eprintln!("{error}");
+                eprintln!("ttc: {error}");
                 conflicted = true;
             }
         }
@@ -376,6 +408,9 @@ pub(super) fn compile_jobs(jobs: &[Job], support_root: Option<&Path>, opts: &Bui
 
     let outcomes = compile_outcomes(jobs, support_root, opts);
 
+    if opts.check && support_claim_conflict(jobs, &support_forms(jobs, &outcomes, support_root)) {
+        return true;
+    }
     if opts.print || opts.check {
         let mut failed = false;
         for outcome in outcomes {
@@ -383,14 +418,63 @@ pub(super) fn compile_jobs(jobs: &[Job], support_root: Option<&Path>, opts: &Bui
                 eprintln!("{message}");
             }
             failed |= outcome.failed;
-            if let Some(output) = outcome.output {
-                crate::out::text(&output.code);
+            if opts.print
+                && let Some(output) = outcome.output
+            {
+                match &output.bytes {
+                    Some(bytes) => crate::out::bytes(bytes),
+                    None => crate::out::text(&output.code),
+                }
             }
         }
         return failed;
     }
 
     write_outcomes(jobs, &outcomes, support_root, opts)
+}
+
+pub(super) fn claim_conflicts(jobs: &[Job]) -> (bool, std::collections::HashSet<&Path>) {
+    let mut claims: HashMap<&Path, &Path> = HashMap::with_capacity(jobs.len());
+    let mut outputs: HashMap<PathBuf, &Path> = HashMap::with_capacity(jobs.len());
+    let mut conflicted = false;
+    let mut contested: std::collections::HashSet<&Path> = std::collections::HashSet::new();
+    for job in jobs {
+        if let Some(first) = claims.get(job.out_path.as_path()) {
+            if !same_file(first, &job.file) {
+                eprintln!(
+                    "ttc: {}: multiple inputs claim this output: {} and {}",
+                    job.out_path.display(),
+                    first.display(),
+                    job.file.display()
+                );
+                contested.insert(&job.out_path);
+                conflicted = true;
+            }
+        } else {
+            claims.insert(&job.out_path, &job.file);
+        }
+        // The other half of the same contract: overlapping input roots
+        // give one source two outputs, so the build would write it
+        // twice, at two paths, and say nothing. Both sides are compared
+        // by identity — the same source reached through two roots is
+        // spelled differently on each.
+        match outputs.get(&file_identity(&job.file)) {
+            Some(first) if !same_file(first, &job.out_path) => {
+                eprintln!(
+                    "ttc: {}: one input claims two outputs: {} and {} (overlapping input roots)",
+                    job.file.display(),
+                    first.display(),
+                    job.out_path.display()
+                );
+                conflicted = true;
+            }
+            Some(_) => {}
+            None => {
+                outputs.insert(file_identity(&job.file), job.out_path.as_path());
+            }
+        }
+    }
+    (conflicted, contested)
 }
 
 /// What `ttc -p <input>` answers: the text it prints on stdout, present
@@ -444,6 +528,7 @@ fn compile_outcomes(
     let loaded = load_jobs(jobs, opts.jobs);
 
     let std_dir = std_placement(support_root);
+    let module_package = std_dir.as_deref().is_some_and(package_is_module);
 
     let cache = ExternCache::new(
         jobs.iter()
@@ -460,16 +545,7 @@ fn compile_outcomes(
                 ttc::ice::panic_for_test("compile");
                 let mut out = Outcome::default();
                 let filename = job.file.display().to_string();
-                // A pass-through `.ts` compiled in place would land on top of
-                // its own source (with specifiers rewritten) — refuse rather
-                // than destroy hand-written code.
-                if !opts.print && !opts.check && same_file(&job.file, &job.out_path) {
-                    out.messages.push(format!(
-                        "ttc: {filename}: output would overwrite the input — pass -o <dir>"
-                    ));
-                    out.failed = true;
-                    return out;
-                }
+                let in_place = !opts.print && !opts.check && same_file(&job.file, &job.out_path);
                 let loaded = match loaded {
                     Ok(loaded) => loaded,
                     Err(e) => {
@@ -484,9 +560,19 @@ fn compile_outcomes(
                     StdModule::ALL
                         .map(|module| std_specifier(job, dir, opts.rewrite_imports, module))
                 };
-                let std_imports_owned = std_dir
-                    .as_ref()
-                    .map(|dir| (specifiers(dir), specifiers(&support_commonjs_dir(dir))));
+                let explicit_module = support_form(false, &job.out_path, module_package)
+                    == SupportForm::ExplicitModule;
+                let std_imports_owned = std_dir.as_ref().map(|dir| {
+                    let module_dir = if explicit_module {
+                        support_module_dir(dir)
+                    } else {
+                        dir.clone()
+                    };
+                    (
+                        specifiers(&module_dir),
+                        specifiers(&support_commonjs_dir(dir)),
+                    )
+                });
                 let commonjs_imports = std_imports_owned
                     .as_ref()
                     .map(|(_, commonjs)| std_imports_of(commonjs));
@@ -502,10 +588,11 @@ fn compile_outcomes(
                     source_kind: ttc::SourceKind::from_path(&job.file).unwrap_or_default(),
                     verify: opts.verify,
                     rewrite_imports: opts.rewrite_imports,
-                    jsx_preserve: opts.jsx_preserve,
+                    jsx_preserve: opts.jsx_preserve.get(&job.file).copied().unwrap_or(false),
                     extern_variants: &extern_variants,
                     defer_to_checker: false,
                     std_imports,
+                    node: opts.node.as_deref(),
                 };
                 // Every tt-level diagnostic of the file, not the first one —
                 // the reader fixes a file in one pass (TASK-120). Output is
@@ -522,13 +609,20 @@ fn compile_outcomes(
                     .collect();
                 if !errors.is_empty() {
                     for diagnostic in errors {
+                        let mut diagnostic = diagnostic.clone();
+                        if diagnostic.code == ttc::DiagnosticCode::VerifyFailed {
+                            diagnostic.suggestions.push(ttc::Suggestion {
+                                message: "use --no-verify to bypass".to_string(),
+                                edit: None,
+                            });
+                        }
                         // Trailing newline: `eprintln!` then separates the
                         // blocks with a blank line, so two diagnostics do not
                         // read as one.
                         out.messages.push(format!(
                             "{}\n",
                             ttc::render::diagnostic(
-                                diagnostic,
+                                &diagnostic,
                                 &loaded.source,
                                 &filename,
                                 styles(),
@@ -591,29 +685,30 @@ fn compile_outcomes(
                     }
                     code.push_str(&rendered.comment);
                 }
-                if !opts.check {
-                    out.output = Some(Emitted {
-                        code,
-                        map: map.and_then(|rendered| rendered.document),
-                        support_imports: emit.support_imports,
-                        commonjs: emit.commonjs,
-                    });
+                if in_place && code != loaded.source {
+                    out.messages.push(format!(
+                        "ttc: {filename}: output would overwrite the input — write the outputs to another directory with -o <dir>"
+                    ));
+                    out.failed = true;
+                    return out;
                 }
+                out.output = Some(Emitted {
+                    bytes: loaded.encoding.map(|encoding| encoding.encode(&code)),
+                    code,
+                    map: map.and_then(|rendered| rendered.document),
+                    support_imports: emit.support_imports,
+                    commonjs: emit.commonjs,
+                    in_place,
+                });
                 out
             })
         },
     )
 }
 
-/// Writes the compiled outputs and the support modules they import.
-/// Returns true if any job failed or any write did.
-fn write_outcomes(
-    jobs: &[Job],
-    outcomes: &[Outcome],
-    support_root: Option<&Path>,
-    opts: &BuildOptions,
-) -> bool {
-    let mut failed = false;
+type SupportForms = Vec<(PathBuf, SupportForm, Vec<StdModule>)>;
+
+fn support_forms(jobs: &[Job], outcomes: &[Outcome], support_root: Option<&Path>) -> SupportForms {
     let std_dir = std_placement(support_root);
     // Compiler-owned support modules are written once for the project, not
     // once per source file, and only when an output being written imports
@@ -621,16 +716,25 @@ fn write_outcomes(
     // source looks like: a pipeline may lower to a direct call, and a script
     // inlines its helpers. Standard-library imports materialize its three
     // public modules; the pipeline runtime is written on its own.
-    let forms: Vec<(PathBuf, bool, Vec<StdModule>)> = std_dir
+    let module_package = std_dir.as_deref().is_some_and(package_is_module);
+    std_dir
         .iter()
-        .flat_map(|dir| [(dir.clone(), false), (support_commonjs_dir(dir), true)])
-        .map(|(dir, commonjs)| {
+        .flat_map(|dir| {
+            [
+                (dir.clone(), SupportForm::Module),
+                (support_commonjs_dir(dir), SupportForm::Commonjs),
+                (support_module_dir(dir), SupportForm::ExplicitModule),
+            ]
+        })
+        .map(|(dir, form)| {
             let imports = |module: StdModule| {
-                outcomes
-                    .iter()
-                    .filter_map(|outcome| outcome.output.as_ref())
-                    .filter(|output| output.commonjs == commonjs)
-                    .any(|output| output.support_imports.contains(&module))
+                jobs.iter()
+                    .zip(outcomes)
+                    .filter_map(|(job, outcome)| Some((job, outcome.output.as_ref()?)))
+                    .filter(|(job, output)| {
+                        support_form(output.commonjs, &job.out_path, module_package) == form
+                    })
+                    .any(|(_, output)| output.support_imports.contains(&module))
             };
             let needs_std = StdModule::STANDARD.into_iter().any(imports);
             let needs_runtime = imports(StdModule::Runtime);
@@ -641,21 +745,20 @@ fn write_outcomes(
                     _ => needs_std,
                 })
                 .collect();
-            (dir, commonjs, modules)
+            (dir, form, modules)
         })
-        .filter(|(_, _, modules): &(PathBuf, bool, Vec<StdModule>)| !modules.is_empty())
-        .collect();
-    for (dir, _, modules) in &forms {
+        .filter(|(_, _, modules): &(PathBuf, SupportForm, Vec<StdModule>)| !modules.is_empty())
+        .collect()
+}
+
+fn support_claim_conflict(jobs: &[Job], forms: &SupportForms) -> bool {
+    for (dir, _, modules) in forms {
         for module in modules {
             let support = dir.join(module.file_name());
-            if let Err(error) = check_output_owner(&support, OutputOwner::Support(*module)) {
-                eprintln!("{error}");
-                return true;
-            }
             for job in jobs {
                 if same_file(&job.file, &support) {
                     eprintln!(
-                        "ttc: {}: the compiler support module would overwrite input {} — pass -o <dir>",
+                        "ttc: {}: the compiler support module would overwrite input {} — write the outputs to another directory with -o <dir>",
                         support.display(),
                         job.file.display()
                     );
@@ -672,10 +775,48 @@ fn write_outcomes(
             }
         }
     }
-    for (dir, commonjs, modules) in &forms {
-        let wrote = fs::create_dir_all(dir).and_then(|()| {
+    false
+}
+
+/// Writes the compiled outputs and the support modules they import.
+/// Returns true if any job failed or any write did.
+fn write_outcomes(
+    jobs: &[Job],
+    outcomes: &[Outcome],
+    support_root: Option<&Path>,
+    opts: &BuildOptions,
+) -> bool {
+    let mut failed = false;
+    let forms = support_forms(jobs, outcomes, support_root);
+    let manifest = |form: SupportForm| match form {
+        SupportForm::Module => None,
+        SupportForm::Commonjs => Some((OutputOwner::CommonjsManifest, ttc::STD_COMMONJS_MANIFEST)),
+        SupportForm::ExplicitModule => {
+            Some((OutputOwner::ModuleManifest, ttc::STD_MODULE_MANIFEST))
+        }
+    };
+    if support_claim_conflict(jobs, &forms) {
+        return true;
+    }
+    for (dir, form, modules) in &forms {
+        if let Some((owner, _)) = manifest(*form)
+            && let Err(error) = check_output_owner(&dir.join("package.json"), owner)
+        {
+            eprintln!("ttc: {error}");
+            return true;
+        }
+        for module in modules {
+            let support = dir.join(module.file_name());
+            if let Err(error) = check_output_owner(&support, OutputOwner::Support(*module)) {
+                eprintln!("ttc: {error}");
+                return true;
+            }
+        }
+    }
+    for (dir, form, modules) in &forms {
+        let wrote = create_dir_all(dir).and_then(|()| {
             for module in modules {
-                let mut code = if *commonjs {
+                let mut code = if *form == SupportForm::Commonjs {
                     module.commonjs_source().into_owned()
                 } else {
                     module.source().to_string()
@@ -689,6 +830,10 @@ fn write_outcomes(
                     &code,
                 )
                 .map_err(std::io::Error::other)?;
+            }
+            if let Some((owner, text)) = manifest(*form) {
+                write_owned_output(&dir.join("package.json"), owner, text)
+                    .map_err(std::io::Error::other)?;
             }
             Ok(())
         });
@@ -718,12 +863,12 @@ fn write_outcomes(
 /// Writes one job's emitted output and its source map, returning the
 /// messages to print and whether the write failed.
 fn write_emitted(job: &Job, output: Option<&Emitted>) -> (Vec<String>, bool) {
-    let Some(output) = output else {
+    let Some(output) = output.filter(|output| !output.in_place) else {
         return (Vec::new(), false);
     };
-    if let Err(e) = write_owned_output(&job.out_path, OutputOwner::Source(&job.file), &output.code)
-    {
-        return (vec![e], true);
+    let code = output.bytes.as_deref().unwrap_or(output.code.as_bytes());
+    if let Err(e) = write_owned_bytes(&job.out_path, OutputOwner::Source(&job.file), code) {
+        return (vec![format!("ttc: {e}")], true);
     }
     if let Some(document) = &output.map
         && let Err(e) = write_owned_output(
@@ -732,7 +877,7 @@ fn write_emitted(job: &Job, output: Option<&Emitted>) -> (Vec<String>, bool) {
             document,
         )
     {
-        return (vec![e], true);
+        return (vec![format!("ttc: {e}")], true);
     }
     (
         vec![format!(

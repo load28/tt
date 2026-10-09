@@ -2,5 +2,5 @@
 1:1 -> 1:1 len 20  "function f(): X {\n  "
 2:9 -> 6:9 len 1  "n"
 2:17 -> 2:18 len 3  "g()"
-2:21 -> 6:26 len 18  "\n  return h(n);\n}\n"
+2:20 -> 6:25 len 19  ";\n  return h(n);\n}\n"
 

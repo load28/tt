@@ -6,7 +6,7 @@ error[unknown-field]: variant Disk: case `Round` has no field `radiu`
 5 | const top0 = match (note("operand", input)) { Round(radiu) => note("round", radiu), Dot => note("dot", 0) };
   |                                                     ^^^^^
   |
-  = help: a field with a similar name exists: `radius`
+  = help: a field with a similar name exists: `radius: radiu`
 
 error[unknown-field]: variant Disk: case `Round` has no field `radiu`
  --> ./main.tt:8:53
@@ -14,7 +14,7 @@ error[unknown-field]: variant Disk: case `Round` has no field `radiu`
 8 | const top1 = match (note("operand", input)) { Round(radiu) => note("round", radiu), Dot => note("dot", 0) };
   |                                                     ^^^^^
   |
-  = help: a field with a similar name exists: `radius`
+  = help: a field with a similar name exists: `radius: radiu`
 
 
 ==== ttc --check-types (exit 1) ====
@@ -24,13 +24,13 @@ error[unknown-field]: variant Disk: case `Round` has no field `radiu`
 5 | const top0 = match (note("operand", input)) { Round(radiu) => note("round", radiu), Dot => note("dot", 0) };
   |                                                     ^^^^^
   |
-  = help: a field with a similar name exists: `radius`
+  = help: a field with a similar name exists: `radius: radiu`
 error[unknown-field]: variant Disk: case `Round` has no field `radiu`
  --> main.tt:8:53
   |
 8 | const top1 = match (note("operand", input)) { Round(radiu) => note("round", radiu), Dot => note("dot", 0) };
   |                                                     ^^^^^
   |
-  = help: a field with a similar name exists: `radius`
+  = help: a field with a similar name exists: `radius: radiu`
 
 ==== tsc on the emitted TypeScript (exit 0) ====

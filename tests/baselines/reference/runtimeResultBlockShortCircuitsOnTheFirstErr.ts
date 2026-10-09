@@ -66,8 +66,7 @@ const chain = (secondOk: boolean) => {
   }
   const c = $tt_t2.value;
   {
-    const $tt_a0 = { value: { kind: "Ok" as const, value: a + b + c } };
-    $tt_v0 = $tt_a0.value;
+    $tt_v0 = { kind: "Ok" as const, value: a + b + c };
     break $tt_v0;
   }
   }

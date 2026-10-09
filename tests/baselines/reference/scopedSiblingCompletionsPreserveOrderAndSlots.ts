@@ -71,7 +71,7 @@ for (const state of [State.Ready(4), State.Empty]) {
   shared = 10;
   let $tt_v0: Item;
   let $tt_v1: number;
-  const $tt_v2 = (pair);
+  const $tt_v2: typeof pair = (pair);
   {
     const $tt_m = mark("subject1", state);
     switch ($tt_m.kind) {
@@ -112,7 +112,7 @@ function throwingSubject(): State { trace.push("boom"); throw new Error("subject
 trace.length = 0;
 try {
   let $tt_v3: Item;
-  const $tt_v5 = (pair);
+  const $tt_v5: typeof pair = (pair);
   {
     const $tt_m = State.Ready(1);
     switch ($tt_m.kind) {

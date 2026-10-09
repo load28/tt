@@ -1,0 +1,65 @@
+=== aMatchInsideAFunctionInAConditionalBranchIsNotMisplaced.tt ===
+variant S { A(n: number), B }
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => S
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const s: S = S.A(3) as S; const c = true;
+>s : const s: S
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => S
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>c : const c: true
+const v = c ? match (s) { A(n) => n, B => 0 } : () => match (s) { A => 1, B => 2 };
+>v : const v: number | (() => number)
+>c : const c: true
+>s : const s: S
+>n : const n: number
+>n : const n: number
+>s : const s: S
+const w = !c ? match (s) { A(n) => n, B => 0 } : () => match (s) { A => 1, B => 2 };
+>w : const w: number | (() => number)
+>c : const c: true
+>s : const s: S
+>n : const n: number
+>n : const n: number
+>s : const s: S
+const x = c ? (function () { return match (s) { A => 10, B => 20 }; })() : match (s) { A(n) => n * 2, B => 0 };
+>x : const x: number
+>c : const c: true
+>s : const s: S
+>s : const s: S
+>n : const n: number
+>n : const n: number
+console.log(v, typeof w === "function" ? (w as () => number)() : w, x);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>v : const v: number | (() => number)
+>w : const w: number | (() => number)
+>w : const w: () => number
+>w : const w: number
+>x : const x: number
+

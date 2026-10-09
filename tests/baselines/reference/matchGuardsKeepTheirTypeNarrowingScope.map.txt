@@ -1,6 +1,6 @@
 //// [matchGuardsKeepTheirTypeNarrowingScope.tt] 9 mapping(s)
 1:1 -> 1:1 len 107  "\ndeclare const input: unknown;\ndeclare const fla"...
-5:1 -> 5:17 len 7  "consume"
+5:1 -> 5:33 len 7  "consume"
 5:8 -> 8:7 len 1  "("
 5:16 -> 6:15 len 4  "flag"
 6:3 -> 8:20 len 4  "true"

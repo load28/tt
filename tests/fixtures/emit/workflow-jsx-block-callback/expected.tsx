@@ -50,9 +50,9 @@ export function Cart({state,onSelect}:{state:Load<Item[]>;onSelect:(item:Item)=>
    $tt_v0 = <ul>{items.map(item=>{
      let $tt_v4: number;
      let $tt_v5: number;
-     const $tt_v7 = (item.id);
+     const $tt_v7: typeof item.id = (item.id);
      const $tt_v9 = (<button onClick={()=>onSelect(item)}>{item.title.trim()}</button>);
-     const $tt_v8 = (Number);
+     const $tt_v8: typeof Number = (Number);
      {
        const $tt_m = item.quantity;
        switch ($tt_m) {
@@ -67,7 +67,7 @@ export function Cart({state,onSelect}:{state:Load<Item[]>;onSelect:(item:Item)=>
        }
      }
      const $tt_v11 = ($tt_v4);
-     const $tt_v10 = (Number);
+     const $tt_v10: typeof Number = (Number);
      {
        const $tt_m = item.price;
        switch ($tt_m) {

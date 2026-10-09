@@ -33,6 +33,7 @@
 use super::cursor::dotted_at;
 use crate::ast::{PipeExpr, PipeHeadKind, PipeStep, PipeStepKind, Span};
 use crate::lexer::{Token, TokenKind};
+use std::ops::Range;
 
 /// True for a `=` Punct that is (the start of) an assignment operator —
 /// not part of `==`/`===`/`!=`/`<=`/`>=`. Compound assignments (`+=`,
@@ -83,7 +84,7 @@ fn asserts_pipeline(src: &str, tokens: &[Token], from: usize, k: usize) -> bool 
 /// and the parsed pipeline. `None` leaves everything unclaimed (the caller
 /// records the stray `|>` for sema).
 pub(super) enum Attempt {
-    Parsed(usize, PipeExpr),
+    Parsed(usize, PipeScan),
     MalformedOptional {
         next: usize,
         head_span: Span,
@@ -108,7 +109,7 @@ pub(super) fn parse_pipeline(
             && &parser.src[tokens[before].span.start..tokens[before].span.end] == "case"
     });
 
-    let mut steps: Vec<PipeStep> = Vec::new();
+    let mut steps: Vec<ScannedStep> = Vec::new();
     let mut k = pipe_idx;
     while matches!(tokens.get(k).map(|t| &t.kind), Some(TokenKind::PipeOp)) {
         k += 1;
@@ -206,10 +207,10 @@ pub(super) fn parse_pipeline(
             // `x |> |> f`, `x |>;`, a trailing `|>`: the step is missing,
             // and the pipeline it would end is still the one written.
             let at = tokens[k - 1].span.end;
-            steps.push(PipeStep {
+            steps.push(ScannedStep {
                 span: Span { start: at, end: at },
                 kind: PipeStepKind::Missing,
-                body: parser.parse_expression_tokens(&[], at, at),
+                tokens: k..k,
             });
             continue;
         }
@@ -261,29 +262,77 @@ pub(super) fn parse_pipeline(
                 )
             },
         };
-        steps.push(PipeStep {
+        steps.push(ScannedStep {
             span,
             kind,
-            body: parser.parse_expression_tokens(&tokens[step_from..k], span.start, span.end),
+            tokens: step_from..k,
         });
     }
     if steps.is_empty() {
         return None;
     }
 
-    let head_kind = head_kind(parser, tokens, head_idx, pipe_idx);
-    let head = (head_kind != PipeHeadKind::Flow).then(|| {
-        parser.parse_expression_tokens(&tokens[head_idx..pipe_idx], head_span.start, head_span.end)
-    });
     Some(Attempt::Parsed(
         k,
-        PipeExpr {
+        PipeScan {
             head_span,
-            head_kind,
-            head,
+            head_kind: head_kind(parser, tokens, head_idx, pipe_idx),
+            head_tokens: head_idx..pipe_idx,
             steps,
         },
     ))
+}
+
+/// A pipeline whose extent is known but whose head and steps are not yet
+/// parsed. The token loop claims it, and a later pipeline whose head
+/// contains it rewinds it; only a claim that survives is parsed, so a head
+/// is parsed once however deeply pipelines nest inside it.
+pub(super) struct PipeScan {
+    pub(super) head_span: Span,
+    head_kind: PipeHeadKind,
+    head_tokens: Range<usize>,
+    steps: Vec<ScannedStep>,
+}
+
+struct ScannedStep {
+    span: Span,
+    kind: PipeStepKind,
+    tokens: Range<usize>,
+}
+
+impl PipeScan {
+    pub(super) fn end(&self) -> Option<usize> {
+        self.steps.last().map(|step| step.span.end)
+    }
+
+    pub(super) fn parse(self, parser: &super::Parser, tokens: &[Token]) -> PipeExpr {
+        let steps = self
+            .steps
+            .into_iter()
+            .map(|step| PipeStep {
+                span: step.span,
+                kind: step.kind,
+                body: parser.parse_expression_tokens(
+                    &tokens[step.tokens],
+                    step.span.start,
+                    step.span.end,
+                ),
+            })
+            .collect();
+        let head = (self.head_kind != PipeHeadKind::Flow).then(|| {
+            parser.parse_expression_tokens(
+                &tokens[self.head_tokens],
+                self.head_span.start,
+                self.head_span.end,
+            )
+        });
+        PipeExpr {
+            head_span: self.head_span,
+            head_kind: self.head_kind,
+            head,
+            steps,
+        }
+    }
 }
 
 /// Validates the complete optional postfix tail in `tokens[from..to]`.

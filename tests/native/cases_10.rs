@@ -626,3 +626,424 @@ fn a_values_storage_widens_only_fresh_literal_types() {
     let out = check(&dir);
     assert!(!out.contains("error"), "{out}");
 }
+
+#[cfg(target_os = "linux")]
+struct InteractiveServer {
+    child: std::process::Child,
+    lines: std::io::Lines<std::io::BufReader<std::process::ChildStdout>>,
+    next: u64,
+}
+
+#[cfg(target_os = "linux")]
+impl InteractiveServer {
+    fn start(dir: &Path) -> Self {
+        use std::io::BufRead;
+        let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .arg("--server")
+            .current_dir(dir)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .expect("server starts");
+        let stdout = child.stdout.take().expect("stdout piped");
+        Self {
+            child,
+            lines: std::io::BufReader::new(stdout).lines(),
+            next: 0,
+        }
+    }
+
+    fn ask(&mut self, method: &str, params: serde_json::Value) -> serde_json::Value {
+        use std::io::Write;
+        self.next += 1;
+        let request = serde_json::json!({ "id": self.next, "method": method, "params": params });
+        writeln!(self.child.stdin.as_mut().unwrap(), "{request}").unwrap();
+        let line = self
+            .lines
+            .next()
+            .expect("the server answers")
+            .expect("the answer is readable");
+        serde_json::from_str(&line).expect("JSON response")
+    }
+
+    fn descendants(&self) -> Vec<u32> {
+        let parents: Vec<(u32, u32)> = fs::read_dir("/proc")
+            .unwrap()
+            .filter_map(|entry| entry.ok()?.file_name().to_str()?.parse::<u32>().ok())
+            .filter_map(|pid| {
+                let stat = fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+                let after = &stat[stat.rfind(')')? + 2..];
+                Some((pid, after.split(' ').nth(1)?.parse().ok()?))
+            })
+            .collect();
+        let mut found = vec![self.child.id()];
+        let mut index = 0;
+        while index < found.len() {
+            let parent = found[index];
+            found.extend(
+                parents
+                    .iter()
+                    .filter(|(_, ppid)| *ppid == parent)
+                    .map(|(pid, _)| *pid),
+            );
+            index += 1;
+        }
+        found.split_off(1)
+    }
+
+    fn compilers(&self) -> Vec<u32> {
+        self.descendants()
+            .into_iter()
+            .filter(|pid| {
+                fs::read_to_string(format!("/proc/{pid}/comm"))
+                    .is_ok_and(|name| name.trim() != "node")
+            })
+            .collect()
+    }
+}
+
+#[cfg(target_os = "linux")]
+impl Drop for InteractiveServer {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn a_typed_session_recovers_after_its_compiler_process_dies() {
+    require_tsgo!();
+    let source = "export const n: number = 1;\n";
+    let dir = project(&[("src/main.tt", source)]);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut server = InteractiveServer::start(&dir);
+    let first = server.ask(
+        "typedCheck",
+        serde_json::json!({ "path": file, "text": source, "includeTypes": true }),
+    );
+    assert!(first["result"]["backendError"].is_null(), "{first}");
+    let compilers = server.compilers();
+    assert!(!compilers.is_empty(), "the session started a compiler");
+    for pid in compilers {
+        let _ = Command::new("kill").args(["-9", &pid.to_string()]).status();
+    }
+    let edited = "export const n: number = \"text\";\n";
+    let mut last = serde_json::Value::Null;
+    for _ in 0..2 {
+        server.ask(
+            "updateDocument",
+            serde_json::json!({ "path": file, "text": edited }),
+        );
+        last = server.ask(
+            "typedCheck",
+            serde_json::json!({ "path": file, "text": edited, "includeTypes": true }),
+        );
+    }
+    assert!(last["result"]["backendError"].is_null(), "{last}");
+    assert!(
+        last["result"]["diagnostics"]
+            .as_array()
+            .is_some_and(|diagnostics| diagnostics.iter().any(|d| d["code"] == "ts2322")),
+        "{last}"
+    );
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn a_typed_session_releases_the_snapshots_of_earlier_edits() {
+    require_tsgo!();
+    let dir = project(&[]);
+    write(
+        &dir,
+        "tsconfig.json",
+        r#"{ "compilerOptions": { "target": "es2022", "module": "preserve", "strict": true, "noEmit": true }, "include": ["src"] }"#,
+    );
+    write(&dir, "src/main.tt", "export const n: number = 0;\n");
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut server = InteractiveServer::start(&dir);
+    let resident = |server: &InteractiveServer| -> u64 {
+        server
+            .compilers()
+            .iter()
+            .filter_map(|pid| fs::read_to_string(format!("/proc/{pid}/status")).ok())
+            .filter_map(|status| {
+                status
+                    .lines()
+                    .find_map(|line| line.strip_prefix("VmRSS:"))
+                    .and_then(|kb| kb.trim().trim_end_matches("kB").trim().parse::<u64>().ok())
+            })
+            .sum()
+    };
+    let check = |server: &mut InteractiveServer, edit: usize| {
+        let text = format!("export const n: number = {edit};\n");
+        server.ask("updateDocument", serde_json::json!({ "path": file, "text": text }));
+        let answer = server.ask(
+            "typedCheck",
+            serde_json::json!({ "path": file, "text": text, "includeTypes": true }),
+        );
+        assert!(answer["result"]["backendError"].is_null(), "{answer}");
+    };
+    for edit in 0..5 {
+        check(&mut server, edit);
+    }
+    let settled = resident(&server);
+    for edit in 5..35 {
+        check(&mut server, edit);
+    }
+    let grown = resident(&server).saturating_sub(settled);
+    assert!(
+        grown < 300 * 1024,
+        "30 edits grew the compiler by {} MB",
+        grown / 1024
+    );
+}
+
+#[test]
+fn a_circular_configuration_is_reported_rather_than_waited_on() {
+    require_tsgo!();
+    for (config, base) in [
+        (r#"{"extends": "./tsconfig.json"}"#, None),
+        (r#"{"extends": "./base.json"}"#, Some(r#"{"extends": "./tsconfig.json"}"#)),
+    ] {
+        let dir = tmpdir();
+        write(&dir, "tsconfig.json", config);
+        if let Some(base) = base {
+            write(&dir, "base.json", base);
+        }
+        write(&dir, "src/a.tt", "export const a = 1;\n");
+        let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .args(["--check-types", "src"])
+            .current_dir(&dir)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("ttc runs");
+        let started = std::time::Instant::now();
+        while child.try_wait().unwrap().is_none() {
+            if started.elapsed() > std::time::Duration::from_secs(60) {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("the check never finished for {config}");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        let output = child.wait_with_output().unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(1), "{stderr}");
+        assert!(stderr.contains("ts18000"), "{stderr}");
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn output_a_preload_or_a_node_shim_writes_does_not_break_the_check() {
+    require_tsgo!();
+    let dir = project(&[("src/a.tt", "export const a: number = \"x\";\n")]);
+    write(
+        &dir,
+        "preload.js",
+        "console.log(\"preloaded\");\nprocess.stdout.write(\"partial\");\n",
+    );
+    write(&dir, "shim", "#!/bin/sh\necho \"using node\"\nexec node \"$@\"\n");
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(dir.join("shim"), fs::Permissions::from_mode(0o755)).unwrap();
+    let preload = format!("--require {}", dir.join("preload.js").display());
+    let shim = dir.join("shim");
+    let runs = [
+        Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .args(["--check-types", "src"])
+            .env("NODE_OPTIONS", &preload)
+            .current_dir(&dir)
+            .output()
+            .unwrap(),
+        Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .arg("--node")
+            .arg(&shim)
+            .args(["--check-types", "src"])
+            .current_dir(&dir)
+            .output()
+            .unwrap(),
+    ];
+    for output in runs {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(1), "{stderr}");
+        assert!(stderr.contains("ts2322"), "{stderr}");
+    }
+}
+
+#[test]
+fn types_writes_sidecars_under_an_out_dir_or_a_declaration_dir() {
+    require_emit!();
+    for options in [
+        r#""outDir": "dist", "rootDir": "src""#,
+        r#""declaration": true, "declarationDir": "dd", "rootDir": "src""#,
+    ] {
+        let dir = tmpdir();
+        write(
+            &dir,
+            "tsconfig.json",
+            &format!(r#"{{"compilerOptions": {{{options}}}, "include": ["src"]}}"#),
+        );
+        write(&dir, "src/a.tt", "export const a = 1;\n");
+        let output = run(&dir, &["--types", "src"]);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let sidecar = fs::read_to_string(dir.join(".tt-types/a.tt.d.ts"))
+            .unwrap_or_else(|_| panic!("no sidecar under {options}"));
+        assert!(sidecar.contains("export declare const a = 1;"), "{sidecar}");
+    }
+}
+
+#[test]
+fn a_build_refines_a_named_tt_source_the_configuration_does_not_include() {
+    require_emit!();
+    let dir = tmpdir();
+    write(
+        &dir,
+        "tsconfig.json",
+        r#"{"compilerOptions": {"strict": true, "noEmit": true}, "include": ["*.ts"]}"#,
+    );
+    write(
+        &dir,
+        "c.tt",
+        "declare function g(cb: (s: string) => number, b: number): number;\n\
+         variant O { A(n: number), B }\n\
+         export function f(o: O) { return g(x => x.length, match (o) { A(n) => n, B => 0 }); }\n",
+    );
+    let output = run(&dir, &["c.tt"]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let emitted = fs::read_to_string(dir.join("c.ts")).unwrap();
+    assert!(
+        emitted.contains("const $tt_v2: (s: string) => number = "),
+        "{emitted}"
+    );
+}
+
+#[test]
+fn types_records_the_standard_library_declarations_it_writes() {
+    require_emit!();
+    let dir = project(&[(
+        "src/a.tt",
+        "import * as O from \"@tt/std/option\";\nexport const a = 1 |> O.Some;\n",
+    )]);
+    let declared = run(&dir, &["--types", "-o", "src", "src"]);
+    assert!(
+        declared.status.success(),
+        "{}",
+        String::from_utf8_lossy(&declared.stderr)
+    );
+    assert!(dir.join("src/tt/option.d.ts").is_file());
+    let built = run(&dir, &["-o", "out", "src"]);
+    assert!(
+        built.status.success(),
+        "{}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+    for name in ["index", "option", "result"] {
+        assert!(
+            !dir.join(format!("out/tt/{name}.d.ts")).exists(),
+            "{}",
+            String::from_utf8_lossy(&built.stderr)
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn a_tt_source_imported_through_a_symlink_is_type_checked() {
+    require_emit!();
+    let dir = project(&[
+        (
+            "src/a.tt",
+            "import { s } from \"./link/s.tt\";\nexport const a: string = s;\n",
+        ),
+        (
+            "src/b.tt",
+            "import { s } from \"./fl.tt\";\nexport const b: string = s;\n",
+        ),
+    ]);
+    fs::create_dir_all(dir.join("src/real")).unwrap();
+    fs::write(dir.join("src/real/s.tt"), "export const s: number = 1;\n").unwrap();
+    std::os::unix::fs::symlink("real", dir.join("src/link")).unwrap();
+    std::os::unix::fs::symlink("real/s.tt", dir.join("src/fl.tt")).unwrap();
+    let output = run(&dir, &["--check-types", "src"]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert!(!stderr.contains("ts2307"), "{stderr}");
+    assert_eq!(stderr.matches("ts2322").count(), 2, "{stderr}");
+}
+
+/// A candidate the configuration leaves out is projected only when the
+/// program contains it: here through a hand-written `.ts` import, and
+/// through a `.ts` module a projected `.tt` file imports. The rest are
+/// served as placeholders and never lowered.
+#[test]
+fn only_the_candidates_the_program_contains_are_projected() {
+    require_tsgo!();
+    let dir = project(&[
+        (
+            "src/main.tt",
+            "import { f } from \"./bridge\";\nexport const main = f;\n",
+        ),
+        ("src/bridge.ts", "export * from \"../ext/z.tt\";\n"),
+        (
+            "src/use.ts",
+            "import { v } from \"../ext/y.tt\";\nexport const n: string = v;\n",
+        ),
+    ]);
+    fs::create_dir_all(dir.join("ext")).unwrap();
+    fs::create_dir_all(dir.join("other")).unwrap();
+    write(
+        &dir,
+        "ext/y.tt",
+        "export variant V { A(n: number), B }\nexport const v: V = V.A(1);\n",
+    );
+    write(
+        &dir,
+        "ext/z.tt",
+        "export variant Z { P, Q }\nexport function f(z: Z) { return match (z) { P => 1 }; }\n",
+    );
+    write(&dir, "other/unused.tt", "export const unused = 1;\n");
+    let main = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut project = ttc::engine::Engine::new(None)
+        .open_project(
+            &[main.to_string_lossy().into_owned()],
+            &ttc::engine::ProjectOptions::default(),
+        )
+        .unwrap();
+    let snapshot = project.update(&project.initial_files()).unwrap();
+    let mut projected: Vec<String> = snapshot
+        .files()
+        .iter()
+        .map(|file| {
+            file.source_path
+                .strip_prefix(dir.canonicalize().unwrap())
+                .unwrap()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    projected.sort();
+    assert_eq!(projected, ["ext/y.tt", "ext/z.tt", "src/main.tt"]);
+    let checked = project
+        .check(&snapshot, &ttc::engine::CheckRequest::default())
+        .unwrap();
+    let codes: Vec<_> = checked
+        .diagnostics
+        .iter()
+        .filter_map(|diagnostic| diagnostic.code.clone())
+        .collect();
+    assert!(codes.iter().any(|code| code == "ts2322"), "{codes:?}");
+    assert!(
+        codes.iter().any(|code| code == "match-not-exhaustive"),
+        "{codes:?}"
+    );
+}

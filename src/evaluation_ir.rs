@@ -6,6 +6,7 @@
 mod builder;
 mod evaluation;
 mod planning;
+mod summary;
 mod validation;
 
 #[cfg(test)]
@@ -29,6 +30,7 @@ use crate::program_syntax::{
 
 use builder::*;
 use planning::*;
+use summary::*;
 
 /// A failure of one of the lowering validators, already carrying the stage,
 /// the named invariant, and the identities it failed on.
@@ -69,6 +71,7 @@ enum RegionPlacement {
         exits: Vec<HostExit>,
         protocol: HostEvaluationProtocol,
         context: Option<EvaluationContext>,
+        owner: Option<HostOwner>,
     },
     SourceEdit,
 }
@@ -117,14 +120,118 @@ pub(crate) struct EvaluationFile {
     occupied_names: HashSet<String>,
     declared_names: HashSet<String>,
     module_declared_names: HashSet<String>,
+    if_tests: Vec<crate::program_syntax::IfTestFacts>,
+    anonymous_functions: Vec<SourceSpan>,
+    function_names: Vec<(SourceSpan, String)>,
     directive_prologue_end: Option<usize>,
     /// Source spans of every tt node in the file. A schedule's source
     /// capture must not overlap one: the capture copies raw source bytes,
     /// and a tt node inside them is lowered elsewhere.
-    tt_spans: Vec<SourceSpan>,
+    tt_spans: TtSpans,
+    lowered_spans: TtSpans,
     script: bool,
     commonjs: bool,
     globals: HashMap<SourceSpan, GlobalStatement>,
+}
+
+#[derive(Debug)]
+pub(crate) struct TtSpans {
+    spans: Vec<SourceSpan>,
+    owners: Vec<SourceSpan>,
+    index: crate::span_index::SpanIndex,
+    starts: Vec<usize>,
+    by_start: Vec<usize>,
+    least_end: Vec<Vec<usize>>,
+}
+
+impl TtSpans {
+    fn new(entries: Vec<(SourceSpan, SourceSpan)>) -> Self {
+        let (spans, owners): (Vec<SourceSpan>, Vec<SourceSpan>) = entries.into_iter().unzip();
+        let index =
+            crate::span_index::SpanIndex::new(spans.iter().map(|span| (span.start, span.end)));
+        let mut by_start: Vec<usize> = (0..spans.len()).collect();
+        by_start.sort_by_key(|&at| spans[at].start);
+        let starts = by_start.iter().map(|&at| spans[at].start).collect();
+        let mut least_end = vec![by_start.iter().map(|&at| spans[at].end).collect::<Vec<_>>()];
+        let mut width = 1;
+        while width * 2 <= by_start.len() {
+            let previous = &least_end[least_end.len() - 1];
+            let next = (0..=by_start.len() - width * 2)
+                .map(|at| previous[at].min(previous[at + width]))
+                .collect();
+            least_end.push(next);
+            width *= 2;
+        }
+        Self {
+            spans,
+            owners,
+            index,
+            starts,
+            by_start,
+            least_end,
+        }
+    }
+
+    /// The span of the host owner the tt value at `at` evaluates in.
+    pub(crate) fn owner(&self, at: usize) -> SourceSpan {
+        self.owners[at]
+    }
+
+    pub(crate) fn iter(&self) -> std::slice::Iter<'_, SourceSpan> {
+        self.spans.iter()
+    }
+
+    pub(crate) fn overlapping(&self, span: SourceSpan) -> Vec<SourceSpan> {
+        let mut found = self.index.containing(span.start);
+        found.extend(self.index.starting_in(span.start, span.end));
+        found.sort_unstable();
+        found.dedup();
+        found
+            .into_iter()
+            .map(|index| self.spans[index])
+            .filter(|other| planning::overlaps(span, *other))
+            .collect()
+    }
+
+    pub(crate) fn any_within(&self, span: SourceSpan) -> bool {
+        let low = self.starts.partition_point(|&start| start < span.start);
+        let high = self.starts.partition_point(|&start| start <= span.end);
+        if low >= high {
+            return false;
+        }
+        let level = (usize::BITS - 1 - (high - low).leading_zeros()) as usize;
+        let width = 1 << level;
+        self.least_end[level][low].min(self.least_end[level][high - width]) <= span.end
+    }
+
+    pub(crate) fn within(&self, span: SourceSpan) -> Vec<(usize, SourceSpan)> {
+        let low = self.starts.partition_point(|&start| start < span.start);
+        let high = self.starts.partition_point(|&start| start <= span.end);
+        let mut found: Vec<_> = self.by_start[low..high.max(low)]
+            .iter()
+            .map(|&at| (at, self.spans[at]))
+            .filter(|(_, other)| other.end <= span.end)
+            .collect();
+        found.sort_unstable_by_key(|(at, _)| *at);
+        found
+    }
+
+    pub(crate) fn straddling(&self, span: SourceSpan) -> Vec<(usize, SourceSpan)> {
+        let mut found = self.index.containing(span.start);
+        if let Some(last) = span.end.checked_sub(1) {
+            found.extend(self.index.containing(last));
+        }
+        found.sort_unstable();
+        found.dedup();
+        found
+            .into_iter()
+            .map(|at| (at, self.spans[at]))
+            .filter(|(_, other)| {
+                planning::overlaps(span, *other)
+                    && !(span.start <= other.start && other.end <= span.end)
+            })
+            .collect()
+    }
 }
 
 #[derive(Debug, Default)]
@@ -132,8 +239,8 @@ pub(crate) struct LoweringPlan {
     owners: Vec<HostRewrite>,
     for_initializer_propagations: Vec<ForInitializerPropagation>,
     slot_names: Vec<String>,
-    /// Earlier materializations substituted when an enclosing source is captured.
-    capture_dependencies: HashMap<ValueSlotId, Vec<(SourceSpan, ValueSlotId)>>,
+    captures: HashMap<ValueSlotId, (usize, SourceSpan)>,
+    captured_slots: HashMap<(usize, SourceSpan), ValueSlotId>,
     value_slots: HashMap<ExprId, ValueSlotId>,
     piped_slots: HashMap<ExprId, Vec<ValueSlotId>>,
     nested_exits: HashMap<ExprId, Vec<HostExit>>,
@@ -145,6 +252,11 @@ pub(crate) struct LoweringPlan {
     expression_boundary_name: String,
     match_raise_name: String,
     match_show_name: String,
+    spread_name: String,
+    statement_decision_sources: Vec<SourceSpan>,
+    if_tests: Vec<crate::program_syntax::IfTestFacts>,
+    anonymous_functions: Vec<SourceSpan>,
+    function_names: Vec<(SourceSpan, String)>,
     generated_names: Option<crate::generated_names::GeneratedNames>,
     shadowed_globals: HashSet<String>,
     host_global_aliases: HashMap<String, HostGlobalAlias>,
@@ -253,14 +365,17 @@ pub(crate) struct PlannedConditionalOperation {
     pub(crate) active: Vec<PlannedActiveBranch>,
     /// The evaluation steps outside this operation (its own host context),
     /// shared by every consumed value.
-    pub(crate) outer: Vec<PlannedEvaluationStep>,
+    pub(crate) outer: crate::chain::ChainSlice<PlannedEvaluationStep>,
+    /// The authored text between the operation's pieces
+    /// ([`crate::program_syntax::ConditionalFacts::gaps`]).
+    pub(crate) gaps: Box<[SourceSpan]>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PlannedActiveBranch {
     pub(crate) value: ExprId,
     pub(crate) branch: SourceSpan,
-    pub(crate) steps: Vec<PlannedEvaluationStep>,
+    pub(crate) steps: crate::chain::ChainSlice<PlannedEvaluationStep>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -310,6 +425,9 @@ pub(crate) enum PlannedOperand {
         span: SourceSpan,
         spread: bool,
         values: Vec<ExprId>,
+        /// The capture slot, when a later argument holds a tt value: the
+        /// argument is then evaluated whole before that value runs.
+        capture: Option<ValueSlotId>,
     },
     /// Original argument source. Arguments before the last tt value are
     /// captured (in order) before the values run; arguments after it are
@@ -408,12 +526,12 @@ pub(crate) enum ExpressionBoundaryReason {
 pub(crate) struct EvaluationSchedule {
     /// Optional host-call completion carried from the syntax proof.
     pub(crate) call_completion: Option<PlannedCallCompletion>,
-    steps: Vec<PlannedEvaluationStep>,
+    steps: crate::chain::ChainSlice<PlannedEvaluationStep>,
 }
 
 /// A syntax-proven completable call with its generated-name reservations
 /// ([`crate::program_syntax::CallCompletionFacts`]).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PlannedCallCompletion {
     pub(crate) facts: crate::program_syntax::CallCompletionFacts,
     /// The slot that holds the captured callee instantiated with the
@@ -424,8 +542,23 @@ pub(crate) struct PlannedCallCompletion {
 }
 
 impl EvaluationSchedule {
-    pub(crate) fn steps(&self) -> &[PlannedEvaluationStep] {
+    pub(crate) fn steps(&self) -> &crate::chain::ChainSlice<PlannedEvaluationStep> {
         &self.steps
+    }
+
+    pub(crate) fn outermost_step(&self) -> Option<&PlannedEvaluationStep> {
+        outermost_step(&self.steps)
+    }
+
+    pub(crate) fn loop_test_count(&self) -> usize {
+        loop_test_count(&self.steps)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn edit_steps(&mut self, edit: impl FnOnce(&mut Vec<PlannedEvaluationStep>)) {
+        let mut steps = self.steps.to_vec();
+        edit(&mut steps);
+        self.steps = crate::chain::ChainSlice::whole(crate::chain::Chain::from_vec(steps));
     }
 }
 
@@ -433,11 +566,12 @@ impl EvaluationSchedule {
 pub(crate) struct PlannedEvaluationStep {
     pub(crate) parent: SourceSpan,
     pub(crate) operation: HostEvaluationOperation,
-    pub(crate) inputs: Vec<PlannedEvaluationInput>,
+    pub(crate) inputs: crate::chain::Segments<PlannedEvaluationInput>,
     /// The whole-operation structure, carried from the protocol when the
     /// step is conditional ([`crate::program_syntax::ConditionalFacts`]).
     pub(crate) conditional: Option<ConditionalFacts>,
     pub(crate) loop_test: Option<crate::program_syntax::LoopTestFacts>,
+    summary: StepsSummary,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -489,6 +623,9 @@ pub(crate) enum PlannedReceiver {
     Stable {
         source: SourceSpan,
     },
+    ThisOfSuper {
+        source: SourceSpan,
+    },
 }
 
 struct PendingPlannedValue {
@@ -517,6 +654,19 @@ struct PlannedSourceSlot {
 }
 
 impl LoweringPlan {
+    pub(crate) fn capture_depends_on(&self, target: ValueSlotId, earlier: SourceSpan) -> bool {
+        let Some(&(group, source)) = self.captures.get(&target) else {
+            return false;
+        };
+        earlier != source
+            && source.start <= earlier.start
+            && earlier.end <= source.end
+            && self
+                .captured_slots
+                .get(&(group, earlier))
+                .is_some_and(|dependency| dependency.0 < target.0)
+    }
+
     /// The plan of a file whose TypeScript gives no owner model. The helpers
     /// a lowering without owners still calls are named against the names
     /// the source already uses, as a built plan names them.
@@ -530,12 +680,14 @@ impl LoweringPlan {
         let expression_boundary_name = name("$tt_expr");
         let match_raise_name = name("$tt_raise");
         let match_show_name = name("$tt_show");
+        let spread_name = name("$tt_spread");
         let allocated = occupied.difference(&written).cloned().collect();
         Self {
             owner_model_unavailable: true,
             expression_boundary_name,
             match_raise_name,
             match_show_name,
+            spread_name,
             generated_names: Some(crate::generated_names::GeneratedNames::from_occupied(
                 occupied, allocated,
             )),
@@ -619,6 +771,27 @@ impl LoweringPlan {
 
     pub(crate) fn match_show_name(&self) -> &str {
         &self.match_show_name
+    }
+
+    pub(crate) fn spread_name(&self) -> &str {
+        &self.spread_name
+    }
+
+    pub(crate) fn statement_decision_sources(&self) -> &[SourceSpan] {
+        &self.statement_decision_sources
+    }
+
+    pub(crate) fn if_tests(&self) -> &[crate::program_syntax::IfTestFacts] {
+        &self.if_tests
+    }
+
+    /// [`crate::program_syntax::ProgramSyntax::anonymous_functions`].
+    pub(crate) fn anonymous_functions(&self) -> &[SourceSpan] {
+        &self.anonymous_functions
+    }
+
+    pub(crate) fn function_names(&self) -> &[(SourceSpan, String)] {
+        &self.function_names
     }
 
     pub(crate) fn host_global(&self, name: &str) -> String {

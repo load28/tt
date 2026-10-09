@@ -1,0 +1,24 @@
+// @run: aSpreadBesideATtValueReadsItsElementsFirst.tt
+variant V { A, B }
+const o: { a: number } = { a: 1 };
+const arr = [1, 2];
+function get(): V { o.a = 99; arr.push(7); return V.A; }
+function bump(v: V): number { o.a = 98; return v.kind === "A" ? 1 : 2; }
+export function objectScrutinee() {
+  return { ...o, b: match (get()) { A => 1, B => 0 } };
+}
+export function arrayScrutinee() {
+  return [...arr, match (get()) { A => 1, B => 0 }];
+}
+export function objectArm(v: V) {
+  o.a = 1;
+  return { ...o, b: match (v) { A => bump(v), B => 0 } };
+}
+export function arrayArm(v: V) {
+  arr.length = 2;
+  return [...arr, match (v) { A => arr.push(3), B => 0 }];
+}
+console.log(JSON.stringify(objectScrutinee()));
+console.log(JSON.stringify(arrayScrutinee()));
+console.log(JSON.stringify(objectArm(V.A)));
+console.log(JSON.stringify(arrayArm(V.A)));

@@ -1,0 +1,15 @@
+// @run: aTryInAForInitializerInsideAResultBlockRunsBeforeTheLoop.tt
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+const ok = (value: number): R<number> => ({ kind: "Ok", value });
+const err = (error: string): R<number> => ({ kind: "Err", error });
+
+function sum(start: R<number>): R<number> {
+    return result {
+        let total = 0;
+        for (let i = try start; i < 3; i++) { total += i; }
+        return total;
+    };
+}
+
+console.log(JSON.stringify(sum(ok(0))), JSON.stringify(sum(err("no start"))));
+export {};

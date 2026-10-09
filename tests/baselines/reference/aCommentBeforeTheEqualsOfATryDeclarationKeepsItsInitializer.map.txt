@@ -1,0 +1,9 @@
+//// [aCommentBeforeTheEqualsOfATryDeclarationKeepsItsInitializer.tt] 7 mapping(s)
+1:1 -> 1:1 len 150  "type R = { kind: \"Ok\"; value: number } | { kind:"...
+4:9 -> 8:9 len 10  "v //C\n    "
+5:11 -> 4:18 len 5  "ok(3)"
+5:16 -> 9:19 len 44  ";\n  return ok(v + 1);\n}\nfunction g(): R {\n  "
+9:9 -> 17:9 len 14  "w /* block */ "
+9:29 -> 13:18 len 5  "ok(5)"
+9:34 -> 17:37 len 79  ";\n  return ok(w * 2);\n}\nconsole.log(JSON.stringi"...
+

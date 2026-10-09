@@ -1,0 +1,19 @@
+//// [aDiscardedCommaOperandThatIsATtValueIsRemoved.tt] 17 mapping(s)
+1:1 -> 19:1 len 82  "import * as Result from \"@tt/std/result\";\nimport"...
+3:18 -> 22:21 len 6  "number"
+3:18 -> 25:10 len 6  "number"
+3:30 -> 27:3 len 208  "\nconst seen: number[] = [];\nconst r = (n: number"...
+7:3 -> 70:3 len 10  "const q = "
+7:20 -> 58:15 len 1  "("
+7:25 -> 34:20 len 4  "r(k)"
+7:30 -> 58:16 len 1  " "
+7:38 -> 42:21 len 1  "v"
+7:45 -> 45:19 len 1  "n"
+7:51 -> 46:20 len 1  "n"
+7:59 -> 50:20 len 1  "0"
+7:62 -> 58:23 len 11  ") as number"
+7:77 -> 60:12 len 1  "1"
+7:82 -> 61:18 len 5  "\"one\""
+7:94 -> 65:18 len 7  "\"other\""
+7:103 -> 70:19 len 113  ";\n  return Result.Ok(q);\n}\nconsole.log(JSON.stri"...
+

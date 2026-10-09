@@ -1,0 +1,13 @@
+variant O { A(n: number), B }
+declare const obj: { m(a: number, b: number): number } | undefined;
+declare function g(a: number, b: number): number;
+export function f(o: O, c: boolean) {
+  const a = obj?.m(/*C1*/ 1, match (o) { A(n) => n, B => 0 });
+  const b = new Array(/*C2*/ 1, match (o) { A(n) => n, B => 0 });
+  const d = c ? /*C3*/ 1 : match (o) { A(n) => n, B => 0 };
+  const e = c /*C4*/ && match (o) { A(n) => n, B => 0 };
+  const h = [/*C5*/ match (o) { A(n) => n, B => 0 } /*C6*/];
+  const i = o /*C7*/ |> /*C8*/ (v => v) /*C9*/;
+  const j = g(1, /*C10*/ match (o) { A(n) => /*C11*/ n /*C12*/, B => 0 } /*C13*/);
+  return [a, b, d, e, h, i, j];
+}

@@ -1,0 +1,77 @@
+=== aTtValueAsADiscardedCommaOperandLeavesNothingBehind.tt ===
+variant O { A(n: number), B }
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => O
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const log: string[] = [];
+>log : const log: string[]
+const r = (n: number): TResult<number, string> => { log.push("r" + n); return { kind: "Ok", value: n }; };
+>r : const r: (n: number) => TResult<number, string>
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>n : (parameter) n: number
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>n : (parameter) n: number
+export function f(o: O) {
+>f : function f(o: O): number
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  match (o) { A(n) => log.push("a" + n), B => 0 }, log.push("second");
+>o : (parameter) o: O
+>n : const n: number
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>n : const n: number
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  const x = (match (o) { A(n) => n, B => 0 }, 5);
+>x : const x: 5
+>o : (parameter) o: O
+>n : const n: number
+>n : const n: number
+  return x;
+>x : const x: 5
+export function g(): TResult<number, string> {
+>g : function g(): TResult<number, string>
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+  const y = (try r(1), try r(2));
+>y : const y: number
+>r : const r: (n: number) => TResult<number, string>
+>r : const r: (n: number) => TResult<number, string>
+  return { kind: "Ok", value: y };
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>y : const y: number
+console.log(f(O.A(1)), JSON.stringify(g()), log.join());
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>f : function f(o: O): number
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => O
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>g : function g(): TResult<number, string>
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

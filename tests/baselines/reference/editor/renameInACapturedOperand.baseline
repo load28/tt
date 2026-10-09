@@ -1,0 +1,9 @@
+=== rename /*read*/ renameInACapturedOperand.tt:6:17 ===
+  |   const v = add(box, try parse("1"));
+  |                 ^ /*read*/
+prepareRename: 6:17-6:20 "box"
+rename: 3 edit(s)
+  renameInACapturedOperand.tt 5:9-5:12 "box" -> "ttRenamePlaceholder"
+  renameInACapturedOperand.tt 6:17-6:20 "box" -> "ttRenamePlaceholder"
+  renameInACapturedOperand.tt 7:35-7:38 "box" -> "ttRenamePlaceholder"
+

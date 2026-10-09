@@ -59,7 +59,7 @@ return c ? f(($tt_subject = o, ($tt_subject.kind === "A") ? 1 : ($tt_subject.kin
 function left(c: boolean, o: O) { let $tt_v9: number;
 if (c) {
   let $tt_v6: number;
-  const $tt_v7 = (f);
+  const $tt_v7: typeof f = (f);
   {
     const $tt_m = o;
     switch ($tt_m.kind) {
@@ -89,7 +89,7 @@ return c ? ($tt_subject_3 = o, ($tt_subject_3.kind === "A") ? 5 : ($tt_subject_3
 function wrapped(c: boolean, r: R<number>): R<number> { let $tt_v18: R<number>;
 if (c) {
   let $tt_v15: number;
-  const $tt_v16 = (Ok);
+  const $tt_v16: typeof Ok = (Ok);
   const $tt_t0 = r;
   if (!("value" in $tt_t0)) {
     return $tt_t0;

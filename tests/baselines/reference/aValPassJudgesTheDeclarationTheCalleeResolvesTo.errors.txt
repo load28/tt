@@ -1,0 +1,28 @@
+==== ttc --out-dir (exit 1) ====
+error[val-pass]: cannot pass val binding `cfg` to mutable parameter `y` of `h` (the parameter is not declared with `val`, so the function may mutate through it)
+ --> ./aValPassJudgesTheDeclarationTheCalleeResolvesTo.tt:3:41
+  |
+3 | export function outer(val cfg: Cfg) { h(cfg); }
+  |                                         ^^^
+
+error[val-pass]: cannot pass val binding `cfg` to mutable parameter `y` of `set` (the parameter is not declared with `val`, so the function may mutate through it)
+ --> ./aValPassJudgesTheDeclarationTheCalleeResolvesTo.tt:9:50
+  |
+9 | export function later(val cfg: Cfg) { return set(cfg); }
+  |                                                  ^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[val-pass]: cannot pass val binding `cfg` to mutable parameter `y` of `h` (the parameter is not declared with `val`, so the function may mutate through it)
+ --> aValPassJudgesTheDeclarationTheCalleeResolvesTo.tt:3:41
+  |
+3 | export function outer(val cfg: Cfg) { h(cfg); }
+  |                                         ^^^
+error[val-pass]: cannot pass val binding `cfg` to mutable parameter `y` of `set` (the parameter is not declared with `val`, so the function may mutate through it)
+ --> aValPassJudgesTheDeclarationTheCalleeResolvesTo.tt:9:50
+  |
+9 | export function later(val cfg: Cfg) { return set(cfg); }
+  |                                                  ^^^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

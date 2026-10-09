@@ -4,7 +4,7 @@
 2:30 -> 24:18 len 6  "number"
 2:46 -> 26:3 len 337  "\ntype Item = {kind: \"item\"; run: (x: number) => "...
 9:3 -> 56:3 len 15  "const result = "
-9:18 -> 34:19 len 7  "consume"
+9:18 -> 34:35 len 7  "consume"
 9:33 -> 36:19 len 22  "mark(\"subject\", state)"
 10:11 -> 39:17 len 5  "value"
 11:7 -> 40:9 len 79  "for (const step of [1, 2]) {\n        if (step =="...
@@ -13,7 +13,7 @@
 15:14 -> 44:25 len 35  "{kind: \"item\", run: x => x - value}"
 17:14 -> 48:25 len 29  "({kind: \"item\", run: x => x})"
 18:5 -> 56:24 len 185  " + mark(\"after\", 10);\n  console.log(result, trac"...
-24:3 -> 62:19 len 8  "throwing"
+24:3 -> 62:36 len 8  "throwing"
 24:19 -> 64:19 len 14  "State.Ready(1)"
 25:11 -> 67:17 len 5  "value"
 25:23 -> 68:9 len 15  "if (value > 0) "

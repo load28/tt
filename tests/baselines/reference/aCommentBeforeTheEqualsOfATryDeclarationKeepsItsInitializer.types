@@ -1,0 +1,67 @@
+=== aCommentBeforeTheEqualsOfATryDeclarationKeepsItsInitializer.tt ===
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+const ok = (n: number): R => ({ kind: "Ok", value: n });
+>ok : const ok: (n: number) => R
+>n : (parameter) n: number
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>n : (parameter) n: number
+function f(): R {
+>f : function f(): R
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+  const v //C
+>v : const v: number
+    = try ok(3);
+>ok : const ok: (n: number) => R
+  return ok(v + 1);
+>ok : const ok: (n: number) => R
+>v : const v: number
+function g(): R {
+>g : function g(): R
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+  const w /* block */ = try ok(5);
+>w : const w: number
+>ok : const ok: (n: number) => R
+  return ok(w * 2);
+>ok : const ok: (n: number) => R
+>w : const w: number
+console.log(JSON.stringify(f()), JSON.stringify(g()));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>f : function f(): R
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>g : function g(): R
+

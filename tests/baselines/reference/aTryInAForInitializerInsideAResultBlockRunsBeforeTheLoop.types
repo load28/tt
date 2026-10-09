@@ -1,0 +1,79 @@
+=== aTryInAForInitializerInsideAResultBlockRunsBeforeTheLoop.tt ===
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Ok"
+>value : (property) value: T
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Err"
+>error : (property) error: string
+const ok = (value: number): R<number> => ({ kind: "Ok", value });
+>ok : const ok: (value: number) => R<number>
+>value : (parameter) value: number
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+const err = (error: string): R<number> => ({ kind: "Err", error });
+>err : const err: (error: string) => R<number>
+>error : (parameter) error: string
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Err"
+>error : (property) error: string
+function sum(start: R<number>): R<number> {
+>sum : function sum(start: R<number>): R<number>
+>start : (parameter) start: R<number>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+        let total = 0;
+>total : let total: number
+        for (let i = try start; i < 3; i++) { total += i; }
+>i : let i: number
+>start : (parameter) start: R<number>
+>i : let i: number
+>i : let i: number
+>total : let total: number
+>i : let i: number
+        return total;
+>total : let total: number
+console.log(JSON.stringify(sum(ok(0))), JSON.stringify(sum(err("no start"))));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>sum : function sum(start: R<number>): R<number>
+>ok : const ok: (value: number) => R<number>
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>sum : function sum(start: R<number>): R<number>
+>err : const err: (error: string) => R<number>
+

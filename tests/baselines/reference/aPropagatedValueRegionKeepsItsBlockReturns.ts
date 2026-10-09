@@ -84,7 +84,7 @@ function statement(): R<number> {
         $tt_v16 = $tt_t1;
         break $tt_v16;
       }
-      const w = $tt_t1.value; { const $tt_a0 = { value: { kind: "Ok" as const, value: w + 1 } }; $tt_v16 = $tt_a0.value; break $tt_v16; }
+      const w = $tt_t1.value; { $tt_v16 = { kind: "Ok" as const, value: w + 1 }; break $tt_v16; }
     }
     const $tt_t0 = $tt_v16;
     if (!("value" in $tt_t0)) {
@@ -108,7 +108,7 @@ function product(fail: boolean): R<number> {
         $tt_v17 = $tt_t3;
         break $tt_v17;
       }
-      const w = $tt_t3.value; { const $tt_a1 = { value: { kind: "Ok" as const, value: w + 1 } }; $tt_v17 = $tt_a1.value; break $tt_v17; }
+      const w = $tt_t3.value; { $tt_v17 = { kind: "Ok" as const, value: w + 1 }; break $tt_v17; }
     }
     const $tt_t2 = $tt_v17;
     if (!("value" in $tt_t2)) {
@@ -132,7 +132,7 @@ function discarded(): R<number> {
         $tt_v18 = $tt_t5;
         break $tt_v18;
       }
-      const w = $tt_t5.value; { const $tt_a2 = { value: { kind: "Ok" as const, value: w } }; $tt_v18 = $tt_a2.value; break $tt_v18; }
+      const w = $tt_t5.value; { $tt_v18 = { kind: "Ok" as const, value: w }; break $tt_v18; }
     }
     const $tt_t4 = $tt_v18;
     if (!("value" in $tt_t4)) {
@@ -202,7 +202,7 @@ function guarded(ready: boolean, b: boolean): R<number> {
 }
 function argument(b: boolean): R<number> {
     let $tt_v7: number;
-    const $tt_v9 = (String);
+    const $tt_v9: typeof String = (String);
     let $tt_v8: R<number>;
     {
       const $tt_m = b;
@@ -245,7 +245,7 @@ function alternate(ready: boolean): R<number> {
           $tt_v19 = $tt_t10;
           break $tt_v19;
         }
-        const w = $tt_t10.value; { const $tt_a3 = { value: { kind: "Ok" as const, value: w + 1 } }; $tt_v19 = $tt_a3.value; break $tt_v19; }
+        const w = $tt_t10.value; { $tt_v19 = { kind: "Ok" as const, value: w + 1 }; break $tt_v19; }
       }
       const $tt_t9 = $tt_v19;
       if (!("value" in $tt_t9)) {
@@ -275,7 +275,7 @@ function piped(): R<string> {
           $tt_v21 = $tt_t12;
           break $tt_v21;
         }
-        const w = $tt_t12.value; { const $tt_a4 = { value: { kind: "Ok" as const, value: w + 1 } }; $tt_v21 = $tt_a4.value; break $tt_v21; }
+        const w = $tt_t12.value; { $tt_v21 = { kind: "Ok" as const, value: w + 1 }; break $tt_v21; }
       }
       const $tt_t11 = $tt_v21;
       if (!("value" in $tt_t11)) {
@@ -336,14 +336,14 @@ $tt_v15: {
       $tt_v23 = $tt_t15;
       break $tt_v23;
     }
-    const w = $tt_t15.value; { const $tt_a5 = { value: { kind: "Ok" as const, value: w + 1 } }; $tt_v23 = $tt_a5.value; break $tt_v23; }
+    const w = $tt_t15.value; { $tt_v23 = { kind: "Ok" as const, value: w + 1 }; break $tt_v23; }
   }
   const $tt_t14 = $tt_v23;
   if (!("value" in $tt_t14)) {
     $tt_v15 = $tt_t14;
     break $tt_v15;
   }
-  const q = $tt_t14.value; { const $tt_a6 = { value: { kind: "Ok" as const, value: q * 2 } }; $tt_v15 = $tt_a6.value; break $tt_v15; }
+  const q = $tt_t14.value; { $tt_v15 = { kind: "Ok" as const, value: q * 2 }; break $tt_v15; }
 }
 const nested = $tt_v15;
 console.log(JSON.stringify([statement(), product(false), product(true), discarded()]));

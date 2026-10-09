@@ -1,0 +1,5 @@
+// @completions: field, generic
+interface Point2 { x: number }
+const localValue = 1;
+export variant Shape { Circle(radius: number), Tri(p: /*field*/) }
+export variant Tree<T> { Leaf(value: /*generic*/) }

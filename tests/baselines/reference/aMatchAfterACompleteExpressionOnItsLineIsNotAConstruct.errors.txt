@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+error[source-not-typescript]: the TypeScript here does not parse: Expected ',', got 'ident'. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> ./aMatchAfterACompleteExpressionOnItsLineIsNotAConstruct.tt:3:43
+  |
+3 | const show = (n: number) => console.log(n)match (g) { E => 1, F => 2 } |> (show)
+  |                                           ^
+
+
+==== ttc --check-types (exit 1) ====
+error[source-not-typescript]: the TypeScript here does not parse: Expected ',', got 'ident'. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> aMatchAfterACompleteExpressionOnItsLineIsNotAConstruct.tt:3:43
+  |
+3 | const show = (n: number) => console.log(n)match (g) { E => 1, F => 2 } |> (show)
+  |                                           ^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

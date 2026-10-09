@@ -1,0 +1,22 @@
+=== invalidTypeScriptInAPipelineStepIsNotTypeScript.tt ===
+export function f(r: number) { const x = r |> ((q) => q.); return x; }
+>f : function f(r: number): any
+>r : (parameter) r: number
+>x : const x: any
+>r : (parameter) r: number
+>q : (parameter) q: number
+>q : (parameter) q: number
+>x : const x: any
+export function g(r: number) { const y = r |> h(r.); return y; }
+>g : function g(r: number): number
+>r : (parameter) r: number
+>y : const y: number
+>r : (parameter) r: number
+>h : function h(n: number): (m: number) => number
+>r : (parameter) r: number
+>y : const y: number
+declare function h(n: number): (m: number) => number;
+>h : function h(n: number): (m: number) => number
+>n : (parameter) n: number
+>m : (parameter) m: number
+

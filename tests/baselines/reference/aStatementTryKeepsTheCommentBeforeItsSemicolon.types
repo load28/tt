@@ -1,0 +1,15 @@
+=== aStatementTryKeepsTheCommentBeforeItsSemicolon.tt ===
+declare function r(): TResult<number, string>;
+>r : function r(): TResult<number, string>
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+export function f(): TResult<number, string> {
+>f : function f(): TResult<number, string>
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+  try r() /* validated */;
+>r : function r(): TResult<number, string>
+  try r() // note
+>r : function r(): TResult<number, string>
+  return { kind: "Ok", value: 1 };
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+

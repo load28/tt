@@ -1,0 +1,39 @@
+=== hover /*inner*/ nestedTagHoverUnderAGenericPayload.tt:10:18 ===
+  |     Has(item: Circle(radius: r)) => r,
+  |                  ^ /*inner*/
+hover: null
+ttSymbol: null
+patternSymbol: case Circle of Shape at 10:15-10:21 "Circle"
+    Shape.Circle(radius: number)
+  detail:
+    payload case — compiles to a constructor function of `variant Shape`
+  definition: nestedTagHoverUnderAGenericPayload.tt 1:17-1:23 "Circle"
+
+=== hover /*deeper*/ nestedTagHoverUnderAGenericPayload.tt:16:29 ===
+  |     Full(value: Has(item: Point())) => 0,
+  |                             ^ /*deeper*/
+hover: null
+ttSymbol: null
+patternSymbol: case Point of Shape at 16:27-16:32 "Point"
+    Shape.Point
+  detail:
+    unit case — compiles to a singleton value of `variant Shape`
+  definition: nestedTagHoverUnderAGenericPayload.tt 1:41-1:46 "Point"
+
+=== hover /*declared*/ nestedTagHoverUnderAGenericPayload.tt:22:21 ===
+  |     Holds(shape: Circle(radius: r)) => r,
+  |                     ^ /*declared*/
+hover: null
+ttSymbol: case Circle of Shape at 22:18-22:24 "Circle"
+    Shape.Circle(radius: number)
+  detail:
+    payload case — compiles to a constructor function of `variant Shape`
+  definition: nestedTagHoverUnderAGenericPayload.tt 1:17-1:23 "Circle"
+
+=== hover /*binding*/ nestedTagHoverUnderAGenericPayload.tt:10:30 ===
+  |     Has(item: Circle(radius: r)) => r,
+  |                              ^ /*binding*/
+hover: 10:30-10:31 "r"
+    const r: number
+ttSymbol: null
+

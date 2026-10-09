@@ -48,23 +48,25 @@ impl<'a> Emitter<'a> {
         };
         let mut out = Rope::new();
         if self.has_conditional_match_dispatch(expr) {
-            for subject in &decision.subjects {
+            for (index, subject) in decision.subjects.iter().enumerate() {
                 out.append(self.emit_subject_initialization(
                     subject,
                     &self.temp_name(subject.temporary),
                     decision.head,
+                    self.match_leading(decision, index),
                 ));
                 out.push_break(0);
             }
             return out;
         }
         out.push_lit("{");
-        for subject in &decision.subjects {
+        for (index, subject) in decision.subjects.iter().enumerate() {
             out.push_break(1);
             out.append(self.emit_subject_initialization(
                 subject,
                 &self.temp_name(subject.temporary),
                 decision.head,
+                self.match_leading(decision, index),
             ));
         }
         let DecisionKind::Match { dispatch, .. } = decision.kind else {
@@ -150,6 +152,7 @@ impl<'a> Emitter<'a> {
                     last = true;
                 }
             }
+            let arrow_commented = self.push_arrow_comments(arm, 0, &mut out);
             let value = self.emit_deferred_arm_value(expr, &arm.action);
             push_grouped(
                 &mut out,
@@ -157,7 +160,7 @@ impl<'a> Emitter<'a> {
                 self.source_kind,
             );
             let pattern_commented = self.push_head_comments(arm, 0, &mut out);
-            if commented || pattern_commented {
+            if commented || pattern_commented || arrow_commented {
                 out.push_break(0);
             }
             if last {
@@ -170,12 +173,16 @@ impl<'a> Emitter<'a> {
             if self.push_head_comments(arm, 0, &mut out) || commented {
                 out.push_break(0);
             }
+            self.push_arrow_comments(arm, 0, &mut out);
         }
         if self.push_gap_comments(decision.trailing, 0, &mut out) {
             out.push_break(0);
         }
         out.push_lit(")");
-        self.scoped_if_commented(decision, out)
+        let (_, start, _, extent) = self.value_anchor(expr);
+        let mut read = Rope::new();
+        read.relocated_operand(start, extent, self.scoped_if_commented(decision, out));
+        read
     }
 
     fn emit_deferred_arm_value(&self, expr: ExprId, action: &ArmAction) -> Rope<'a> {
@@ -253,6 +260,7 @@ impl<'a> Emitter<'a> {
             } else {
                 total = true;
             }
+            let arrow_commented = self.push_arrow_comments(arm, 0, &mut out);
             push_grouped(
                 &mut out,
                 guard_line_comment(
@@ -263,7 +271,7 @@ impl<'a> Emitter<'a> {
                 self.source_kind,
             );
             let pattern_commented = self.push_head_comments(arm, 0, &mut out);
-            if commented || pattern_commented {
+            if commented || pattern_commented || arrow_commented {
                 out.push_break(0);
             }
             if total {
@@ -276,6 +284,7 @@ impl<'a> Emitter<'a> {
             if self.push_head_comments(arm, 0, &mut out) || commented {
                 out.push_break(0);
             }
+            self.push_arrow_comments(arm, 0, &mut out);
         }
         if self.push_gap_comments(decision.trailing, 0, &mut out) {
             out.push_break(0);
@@ -637,6 +646,7 @@ impl<'a> Emitter<'a> {
             out.push_lit(") {");
             out.push_break(action_depth);
         }
+        self.push_arrow_comments(arm, action_depth, out);
         out.append(action);
         if arm.guard.is_some() {
             out.push_break(depth);
@@ -717,6 +727,65 @@ impl<'a> Emitter<'a> {
         self.emit_value_delivery_control(body, close, continuation, break_label, exit_depth, true)
     }
 
+    /// `value` as generated storage receives it without naming it. Assigning
+    /// an anonymous function definition to an identifier or writing it as a
+    /// property value gives the function that name (ECMA-262
+    /// NamedEvaluation); the source position the value came from names
+    /// nothing, so a value that is one is written as the right operand of a
+    /// comma expression, which is not a function definition.
+    pub(super) fn unnamed(&self, value: Rope<'a>) -> Rope<'a> {
+        if !value
+            .source_bounds()
+            .is_some_and(|(start, end)| self.anonymous_function(start, end))
+        {
+            return value;
+        }
+        let mut out = Rope::new();
+        out.push_lit("(void 0, ");
+        out.append(value);
+        out.push_lit(")");
+        out
+    }
+
+    pub(super) fn named_as_written(&self, span: SourceSpan, value: Rope<'a>) -> Rope<'a> {
+        if !self.anonymous_function(span.start, span.end) {
+            return value;
+        }
+        let mut out = Rope::new();
+        match self
+            .function_names
+            .binary_search_by_key(&(span.start, span.end), |(named, _)| {
+                (named.start, named.end)
+            }) {
+            Ok(index) => {
+                let key =
+                    serde_json::Value::from(self.function_names[index].1.as_str()).to_string();
+                out.push_lit(format!("({{ {key}: "));
+                out.append(value);
+                out.push_lit(format!(" }})[{key}]"));
+            }
+            Err(_) => {
+                out.push_lit("(void 0, ");
+                out.append(value);
+                out.push_lit(")");
+            }
+        }
+        out
+    }
+
+    /// Whether the source from `start` to `end` is an anonymous function
+    /// definition, as a value written from `start` and no further than the
+    /// definition's end is.
+    pub(super) fn anonymous_function(&self, start: usize, end: usize) -> bool {
+        let first = self
+            .anonymous_functions
+            .partition_point(|span| span.start < start);
+        self.anonymous_functions[first..]
+            .iter()
+            .take_while(|span| span.start == start)
+            .any(|span| end <= span.end)
+    }
+
     fn wrapped_delivery(&self, body: Rope<'a>, wrappers: &[ValueWrapper]) -> (Rope<'a>, bool) {
         let body_grouped = needs_grouping(&body, self.source_kind);
         let Some(innermost) = wrappers.len().checked_sub(1) else {
@@ -760,6 +829,11 @@ impl<'a> Emitter<'a> {
         exit_depth: Option<u16>,
         exit_after_assignment: bool,
     ) -> Rope<'a> {
+        let body = if continuation.names_value() {
+            self.unnamed(body)
+        } else {
+            body
+        };
         let (value, grouped) = self.wrapped_delivery(body, &continuation.wrappers);
         let mut out = Rope::new();
         match continuation.destination {
@@ -769,12 +843,15 @@ impl<'a> Emitter<'a> {
                 prefix,
                 result: Some(result),
                 ..
-            } => out.push_lit(format!("{result} = {prefix}")),
+            } => {
+                out.push_lit(format!("{result} = "));
+                prefix.push_to(self.source, &mut out);
+            }
             ValueDestination::Invoke {
                 prefix,
                 result: None,
                 ..
-            } => out.push_lit(prefix.to_owned()),
+            } => prefix.push_to(self.source, &mut out),
         }
         let frame = match continuation.destination {
             ValueDestination::Invoke { frame, .. } => frame,
@@ -797,8 +874,8 @@ impl<'a> Emitter<'a> {
         if let Some((_, tail)) = frame {
             out.push_src(&self.source[tail.start..tail.end], tail.start);
         }
-        if matches!(continuation.destination, ValueDestination::Invoke { .. }) {
-            out.push_lit(")");
+        if let ValueDestination::Invoke { close, .. } = continuation.destination {
+            close.push_to(self.source, &mut out);
         }
         out.push_lit(";");
         if continuation.assigns() && exit_after_assignment {
@@ -876,10 +953,13 @@ impl<'a> Emitter<'a> {
             Test::Variant { place, constructor } => {
                 let mut test =
                     self.emit_place(place, decision, Some(constructor_node(constructor)));
-                test.push_lit(format!(
-                    ".kind === \"{}\"",
-                    self.constructor_name(constructor)
-                ));
+                let literal = format!("\"{}\"", self.constructor_name(constructor));
+                if place.fields.is_empty() {
+                    test.push_lit(format!(".kind === {literal}"));
+                } else {
+                    test.push_lit(".kind === ");
+                    test.push_payload_tag(self.span(constructor_node(constructor)).start, literal);
+                }
                 let (tag, at) = self.source_node(constructor_node(constructor));
                 let head = self.span(decision.head);
                 let mut out = Rope::new();
@@ -1051,6 +1131,11 @@ impl<'a> Emitter<'a> {
                         .fields
                         .last()
                         .is_some_and(|field| helpers::field_node(field) == other.binding),
+                    declared: other
+                        .source
+                        .fields
+                        .last()
+                        .is_some_and(|field| matches!(field, FieldAccess::Resolved { .. })),
                 }
             })
             .collect();

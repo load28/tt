@@ -4,7 +4,7 @@
 //! method call's receiver ([`super::method_calls`]) and the root of an
 //! assignment, update, or `delete` target ([`super::targets`]).
 
-use swc_ecma_ast::{Expr, Ident, OptChainBase};
+use swc_ecma_ast::{Expr, Ident, MemberProp, OptChainBase};
 
 /// The operand a TypeScript expression wrapper evaluates to. Parentheses,
 /// a non-null assertion (`x!`), a type assertion (`x as T`, `<T>x`,
@@ -42,4 +42,23 @@ fn access_path_grown(expr: &Expr) -> Option<(&Ident, usize)> {
         _ => return None,
     };
     access_path(object).map(|(root, steps)| (root, steps + 1))
+}
+
+/// The identifier a call argument passes along: an access path whose last
+/// step, if any, names a property, read through wrappers as
+/// [`access_path`] reads them (`(x as T).a` passes `x`; `x[k]` passes
+/// whatever `k` selects).
+pub(super) fn argument_root(expr: &Expr) -> Option<&Ident> {
+    let last = match unwrapped(expr) {
+        Expr::Member(member) => Some(&member.prop),
+        Expr::OptChain(chain) => match &*chain.base {
+            OptChainBase::Member(member) => Some(&member.prop),
+            OptChainBase::Call(_) => return None,
+        },
+        _ => None,
+    };
+    if matches!(last, Some(MemberProp::Computed(_))) {
+        return None;
+    }
+    access_path(expr).map(|(root, _)| root)
 }

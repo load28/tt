@@ -118,7 +118,7 @@ fn source_in_a_top_level_construct_is_an_insertion_boundary() {
 #[test]
 fn target_rejects_unbalanced_anchor_structure() {
     let rope = Rope {
-        pieces: vec![Piece::Close],
+        pieces: vec![Piece::Close].into(),
         len: 0,
     };
     let target = TargetFile::from_rope(rope, 0);

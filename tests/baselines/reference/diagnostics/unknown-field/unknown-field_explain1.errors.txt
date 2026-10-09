@@ -5,7 +5,7 @@ error[unknown-field]: variant Shape: case `Circle` has no field `radus`
 5 |       Circle(radus) => radus,
   |              ^^^^^
   |
-  = help: a field with a similar name exists: `radius`
+  = help: a field with a similar name exists: `radius: radus`
 
 
 ==== ttc --check-types (exit 1) ====
@@ -15,7 +15,7 @@ error[unknown-field]: variant Shape: case `Circle` has no field `radus`
 5 |       Circle(radus) => radus,
   |              ^^^^^
   |
-  = help: a field with a similar name exists: `radius`
+  = help: a field with a similar name exists: `radius: radus`
 
 ==== tsc on the emitted TypeScript ====
 nothing was emitted

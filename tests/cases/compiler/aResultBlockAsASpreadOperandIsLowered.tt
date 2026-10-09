@@ -1,0 +1,5 @@
+// @run: aResultBlockAsASpreadOperandIsLowered.tt
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+function r(): R<number[]> { return { kind: "Ok", value: [1, 2] }; }
+function f() { return { ...result { const q = try r(); return q; } }; }
+console.log(JSON.stringify(f()));

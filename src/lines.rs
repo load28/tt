@@ -72,36 +72,76 @@ pub struct LineMap<'a> {
     text: &'a str,
     signature: usize,
     /// Byte offset of each line's first byte.
-    starts: Vec<usize>,
+    starts: std::borrow::Cow<'a, [usize]>,
     /// Byte offset of each line's break, or of the text's end on the last.
+    ends: std::borrow::Cow<'a, [usize]>,
+    /// Whether each line is ASCII, so its columns are its byte offsets.
+    ascii: std::borrow::Cow<'a, [bool]>,
+}
+
+/// A [`LineMap`]'s measurements, kept apart from the text they measure.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct LineIndex {
+    signature: usize,
+    starts: Vec<usize>,
     ends: Vec<usize>,
+    ascii: Vec<bool>,
 }
 
 impl<'a> LineMap<'a> {
     /// Measures `text` under `breaks`.
     #[must_use]
     pub fn new(text: &'a str, breaks: LineBreaks) -> Self {
+        crate::work::tick("line measurements");
         let bytes = text.as_bytes();
         let signature = signature_len(text);
         let mut starts = vec![signature];
         let mut ends = Vec::new();
+        let mut ascii = Vec::new();
+        let mut line_ascii = true;
         let mut at = signature;
         while at < bytes.len() {
             match breaks.break_end(bytes, at) {
                 Some(next) => {
                     ends.push(at);
+                    ascii.push(line_ascii);
+                    line_ascii = true;
                     starts.push(next);
                     at = next;
                 }
-                None => at += 1,
+                None => {
+                    line_ascii &= bytes[at].is_ascii();
+                    at += 1;
+                }
             }
         }
         ends.push(bytes.len());
+        ascii.push(line_ascii);
         Self {
             text,
             signature,
-            starts,
-            ends,
+            starts: starts.into(),
+            ends: ends.into(),
+            ascii: ascii.into(),
+        }
+    }
+
+    pub(crate) fn index(&self) -> LineIndex {
+        LineIndex {
+            signature: self.signature,
+            starts: self.starts.to_vec(),
+            ends: self.ends.to_vec(),
+            ascii: self.ascii.to_vec(),
+        }
+    }
+
+    pub(crate) fn indexed(text: &'a str, index: &'a LineIndex) -> Self {
+        Self {
+            text,
+            signature: index.signature,
+            starts: std::borrow::Cow::Borrowed(&index.starts),
+            ends: std::borrow::Cow::Borrowed(&index.ends),
+            ascii: std::borrow::Cow::Borrowed(&index.ascii),
         }
     }
 
@@ -174,6 +214,10 @@ impl<'a> LineMap<'a> {
     #[must_use]
     pub fn utf16_position(&self, byte: usize) -> (usize, usize) {
         let (line, prefix) = self.prefix(byte);
+        if self.ascii[line] {
+            return (line, prefix.len());
+        }
+        crate::work::tick_by("column scan bytes", prefix.len());
         (line, prefix.encode_utf16().count())
     }
 
@@ -182,6 +226,10 @@ impl<'a> LineMap<'a> {
     #[must_use]
     pub fn char_position(&self, byte: usize) -> (usize, usize) {
         let (line, prefix) = self.prefix(byte);
+        if self.ascii[line] {
+            return (line, prefix.len());
+        }
+        crate::work::tick_by("column scan bytes", prefix.len());
         (line, prefix.chars().count())
     }
 
@@ -194,6 +242,10 @@ impl<'a> LineMap<'a> {
         let Some(text) = self.line_text(line) else {
             return self.text.len();
         };
+        if self.ascii[line] {
+            return self.starts[line] + column.min(text.len());
+        }
+        crate::work::tick_by("column scan bytes", text.len());
         let mut units = 0;
         for (byte, ch) in text.char_indices() {
             units += ch.len_utf16();
@@ -211,6 +263,10 @@ impl<'a> LineMap<'a> {
     pub fn char_offset(&self, line: usize, column: usize) -> Option<usize> {
         let text = self.line_text(line)?;
         let start = self.starts[line];
+        if self.ascii[line] {
+            return (column <= text.len()).then_some(start + column);
+        }
+        crate::work::tick_by("column scan bytes", text.len());
         match text.char_indices().nth(column) {
             Some((byte, _)) => Some(start + byte),
             None => (column == text.chars().count()).then_some(self.ends[line]),
@@ -229,6 +285,129 @@ impl<'a> LineMap<'a> {
         let byte = self.clamp(byte);
         let line = self.starts.partition_point(|start| *start <= byte) - 1;
         (line, &self.text[self.starts[line]..byte])
+    }
+}
+
+/// A file's text as TypeScript reads it, measured in the same UTF-16 units:
+/// a UTF-16 file (one that starts with its byte order mark) is decoded
+/// without the mark, and each byte that is not part of valid UTF-8 reads as
+/// one U+FFFD, the one unit tsgo's `ast.ComputePositionMap` counts for it.
+pub fn typescript_text(bytes: Vec<u8>) -> String {
+    let utf16 = |rest: &[u8], unit: fn([u8; 2]) -> u16| {
+        let units: Vec<u16> = rest
+            .chunks(2)
+            .map(|pair| unit([pair[0], pair.get(1).copied().unwrap_or(0)]))
+            .collect();
+        String::from_utf16_lossy(&units)
+    };
+    match bytes.as_slice() {
+        [0xFF, 0xFE, rest @ ..] => return utf16(rest, u16::from_le_bytes),
+        [0xFE, 0xFF, rest @ ..] => return utf16(rest, u16::from_be_bytes),
+        _ => {}
+    }
+    let bytes = match String::from_utf8(bytes) {
+        Ok(text) => return text,
+        Err(error) => error.into_bytes(),
+    };
+    let mut text = String::with_capacity(bytes.len());
+    let mut rest = &bytes[..];
+    while let Some(chunk) = rest.utf8_chunks().next() {
+        text.push_str(chunk.valid());
+        rest = &rest[chunk.valid().len()..];
+        if rest.is_empty() {
+            break;
+        }
+        let width = if matches!(rest, [0xED, 0xA0..=0xBF, 0x80..=0xBF, ..]) {
+            3
+        } else {
+            1
+        };
+        text.push('\u{FFFD}');
+        rest = &rest[width..];
+    }
+    text
+}
+
+/// Byte offsets and UTF-16 code-unit offsets of one text, measured once.
+///
+/// TypeScript addresses text in UTF-16 code units; the compiler addresses
+/// it in bytes. The two agree up to the first non-ASCII character, and each
+/// such character shifts them by a known amount, so recording those
+/// characters alone answers every conversion by binary search — the shape
+/// of tsgo's `ast.PositionMap`. A leading byte-order mark is a signature:
+/// UTF-16 offsets count the decoded text, byte offsets include it.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct Utf16Map {
+    signature: usize,
+    len: usize,
+    units: usize,
+    wide: Vec<WideChar>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct WideChar {
+    byte: usize,
+    unit: usize,
+    bytes: usize,
+    units: usize,
+}
+
+impl WideChar {
+    fn shift(self) -> usize {
+        self.byte + self.bytes - (self.unit + self.units)
+    }
+}
+
+impl Utf16Map {
+    pub(crate) fn new(text: &str) -> Self {
+        crate::work::tick("utf-16 measurements");
+        let signature = signature_len(text);
+        let decoded = crate::error::decoded(text);
+        let mut shift = 0;
+        let mut wide = Vec::new();
+        for (byte, ch) in decoded.char_indices().filter(|(_, ch)| !ch.is_ascii()) {
+            let entry = WideChar {
+                byte,
+                unit: byte - shift,
+                bytes: ch.len_utf8(),
+                units: ch.len_utf16(),
+            };
+            shift = entry.shift();
+            wide.push(entry);
+        }
+        Self {
+            signature,
+            len: decoded.len(),
+            units: decoded.len() - shift,
+            wide,
+        }
+    }
+
+    /// The UTF-16 offset of `byte`. An offset past the end, or one inside a
+    /// character, counts the whole text.
+    pub(crate) fn to_utf16(&self, byte: usize) -> usize {
+        let byte = byte.saturating_sub(self.signature);
+        if byte > self.len {
+            return self.units;
+        }
+        let before = self.wide.partition_point(|wide| wide.byte < byte);
+        match before.checked_sub(1).map(|at| self.wide[at]) {
+            Some(wide) if byte < wide.byte + wide.bytes => self.units,
+            Some(wide) => byte - wide.shift(),
+            None => byte,
+        }
+    }
+
+    /// The byte offset of the first character boundary at or after the
+    /// UTF-16 offset `utf16`; the text's end past it.
+    pub(crate) fn to_byte(&self, utf16: usize) -> usize {
+        let before = self.wide.partition_point(|wide| wide.unit < utf16);
+        let byte = match before.checked_sub(1).map(|at| self.wide[at]) {
+            Some(wide) if utf16 < wide.unit + wide.units => wide.byte + wide.bytes,
+            Some(wide) => utf16 + wide.shift(),
+            None => utf16,
+        };
+        self.signature + byte.min(self.len)
     }
 }
 

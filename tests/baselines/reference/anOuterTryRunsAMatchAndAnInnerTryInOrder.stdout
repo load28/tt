@@ -1,0 +1,1 @@
+[{"kind":"Err","error":"odd 11"},{"kind":"Ok","value":11},{"kind":"Err","error":"odd 3"}] k=2 half(2) half(11) k=4 half(4) half(22) k=3 half(3)
