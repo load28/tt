@@ -436,6 +436,7 @@ fn parse_answers(stdout: &str, project: &Path) -> Result<Answers, Failure> {
 
     let mut answers = Answers {
         disk_generation: value["diskGeneration"].as_u64(),
+        contextual_round_trips: value["contextualRoundTrips"].as_u64().unwrap_or_default(),
         ..Answers::default()
     };
     let project_modules = value["projectModules"]

@@ -349,6 +349,49 @@ fn contextual_compile(root: &Path, file: usize) -> String {
 }
 
 #[test]
+fn contextual_storage_costs_a_bounded_number_of_checker_requests_per_slot() {
+    if crate::typescript::toolchain::client(Path::new(env!("CARGO_MANIFEST_DIR"))).is_err() {
+        assert!(
+            std::env::var_os("TTC_REQUIRE_TSGO")
+                .is_none_or(|value| value.is_empty() || value == "0"),
+            "TTC_REQUIRE_TSGO is set but no TypeScript toolchain was found"
+        );
+        return;
+    }
+    let trips = |functions: usize| {
+        let root = crate::test_workspace::Workspace::with_subdir("contextual-round-trips", "src");
+        std::fs::write(
+            root.join("tsconfig.json"),
+            r#"{ "compilerOptions": { "strict": true, "noEmit": true }, "include": ["src"] }"#,
+        )
+        .unwrap();
+        let mut source =
+            "export variant Ev { Click(x: number, y: number), Key(code: string), Idle }\n"
+                .to_owned();
+        for i in 0..functions {
+            source.push_str(&format!(
+                "export function f{i}(e: Ev) {{ return match (e) {{ Click(x) => x, Key(code) => code.length, Idle => 0 }}; }}\n"
+            ));
+        }
+        let path = root.join("src/a.tt");
+        std::fs::write(&path, &source).unwrap();
+        let name = path.to_str().unwrap().to_owned();
+        measure(|| {
+            crate::compile(
+                &source,
+                &crate::Options {
+                    filename: Some(&name),
+                    ..crate::Options::default()
+                },
+            )
+            .expect("the file compiles")
+        })["contextual round trips"]
+    };
+    let (small, large) = (trips(20), trips(40));
+    assert!(large - small <= 20 * 16, "{small} -> {large}");
+}
+
+#[test]
 fn project_files_share_one_projection_each_and_one_checker_materialization() {
     if crate::typescript::toolchain::client(Path::new(env!("CARGO_MANIFEST_DIR"))).is_err() {
         assert!(

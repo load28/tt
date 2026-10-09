@@ -1,5 +1,7 @@
 # TASK-796: Carry out the round-nine design decisions
 
+> **Superseded in part by TASK-797**: Decision 6's diagnosis of E9 was wrong. Its cost is the number of checker requests the contextual pass sends per slot, not how modules are handed to the host; TASK-797 bounds them.
+
 - **Status**: Complete
 - **Started**: 2026-10-08
 - **Completed**: 2026-10-08

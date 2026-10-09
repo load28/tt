@@ -35,7 +35,9 @@
  *            tagMembers: [{ index, tags }],
  *            symbols: [{ index, id, name, builtin }],
  *            resultShapes: [{ index }],
- *            declarations: [{ path, text }] }
+ *            declarations: [{ path, text }],
+ *            contextualRoundTrips }      // checker requests the
+ *                                        // contextual pass sent
  *
  * An `ask` may also answer `{ error: "..." }`, which fails that request
  * without ending the session. EOF on stdin ends it.
@@ -650,6 +652,7 @@ async function main() {
       resultShapes: [],
       declarations: [],
       contextualSlots: [],
+      contextualRoundTrips: 0,
     };
     let changes = serve(files, dirs, servedModules(job.modules ?? []));
     detectDisk();
@@ -867,7 +870,9 @@ async function main() {
     }
 
     const contextual = ({ project, members }) => {
-      const checker = project.checker;
+      const checker = memoizedChecker(countedChecker(project.checker, () => {
+        out.contextualRoundTrips += 1;
+      }));
       // Declaration handles use the API's canonical spelling, while input
       // modules retain their authored spelling. Membership is file identity,
       // including when a dependency is followed through another declaration.
@@ -886,12 +891,15 @@ async function main() {
           .filter((slot) => slot.module === module)
           .map((slot) => slot.declarationEnd));
         symbols = new Set();
+        const names = [];
         walkTree(source, (node) => {
           if (isVariableDeclaration(node) && isIdentifier(node.name) && ends.has(node.name.end)) {
-            const declared = checker.getSymbolAtLocation(node.name);
-            if (declared) symbols.add(declared.id);
+            names.push(node.name);
           }
         });
+        for (const declared of checker.getSymbolAtLocation(names)) {
+          if (declared) symbols.add(declared.id);
+        }
         storage.set(module, symbols);
         return symbols;
       };
@@ -914,12 +922,15 @@ async function main() {
         for (const [module, declared] of ends) {
           const source = project.program.getSourceFile(module);
           if (!source) continue;
+          const names = [];
           walkTree(source, (node) => {
             if (isVariableDeclaration(node) && isIdentifier(node.name) && declared.has(node.name.end)) {
-              const symbol = checker.getSymbolAtLocation(node.name);
-              if (symbol) pending.add(symbol.id);
+              names.push(node.name);
             }
           });
+          for (const symbol of checker.getSymbolAtLocation(names)) {
+            if (symbol) pending.add(symbol.id);
+          }
         }
         return pending;
       };
@@ -972,6 +983,24 @@ async function main() {
         return syntax;
       };
       const entries = [...(job.contextualSlots ?? []).entries()];
+      const names = [];
+      const reads = [];
+      for (const [, slot] of entries) {
+        if (slot.settled || !ownsModule(slot.module)) continue;
+        const source = project.program.getSourceFile(slot.module);
+        if (!source) continue;
+        const syntax = syntaxOf(slot.module, source);
+        const declaration = syntax.declarations.get(slot.declarationEnd);
+        if (!declaration) continue;
+        names.push(...(syntax.identifiers.get(declaration.name.text) ?? []));
+        for (const assignment of syntax.assignments.get(declaration.name.text) ?? []) {
+          names.push(assignment.left);
+          reads.push(assignment.right);
+        }
+        if (declaration.initializer) reads.push(declaration.name, declaration.initializer);
+      }
+      checker.getSymbolAtLocation(names);
+      checker.getTypeAtLocation(reads);
       let operandsSettling = false;
       for (const [index, slot] of [...entries.filter(([, slot]) => slot.operand), ...entries.filter(([, slot]) => !slot.operand)]) {
         if (slot.settled || !ownsModule(slot.module)) continue;
@@ -2421,6 +2450,68 @@ function perModule(entries, ask) {
     group.forEach((at, i) => (answers[at] = batch[i]));
   }
   return answers;
+}
+
+/** `checker`, calling `called` once per request it sends to the compiler. */
+function countedChecker(checker, called) {
+  return new Proxy(checker, {
+    get(target, key) {
+      const value = target[key];
+      if (typeof value !== "function") return value;
+      return (...args) => {
+        called();
+        return value.apply(target, args);
+      };
+    },
+  });
+}
+
+/**
+ * `checker`, with the answers that depend only on their arguments kept for
+ * the life of one ask: a node's symbol and type, and the relations and
+ * conversions of types, keyed by type id (snapshot-scoped). A node list
+ * asks for the nodes not yet answered in one batch. The answers are the
+ * checker's own; only the number of round trips changes.
+ */
+function memoizedChecker(checker) {
+  const memo = (cache, key, compute) => {
+    if (!cache.has(key)) cache.set(key, compute());
+    return cache.get(key);
+  };
+  const perNode = (name, method) => {
+    const cache = new Map();
+    return (arg) => {
+      if (!Array.isArray(arg)) return memo(cache, arg, () => checker[method](arg));
+      const missing = [...new Set(arg.filter((node) => !cache.has(node)))];
+      if (missing.length > 0) {
+        const answers = batched(
+          name,
+          () => checker[method](missing),
+          () => missing.map((node) => checker[method](node)),
+        );
+        missing.forEach((node, index) => cache.set(node, answers[index]));
+      }
+      return arg.map((node) => cache.get(node));
+    };
+  };
+  const assignable = new Map();
+  const widened = new Map();
+  const base = new Map();
+  const own = {
+    getSymbolAtLocation: perNode("symbolsAtLocation", "getSymbolAtLocation"),
+    getTypeAtLocation: perNode("typesAtLocation", "getTypeAtLocation"),
+    isTypeAssignableTo: (source, target) =>
+      memo(assignable, `${source.id}:${target.id}`, () => checker.isTypeAssignableTo(source, target)),
+    getWidenedType: (type) => memo(widened, type.id, () => checker.getWidenedType(type)),
+    getBaseTypeOfLiteralType: (type) => memo(base, type.id, () => checker.getBaseTypeOfLiteralType(type)),
+  };
+  return new Proxy(checker, {
+    get(target, key) {
+      if (Object.hasOwn(own, key)) return own[key];
+      const value = target[key];
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
 }
 
 /**

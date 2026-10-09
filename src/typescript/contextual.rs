@@ -99,6 +99,10 @@ pub(crate) fn materialize(
         }
         crate::work::tick("contextual checker asks");
         let answers = backend.ask(config, root, &query)?;
+        crate::work::tick_by(
+            "contextual round trips",
+            usize::try_from(answers.contextual_round_trips).unwrap_or(usize::MAX),
+        );
         if answers.contextual_slots.is_empty() {
             if infer_joins {
                 return Ok(slots);
