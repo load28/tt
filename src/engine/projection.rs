@@ -278,9 +278,10 @@ pub(crate) fn std_package_modules(
 /// Every question is anchored at a byte the compiler can see: a probe whose
 /// anchor did not survive lowering as verbatim text (a nested tt construct)
 /// is dropped rather than asked about at an approximate position.
-pub(crate) fn assemble(
+pub(crate) fn assemble<'d>(
     files: &[Arc<ProjectedDocument>],
     blocked: &[Arc<BlockedFile>],
+    deferred: impl IntoIterator<Item = &'d PathBuf>,
     root: &Path,
     sources: &[PathBuf],
 ) -> (Query, Probes) {
@@ -555,6 +556,12 @@ pub(crate) fn assemble(
         path: module_path_of(&file.source_path),
         text: "export {};\n".to_string(),
     }));
+    query
+        .modules
+        .extend(deferred.into_iter().map(|source| Module {
+            path: module_path_of(source),
+            text: "export {};\n".to_string(),
+        }));
     query.syntax_blocked.extend(
         blocked
             .iter()

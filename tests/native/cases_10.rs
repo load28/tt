@@ -980,3 +980,70 @@ fn a_tt_source_imported_through_a_symlink_is_type_checked() {
     assert!(!stderr.contains("ts2307"), "{stderr}");
     assert_eq!(stderr.matches("ts2322").count(), 2, "{stderr}");
 }
+
+/// A candidate the configuration leaves out is projected only when the
+/// program contains it: here through a hand-written `.ts` import, and
+/// through a `.ts` module a projected `.tt` file imports. The rest are
+/// served as placeholders and never lowered.
+#[test]
+fn only_the_candidates_the_program_contains_are_projected() {
+    require_tsgo!();
+    let dir = project(&[
+        (
+            "src/main.tt",
+            "import { f } from \"./bridge\";\nexport const main = f;\n",
+        ),
+        ("src/bridge.ts", "export * from \"../ext/z.tt\";\n"),
+        (
+            "src/use.ts",
+            "import { v } from \"../ext/y.tt\";\nexport const n: string = v;\n",
+        ),
+    ]);
+    fs::create_dir_all(dir.join("ext")).unwrap();
+    fs::create_dir_all(dir.join("other")).unwrap();
+    write(
+        &dir,
+        "ext/y.tt",
+        "export variant V { A(n: number), B }\nexport const v: V = V.A(1);\n",
+    );
+    write(
+        &dir,
+        "ext/z.tt",
+        "export variant Z { P, Q }\nexport function f(z: Z) { return match (z) { P => 1 }; }\n",
+    );
+    write(&dir, "other/unused.tt", "export const unused = 1;\n");
+    let main = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut project = ttc::engine::Engine::new(None)
+        .open_project(
+            &[main.to_string_lossy().into_owned()],
+            &ttc::engine::ProjectOptions::default(),
+        )
+        .unwrap();
+    let snapshot = project.update(&project.initial_files()).unwrap();
+    let mut projected: Vec<String> = snapshot
+        .files()
+        .iter()
+        .map(|file| {
+            file.source_path
+                .strip_prefix(dir.canonicalize().unwrap())
+                .unwrap()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    projected.sort();
+    assert_eq!(projected, ["ext/y.tt", "ext/z.tt", "src/main.tt"]);
+    let checked = project
+        .check(&snapshot, &ttc::engine::CheckRequest::default())
+        .unwrap();
+    let codes: Vec<_> = checked
+        .diagnostics
+        .iter()
+        .filter_map(|diagnostic| diagnostic.code.clone())
+        .collect();
+    assert!(codes.iter().any(|code| code == "ts2322"), "{codes:?}");
+    assert!(
+        codes.iter().any(|code| code == "match-not-exhaustive"),
+        "{codes:?}"
+    );
+}

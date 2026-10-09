@@ -838,7 +838,8 @@
 | TASK-795 | Fix the round-nine editor findings | Complete | 2026-10-08 | 2026-10-08 | [TASK-795](./TASK-795-round-nine-editor-findings.md) |
 | TASK-796 | Carry out the round-nine design decisions | Complete | 2026-10-08 | 2026-10-08 | [TASK-796](./TASK-796-round-nine-decisions.md) |
 | TASK-797 | Bound the checker requests of contextual storage | Complete | 2026-10-08 | 2026-10-09 | [TASK-797](./TASK-797-contextual-checker-round-trips.md) |
+| TASK-798 | Project only the candidates the program contains | Complete | 2026-10-09 | 2026-10-09 | [TASK-798](./TASK-798-project-only-program-members.md) |
 
 ## Next task number
 
-**TASK-798**
+**TASK-799**

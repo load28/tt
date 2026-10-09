@@ -1,6 +1,6 @@
 # TASK-796: Carry out the round-nine design decisions
 
-> **Superseded in part by TASK-797**: Decision 6's diagnosis of E9 was wrong. Its cost is the number of checker requests the contextual pass sends per slot, not how modules are handed to the host; TASK-797 bounds them.
+> **Superseded in part by TASK-797**: Decision 6's diagnosis of E9 was wrong. Its cost is the number of checker requests the contextual pass sends per slot, not how modules are handed to the host; TASK-797 bounds them. Its K9 part is superseded by TASK-798: candidates outside the program are served as placeholders, and the program's membership answer decides which are projected, without a protocol change.
 
 - **Status**: Complete
 - **Started**: 2026-10-08

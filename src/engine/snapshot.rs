@@ -71,6 +71,9 @@ pub struct Snapshot {
     pub(crate) id: u64,
     pub(crate) files: Vec<Arc<ProjectedDocument>>,
     pub(crate) blocked: Vec<Arc<BlockedFile>>,
+    /// The candidates outside the project's TypeScript programs, sorted:
+    /// served as placeholders, never projected.
+    pub(crate) deferred: Vec<std::path::PathBuf>,
     /// Unsaved host TypeScript sources, frozen with the tt projections.
     pub(crate) host_overlays: std::collections::BTreeMap<std::path::PathBuf, String>,
 }
@@ -89,6 +92,10 @@ impl Snapshot {
 
     pub(crate) fn blocked(&self) -> &[Arc<BlockedFile>] {
         &self.blocked
+    }
+
+    pub(crate) fn deferred(&self) -> &[std::path::PathBuf] {
+        &self.deferred
     }
 
     /// Whether `path` could not be lowered into this snapshot: the typed

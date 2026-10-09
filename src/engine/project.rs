@@ -15,7 +15,7 @@
 //! compiler process stays up and only changed modules are re-served).
 
 use std::cell::{Cell, RefCell};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -139,6 +139,11 @@ pub struct Project {
     scoped: RefCell<HashMap<PathBuf, ScopedMaterialization>>,
     /// Each file's last reference closure and what it was computed from.
     closures: RefCell<HashMap<PathBuf, KnownClosure>>,
+    /// The candidates the last membership question found in the
+    /// project's TypeScript programs: projected up front by the next
+    /// update, so a steady project serves no candidate as a placeholder
+    /// that its program contains.
+    known_members: HashSet<PathBuf>,
     next_snapshot: u64,
     /// The language-service half — the running `tsgo --lsp` conversation —
     /// started by the first editor question ([`crate::engine::language`]).
@@ -177,6 +182,7 @@ impl Project {
             materialized: RefCell::new(None),
             scoped: RefCell::new(HashMap::new()),
             closures: RefCell::new(HashMap::new()),
+            known_members: HashSet::new(),
             next_snapshot: 0,
             service: None,
         }
@@ -342,6 +348,17 @@ impl Project {
         files: &[PathBuf],
         target: Option<&Path>,
     ) -> Result<Snapshot, Box<Blocked>> {
+        self.update_with_roots(files, target, &[])
+    }
+
+    /// [`Project::update_scoped`] for a check that also makes `roots` roots
+    /// by request: they are projected whatever the configuration says.
+    fn update_with_roots(
+        &mut self,
+        files: &[PathBuf],
+        target: Option<&Path>,
+        roots: &[PathBuf],
+    ) -> Result<Snapshot, Box<Blocked>> {
         self.requested.extend(
             files
                 .iter()
@@ -384,12 +401,71 @@ impl Project {
         if let Some(unnamed) = overlays.keys().find(|path| path.to_str().is_none()) {
             return Err(unnameable(unnamed));
         }
-        let mut pending = files.to_vec();
-        let mut seen: HashSet<_> = files.iter().cloned().collect();
+        let deferring = self.tsconfig.is_some() && self.backend.is_ok();
+        let (mut pending, mut deferred): (Vec<PathBuf>, BTreeSet<PathBuf>) = if deferring {
+            let (pending, deferred): (Vec<_>, Vec<_>) = files.iter().cloned().partition(|file| {
+                crate::SourceKind::from_tt_path(file).is_none()
+                    || self.requested.contains(file)
+                    || self.opened.contains(file)
+                    || self.named.contains(file)
+                    || self.known_members.contains(file)
+                    || roots.contains(file)
+                    || target == Some(file.as_path())
+            });
+            (pending, deferred.into_iter().collect())
+        } else {
+            (files.to_vec(), BTreeSet::new())
+        };
+        let mut seen: HashSet<_> = pending.iter().cloned().collect();
         let mut imported = HashSet::new();
         let mut unread = Vec::new();
         let mut cursor = 0;
-        while cursor < pending.len() {
+        loop {
+            if cursor == pending.len() {
+                deferred.retain(|file| !seen.contains(file));
+                if deferred.is_empty() {
+                    break;
+                }
+                let joined = self
+                    .program_members(&projected, &blocked_files, &deferred, &overlays, roots)
+                    .map_err(|failure| {
+                        Box::new(Blocked {
+                            path: self.root.clone(),
+                            error: CompileError {
+                                message: failure.message,
+                                filename: None,
+                                line: 0,
+                                col: 0,
+                                end_line: 0,
+                                end_col: 0,
+                            },
+                        })
+                    })?;
+                let joined: Vec<PathBuf> = match joined {
+                    Some(members) => {
+                        self.known_members = files
+                            .iter()
+                            .filter(|file| members.contains(&projection::module_path_of(file)))
+                            .cloned()
+                            .collect();
+                        deferred
+                            .iter()
+                            .filter(|file| self.known_members.contains(*file))
+                            .cloned()
+                            .collect()
+                    }
+                    None => deferred.iter().cloned().collect(),
+                };
+                if joined.is_empty() {
+                    break;
+                }
+                for file in joined {
+                    deferred.remove(&file);
+                    seen.insert(file.clone());
+                    pending.push(file);
+                }
+                continue;
+            }
             let file = pending[cursor].clone();
             cursor += 1;
             let file = &file;
@@ -502,8 +578,13 @@ impl Project {
             && let Ok(backend) = &self.backend
             && available(backend)?
         {
-            let (mut query, _) =
-                projection::assemble(&projected, &blocked_files, &self.root, &self.sources);
+            let (mut query, _) = projection::assemble(
+                &projected,
+                &blocked_files,
+                &deferred,
+                &self.root,
+                &self.sources,
+            );
             query
                 .modules
                 .retain(|module| !projected.iter().any(|doc| doc.module_path == module.path));
@@ -542,6 +623,7 @@ impl Project {
                     id: self.next_snapshot,
                     files: projected,
                     blocked: blocked_files,
+                    deferred: deferred.into_iter().collect(),
                     host_overlays: overlays
                         .iter()
                         .filter(|(path, _)| is_host_source(path))
@@ -596,12 +678,61 @@ impl Project {
             id: self.next_snapshot,
             files: projected,
             blocked: blocked_files,
+            deferred: deferred.into_iter().collect(),
             host_overlays: overlays
                 .iter()
                 .filter(|(path, _)| is_host_source(path))
                 .map(|(path, text)| (path.clone(), text.clone()))
                 .collect(),
         })
+    }
+
+    /// The modules the project's TypeScript programs contain when every
+    /// file in `deferred` is served as a placeholder: the configuration's
+    /// `files` and `include` and module resolution decide it, as for any
+    /// other module, without the deferred files being projected. `None`
+    /// when there is no checker to ask, and every candidate is projected.
+    fn program_members(
+        &self,
+        projected: &[Arc<ProjectedDocument>],
+        blocked: &[Arc<super::snapshot::BlockedFile>],
+        deferred: &BTreeSet<PathBuf>,
+        overlays: &HashMap<PathBuf, String>,
+        requested: &[PathBuf],
+    ) -> Result<Option<HashSet<PathBuf>>, crate::typescript::backend::Failure> {
+        let Ok(backend) = &self.backend else {
+            return Ok(None);
+        };
+        match backend.open(self.tsconfig.as_deref(), &self.root) {
+            Ok(()) => {}
+            Err(failure) if failure.kind == FailureKind::Unavailable => return Ok(None),
+            Err(failure) => return Err(failure),
+        }
+        let (mut query, _) =
+            projection::assemble(projected, blocked, deferred, &self.root, &self.sources);
+        query.modules.extend(
+            overlays
+                .iter()
+                .filter(|(path, _)| is_host_source(path))
+                .map(|(path, text)| crate::typescript::backend::Module {
+                    path: path.clone(),
+                    text: text.clone(),
+                }),
+        );
+        query
+            .modules
+            .sort_by(|left, right| left.path.cmp(&right.path));
+        let mut roots = self.roots(projected, requested);
+        roots.sort();
+        let query = crate::typescript::backend::Query {
+            contextual_only: true,
+            roots,
+            ..query
+        };
+        let answers = backend.ask(self.tsconfig.as_deref(), &self.root, &query)?;
+        Ok(answers
+            .project_modules
+            .map(|modules| modules.into_iter().collect()))
     }
 
     /// The refined emits of the projected modules `target`'s types can
@@ -982,7 +1113,7 @@ impl Project {
     fn check_for_dependencies(&mut self, inputs: &super::Inputs) -> Result<(), String> {
         let files = self.candidates(inputs).map_err(|error| error.to_string())?;
         let snapshot = self
-            .update(&files)
+            .update_with_roots(&files, None, &inputs.named)
             .map_err(|blocked| blocked.error.message.clone())?;
         let checked =
             self.check_requested(&snapshot, &CheckRequest::default(), &inputs.named, None)?;
@@ -1061,7 +1192,7 @@ impl Project {
         files.sort();
         files.dedup();
         let snapshot = self
-            .update(&files)
+            .update_with_roots(&files, None, &[path.to_path_buf()])
             .map_err(|blocked| blocked.error.to_string())?;
         let Ok(backend) = &self.backend else {
             return Ok(None);
@@ -1069,6 +1200,7 @@ impl Project {
         let (assembled, _) = projection::assemble(
             snapshot.files(),
             snapshot.blocked(),
+            snapshot.deferred(),
             &self.root,
             &self.sources,
         );
@@ -1138,6 +1270,7 @@ impl Project {
         let (mut query, probes) = projection::assemble(
             snapshot.files(),
             snapshot.blocked(),
+            snapshot.deferred(),
             &self.root,
             &self.sources,
         );
