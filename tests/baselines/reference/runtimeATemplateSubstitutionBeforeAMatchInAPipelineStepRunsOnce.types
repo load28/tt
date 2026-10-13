@@ -43,6 +43,20 @@ function run(s: S): string {
 >s : (parameter) s: S
 >log : const log: string[]
 >push : (method) Array<string>.push(...items: string[]): number
+function spaced(s: S): string {
+>spaced : function spaced(s: S): string
+>s : (parameter) s: S
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+  return "in" |> wrap(`${ head() /* first */ }${match (s) { A => (log.push("A"), 1), B => 2 }}`);
+>wrap : function wrap(text: string): (input: string) => string
+>head : function head(): string
+>s : (parameter) s: S
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
 console.log(run(S.A), log.join(","));
 >console : var console: Console
 >log : (method) Console.log(...data: any[]): void
@@ -77,6 +91,26 @@ console.log(run(S.B), log.join(","));
 >   }
 >B : (property) B: {
 >       readonly kind: "B";
+>   }
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+log.length = 0;
+>log : const log: string[]
+>length : (property) Array<string>.length: number
+console.log(spaced(S.A), log.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>spaced : function spaced(s: S): string
+>S : const S: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
 >   }
 >log : const log: string[]
 >join : (method) Array<string>.join(separator?: string): string

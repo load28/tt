@@ -105,7 +105,12 @@ found five crashes no list entry covers (run 38233947903, job
   the evaluation plan's order to an emitter-local rule.
 - **Decision and rationale**: `emit_operand` skips a substitution whose
   source an input of the nested values' scheduled steps captures; the
-  planned capture and its slot are used, as without a pipeline.
+  planned capture and its slot are used, as without a pipeline. The two
+  spans are compared up to trivia: the planned input is the host
+  expression's span, while the Core interpolation's span runs from `${` to
+  `}` and keeps the whitespace and comments around the expression, so a
+  planned input counts when it lies inside the substitution with only
+  trivia (`scanner::skip_ws_comments`) on either side.
 
 ### Decision 6: A pipeline gap starts at the end of the whole operand
 
@@ -178,10 +183,23 @@ found five crashes no list entry covers (run 38233947903, job
 - **Cause**: Decision 6: the gap after a `Sequence` operand began inside it.
 - **Resolution**: Decision 6.
 
+### Issue 6: The first fix of Issue 4 compared the spans exactly
+
+- **Symptom**: The full mutation pass (`TT_MUTATIONS=all`) found
+  `SourceEmittedTwice` again in a mutant of the new case:
+  `return""|>p(\`${d(}${match(s){A=>}}\`)`, saved as
+  `fuzz/regressions/compile_any_bytes/cb541c50f92feddd.tt`.
+- **Cause**: The editor repair wrote `d()\n`; the planned capture covered
+  `d()` (15..18) and the substitution `d()\n` (15..19), so the exact
+  comparison missed it. Valid tt has the same shape: `${ head() /* first */ }`.
+- **Resolution**: Decision 5's comparison up to trivia; the runtime case
+  gained the `spaced` function, which crashed with the exact comparison
+  (`SourceEmittedTwice` at bytes 476..477).
+
 ## Regression test (fails before the fix)
 
 - **Path**: `tests/fuzz_regressions.rs::every_committed_crash_input_replays_as_the_list_says`
-  (the five inputs), `tests/swc_editor_recovery.rs::a_missing_unary_operand_sits_after_its_operator`,
+  (the five inputs and `cb541c50f92feddd.tt`), `tests/swc_editor_recovery.rs::a_missing_unary_operand_sits_after_its_operator`,
   and the four case files of the work log
 - **Observed failure**: the replay test reported all five inputs crashing
   with the signatures of the scope table; the parser test reported

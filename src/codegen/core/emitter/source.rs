@@ -1278,7 +1278,17 @@ impl<'a> Emitter<'a> {
         let substitutions: Vec<_> = self
             .template_substitution_captures(span, templates)
             .into_iter()
-            .filter(|(source, ..)| !planned.contains(source))
+            .filter(|(source, ..)| {
+                let bytes = self.source.as_bytes();
+                !planned.iter().any(|captured| {
+                    source.start <= captured.start
+                        && captured.end <= source.end
+                        && crate::scanner::skip_ws_comments(bytes, source.start, captured.start)
+                            == captured.start
+                        && crate::scanner::skip_ws_comments(bytes, captured.end, source.end)
+                            == source.end
+                })
+            })
             .collect();
         let mut pending = substitutions.iter().peekable();
         for (inner, slot) in nested {
