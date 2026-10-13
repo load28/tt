@@ -839,7 +839,9 @@
 | TASK-796 | Carry out the round-nine design decisions | Complete | 2026-10-08 | 2026-10-08 | [TASK-796](./TASK-796-round-nine-decisions.md) |
 | TASK-797 | Bound the checker requests of contextual storage | Complete | 2026-10-08 | 2026-10-09 | [TASK-797](./TASK-797-contextual-checker-round-trips.md) |
 | TASK-798 | Project only the candidates the program contains | Complete | 2026-10-09 | 2026-10-09 | [TASK-798](./TASK-798-project-only-program-members.md) |
+| TASK-799 | Show typed-parity paths outside the case as the CLI does | In progress | 2026-10-13 | — | [TASK-799](./TASK-799-typed-parity-paths-outside-the-case.md) |
+| TASK-800 | Fix the crashes the scheduled mutation pass found | In progress | 2026-10-13 | — | [TASK-800](./TASK-800-scheduled-mutation-crashes.md) |
 
 ## Next task number
 
-**TASK-799**
+**TASK-801**

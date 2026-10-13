@@ -124,6 +124,18 @@ there. `fuzz/regressions/compile_any_bytes/arrow-after-a-later-parenthesized-ite
 and `tests/cases/compiler/anArrowAfterALaterParenthesizedItemIsASyntaxError.tt`
 in the parent repository cover it.
 
+Local change (TASK-800): `src/parser/expr.rs`, `parse_unary_expr` places
+the missing operand of a prefix operator (`delete`, `void`, `typeof`, `+`,
+`-`, `~`, `!`) at the end of the operator token (`prev_span().hi`).
+Upstream placed it one byte before the start of the next token
+(`cur_pos() - 1`), which for `-;` is the operator's own start: the
+`UnaryExpr` spanned nothing and the operator lay outside its node, and for
+`typeof;` the operand sat inside the keyword. TypeScript's `parseMissingNode`
+creates the missing operand where the scanner stands after the operator, so
+the prefix expression covers its operator. `tests/swc_editor_recovery.rs`
+and `fuzz/regressions/compile_any_bytes/3b85010032ac492f.tt` in the parent
+repository cover it.
+
 `tests/jsx_entities.rs`, `tests/swc_arrow_asi.rs`,
 `tests/swc_import_type_arguments.rs`, `tests/swc_for_using_and_if_function.rs`,
 and `tests/swc_typescript_grammar_gaps.rs` in the parent repository test the

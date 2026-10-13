@@ -305,7 +305,7 @@ impl<I: Tokens> Parser<I> {
                     op!("!")
                 };
                 self.bump();
-                let arg_start = self.cur_pos() - BytePos(1);
+                let arg_start = self.input().prev_span().hi;
                 let arg = match self.parse_unary_expr() {
                     Ok(expr) => expr,
                     Err(err) => {

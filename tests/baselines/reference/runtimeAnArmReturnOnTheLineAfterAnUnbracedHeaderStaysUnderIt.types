@@ -1,0 +1,40 @@
+=== runtimeAnArmReturnOnTheLineAfterAnUnbracedHeaderStaysUnderIt.tt ===
+function pick(v: number, c: boolean): number | undefined {
+>pick : function pick(v: number, c: boolean): number | undefined
+>v : (parameter) v: number
+>c : (parameter) c: boolean
+  return match (v) {
+>v : (parameter) v: number
+      if (c)
+>c : (parameter) c: boolean
+      if (!c)
+>c : (parameter) c: false
+function twice(x: number): number {
+>twice : function twice(x: number): number
+>x : (parameter) x: number
+  return x * 2;
+>x : (parameter) x: number
+function nested(v: number, c: boolean): number {
+>nested : function nested(v: number, c: boolean): number
+>v : (parameter) v: number
+>c : (parameter) c: boolean
+  return match (v) {
+>v : (parameter) v: number
+      if (c)
+>c : (parameter) c: boolean
+        return twice(match (v) { 1 => 3, _ => 4 })
+>twice : function twice(x: number): number
+>v : (parameter) v: number
+console.log(pick(1, true), pick(1, false), pick(2, true));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>pick : function pick(v: number, c: boolean): number | undefined
+>pick : function pick(v: number, c: boolean): number | undefined
+>pick : function pick(v: number, c: boolean): number | undefined
+console.log(nested(1, true), nested(1, false), nested(2, false));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>nested : function nested(v: number, c: boolean): number
+>nested : function nested(v: number, c: boolean): number
+>nested : function nested(v: number, c: boolean): number
+

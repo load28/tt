@@ -1,6 +1,6 @@
 //! Partial syntax keeps independent declarations while strict syntax rejects errors.
 use swc_common::{FileName, SourceMap, sync::Lrc};
-use swc_ecma_ast::{Decl, ModuleItem, Pat, Stmt};
+use swc_ecma_ast::{Decl, Expr, ModuleItem, Pat, Stmt};
 use swc_ecma_parser::{Parser, RecoveryMode, RecoveryRecord, StringInput, Syntax, TsSyntax};
 
 fn parse(
@@ -382,4 +382,32 @@ fn a_skipped_expression_keeps_no_recovery_of_its_parts() {
         recovery.iter().all(|record| record.replacement.is_none()),
         "{recovery:?}"
     );
+}
+
+#[test]
+fn a_missing_unary_operand_sits_after_its_operator() {
+    for operator in ["-", "+", "~", "!", "typeof", "void", "delete"] {
+        let source = format!("const broken = {operator};");
+        let (module, _, errors) = parse(&source, false, RecoveryMode::Editor);
+        assert!(errors > 0, "{source}");
+        let Some(ModuleItem::Stmt(Stmt::Decl(Decl::Var(decl)))) = module.body.first() else {
+            panic!("{source}: {module:?}");
+        };
+        let Some(Expr::Unary(unary)) = decl.decls[0].init.as_deref() else {
+            panic!("{source}: {decl:?}");
+        };
+        let operator_start = source.find(operator).unwrap() as u32 + 1;
+        let operator_end = operator_start + operator.len() as u32;
+        assert_eq!(
+            (unary.span.lo.0, unary.span.hi.0),
+            (operator_start, operator_end),
+            "{source}"
+        );
+        assert!(
+            matches!(&*unary.arg, Expr::Invalid(invalid)
+                if invalid.span.lo.0 == operator_end && invalid.span.hi.0 == operator_end),
+            "{source}: {:?}",
+            unary.arg
+        );
+    }
 }

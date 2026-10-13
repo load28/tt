@@ -1,0 +1,15 @@
+//// [runtimeATemplateSubstitutionBeforeAMatchInAPipelineStepRunsOnce.tt] 13 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:19 -> 26:3 len 239  "\nconst log: string[] = [];\nfunction head(): stri"...
+13:3 -> 62:3 len 7  "return "
+13:10 -> 39:20 len 4  "\"in\""
+13:18 -> 41:34 len 4  "wrap"
+13:22 -> 59:20 len 4  "(`${"
+13:26 -> 42:24 len 6  "head()"
+13:32 -> 59:30 len 3  "}${"
+13:42 -> 44:21 len 1  "s"
+13:52 -> 47:20 len 18  "(log.push(\"A\"), 1)"
+13:77 -> 51:20 len 1  "2"
+13:80 -> 59:39 len 3  "}`)"
+13:83 -> 62:16 len 108  ";\n}\nconsole.log(run(S.A), log.join(\",\"));\nlog.le"...
+

@@ -1,0 +1,34 @@
+=== aMatchArgumentOfAnOptionalCallAfterAnEarlierConditionalKeepsItsPlacementError.tt ===
+variant S { A }
+>S : type S = {
+>       kind: "A";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+declare const s: S;
+>s : const s: S
+>S : type S = {
+>       kind: "A";
+>   }
+declare const g: { m?: (a: number, b: number | undefined) => void };
+>g : const g: {
+>       m?: (a: number, b: number | undefined) => void;
+>   }
+>m : (property) m?: ((a: number, b: number | undefined) => void) | undefined
+>a : (parameter) a: number
+>b : (parameter) b: number | undefined
+declare const h: ((x: number) => number) | undefined;
+>h : const h: ((x: number) => number) | undefined
+>x : (parameter) x: number
+declare const x: boolean;
+>x : const x: boolean
+x && match (s) { A => 0 }, g.m?.(match (s) { A => 1 }, h?.(match (s) { A => 2 }));
+>x : const x: boolean
+>s : const s: S
+>g : const g: {
+>       m?: (a: number, b: number | undefined) => void;
+>   }
+>m : (property) m?: (a: number, b: number | undefined) => void | undefined
+>h : const h: (x: number) => number | undefined
+

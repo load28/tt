@@ -1,0 +1,15 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./aCommentInsideAPipelineOperandIsWrittenOnce.tt → $DIR/out/aCommentInsideAPipelineOperandIsWrittenOnce.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2322]: Type '(x: number) => number' is not assignable to type 'number'.
+ --> aCommentInsideAPipelineOperandIsWrittenOnce.tt:8:21
+  |
+8 |   export const head = match (o) { A => f }// after the head's value
+  |  _____________________^
+9 | | () |> g;
+  | |__^
+  = note: Did you mean to call this expression? --> aCommentInsideAPipelineOperandIsWrittenOnce.tt:8:21
+
+==== tsc on the emitted TypeScript (exit 2) ====
+aCommentInsideAPipelineOperandIsWrittenOnce.ts(46,12): error TS2322: Type '(x: number) => number' is not assignable to type 'number'.

@@ -1,0 +1,9 @@
+//// [aMatchArgumentOfAnOptionalCallAfterAnEarlierConditionalKeepsItsPlacementError.tt] 7 mapping(s)
+1:16 -> 23:3 len 171  "\ndeclare const s: S;\ndeclare const g: { m?: (a: "...
+7:1 -> 31:14 len 1  "x"
+7:13 -> 34:19 len 1  "s"
+7:23 -> 37:18 len 1  "0"
+7:26 -> 50:7 len 8  ", g.m?.("
+7:54 -> 50:33 len 6  ", h?.("
+7:80 -> 50:57 len 16  "));\n\nexport {};\n"
+
