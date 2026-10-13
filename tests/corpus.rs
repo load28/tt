@@ -1312,7 +1312,7 @@ fn typed_parity(case: &TestCase, dir: &Path, oracle: &mut Oracle, audit: bool) -
                 let name = rest.trim_start_matches('/').to_string();
                 back.get(&name).cloned().unwrap_or(name)
             }
-            None => path.to_string(),
+            None => shown_from(root, path),
         }
     };
     let message_of = |message: &str, root: &str| -> String {
@@ -1431,11 +1431,7 @@ fn typed_parity(case: &TestCase, dir: &Path, oracle: &mut Oracle, audit: bool) -
             } else {
                 let text = std::fs::read_to_string(path).unwrap_or_default();
                 let col = utf16_to_points(&text, line, d["col"].as_u64().unwrap_or(0) as usize);
-                let shown = path
-                    .strip_prefix(&tt_dir)
-                    .map(|rest| rest.trim_start_matches('/'))
-                    .unwrap_or(path);
-                format!("{shown}:{line}:{col}")
+                format!("{}:{line}:{col}", shown_from(&tt_dir, path))
             };
             (
                 d["code"].as_str().unwrap_or_default().to_string(),
@@ -1571,6 +1567,23 @@ fn typed_parity(case: &TestCase, dir: &Path, oracle: &mut Oracle, audit: bool) -
 
 fn counterpart(one: &Reported, other: &Reported) -> bool {
     one.code == other.code && (one.file == other.file || one.range == "-" || other.range == "-")
+}
+
+fn shown_from(root: &str, path: &str) -> String {
+    let root: Vec<&str> = root.split('/').filter(|part| !part.is_empty()).collect();
+    let target: Vec<&str> = path.split('/').filter(|part| !part.is_empty()).collect();
+    if !path.starts_with('/') || root.first() != target.first() {
+        return path.to_string();
+    }
+    let shared = root
+        .iter()
+        .zip(&target)
+        .take_while(|(left, right)| left == right)
+        .count();
+    std::iter::repeat_n("..", root.len() - shared)
+        .chain(target[shared..].iter().copied())
+        .collect::<Vec<_>>()
+        .join("/")
 }
 
 fn cli_headers(stderr: &str) -> Vec<(String, String, String)> {
