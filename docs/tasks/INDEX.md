@@ -842,7 +842,8 @@
 | TASK-799 | Show typed-parity paths outside the case as the CLI does | In progress | 2026-10-13 | — | [TASK-799](./TASK-799-typed-parity-paths-outside-the-case.md) |
 | TASK-800 | Fix the crashes the scheduled mutation pass found | In progress | 2026-10-13 | — | [TASK-800](./TASK-800-scheduled-mutation-crashes.md) |
 | TASK-801 | Keep a snapshot's files in source path order | In progress | 2026-10-14 | — | [TASK-801](./TASK-801-snapshot-files-in-path-order.md) |
+| TASK-802 | Regenerate the verify-failed matrix baseline TASK-764 left stale | Complete | 2026-10-14 | 2026-10-14 | [TASK-802](./TASK-802-stale-verify-failed-matrix-baseline.md) |
 
 ## Next task number
 
-**TASK-802**
+**TASK-803**

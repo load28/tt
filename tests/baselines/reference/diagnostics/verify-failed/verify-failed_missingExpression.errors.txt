@@ -1,13 +1,15 @@
 ==== ttc --out-dir (exit 1) ====
-error[verify-failed]: generated TypeScript failed to parse: Expression expected. This is either invalid TypeScript passed through from the source or a ttc bug; use --no-verify to bypass.
+error[verify-failed]: generated TypeScript failed to parse: Expression expected. This is either invalid TypeScript passed through from the source or a ttc bug.
  --> ./main.tt:1:22
   |
 1 | export const limit = ;
   |                      ^
+  |
+  = help: use --no-verify to bypass
 
 
 ==== ttc --check-types (exit 1) ====
-error[verify-failed]: generated TypeScript failed to parse: Expression expected. This is either invalid TypeScript passed through from the source or a ttc bug; use --no-verify to bypass.
+error[verify-failed]: generated TypeScript failed to parse: Expression expected. This is either invalid TypeScript passed through from the source or a ttc bug.
  --> main.tt:1:22
   |
 1 | export const limit = ;
