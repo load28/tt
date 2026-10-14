@@ -547,6 +547,8 @@ impl Project {
         {
             return Err(failure);
         }
+        projected.sort_by(|left, right| left.source_path.cmp(&right.source_path));
+        blocked_files.sort_by(|left, right| left.source_path.cmp(&right.source_path));
         // Entries for files that left the project go with the old map; a
         // blocked update above leaves the previous cache intact instead, so
         // the files that were fine keep their projections.

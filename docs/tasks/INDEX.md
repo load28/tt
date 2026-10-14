@@ -841,7 +841,8 @@
 | TASK-798 | Project only the candidates the program contains | Complete | 2026-10-09 | 2026-10-09 | [TASK-798](./TASK-798-project-only-program-members.md) |
 | TASK-799 | Show typed-parity paths outside the case as the CLI does | In progress | 2026-10-13 | — | [TASK-799](./TASK-799-typed-parity-paths-outside-the-case.md) |
 | TASK-800 | Fix the crashes the scheduled mutation pass found | In progress | 2026-10-13 | — | [TASK-800](./TASK-800-scheduled-mutation-crashes.md) |
+| TASK-801 | Keep a snapshot's files in source path order | In progress | 2026-10-14 | — | [TASK-801](./TASK-801-snapshot-files-in-path-order.md) |
 
 ## Next task number
 
-**TASK-801**
+**TASK-802**
