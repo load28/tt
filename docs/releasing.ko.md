@@ -106,7 +106,8 @@ gh workflow run bump-release-version.yml --ref main -f line=0.4
 ## 빌드와 게시는 어떻게 나뉩니까?
 
 준비 액션의 push가 CI를 자동 실행합니다. CI는 모든 플랫폼 바이너리와 VSIX를 만들고
-30일 동안 보관합니다. `Publish Release`는 성공한 그 CI run의 산출물만 가져오며 다시
+30일 동안 보관합니다. This deploy-path CI does not rerun the test gates: the
+change passed them on its pull request (TASK-808). `Publish Release`는 성공한 그 CI run의 산출물만 가져오며 다시
 빌드하지 않습니다.
 
 Nightly는 예약된 `main` CI 성공 뒤 `X.Y.Z-dev.YYYYMMDD.N` 산출물을 npm `next`와
@@ -133,8 +134,8 @@ ID의 자동 업데이트가 이 빌드를 교체하고 이 동봉은 제거합�
 gh workflow run ci.yml --ref main
 ```
 
-수동 CI도 새 산출물을 만들고 모든 검증을 통과한 뒤 예약 CI와 같은 `next` 게시 경로로
-자동 승격됩니다. 게시 workflow에 run ID나 npm tag를 직접 입력하지 않습니다.
+A manual CI run builds new artifacts and is promoted through the same `next`
+path as the scheduled run once the build succeeds. 게시 workflow에 run ID나 npm tag를 직접 입력하지 않습니다.
 
 Beta·RC·Stable·Patch는 성공한 `release-X.Y` CI 뒤 `production` Environment에서
 대기합니다. 승인자는 **Approve and deploy**를 눌러야 게시됩니다. npm 태그와 CI run ID는

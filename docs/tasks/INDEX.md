@@ -848,7 +848,8 @@
 | TASK-805 | Record the pipeline step completion TypeScript's `Symbol` entry differs in | Complete | 2026-10-14 | 2026-10-14 | [TASK-805](./TASK-805-pipeline-step-symbol-completion.md) |
 | TASK-806 | Keep an arm after one that always matches out of the conditional-expression form | Complete | 2026-10-14 | 2026-10-14 | [TASK-806](./TASK-806-arm-after-total-arm-inline.md) |
 | TASK-807 | Regenerate the matrix diagnostic baselines left stale since TASK-514 | Complete | 2026-10-14 | 2026-10-14 | [TASK-807](./TASK-807-stale-matrix-diagnostic-baselines.md) |
+| TASK-808 | Run the test gates on pull requests only, not on the deploy path | Complete | 2026-10-14 | 2026-10-14 | [TASK-808](./TASK-808-deploy-path-ci.md) |
 
 ## Next task number
 
-**TASK-808**
+**TASK-809**

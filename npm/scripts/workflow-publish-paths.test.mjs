@@ -36,6 +36,27 @@ test("CI follows TypeScript's main and release-X.Y branch model", () => {
   assert.doesNotMatch(ci, /npm publish|action-gh-release/);
 });
 
+function job(text, key) {
+  const body = text.split(/^jobs:$/m)[1];
+  const found = body.split(/\n(?=  [A-Za-z0-9_-]+:\n)/).find((j) => j.trim().startsWith(`${key}:`));
+  assert.ok(found, `job "${key}" not found`);
+  return found;
+}
+
+test("the gates run on proposed changes and the deploy path only builds artifacts", () => {
+  const gate =
+    /if: >-\n      github\.event_name == 'pull_request' \|\| github\.event_name == 'merge_group' \|\|\n      !\(github\.ref == 'refs\/heads\/main' \|\| startsWith\(github\.ref, 'refs\/heads\/release-'\)\)\n/;
+  for (const key of ["check", "bench", "coverage", "native"]) {
+    assert.match(job(ci, key), gate, `job "${key}" runs on the deploy path`);
+  }
+  assert.match(job(ci, "release-metadata"), /needs: \[release-version, release-build, release-vsix, release-ts-preview\]/);
+  assert.doesNotMatch(ci, /^  (exhaustive|typescript-parity):/m);
+  const soak = workflow("soak.yml");
+  assert.match(soak, /^  exhaustive:/m);
+  assert.match(soak, /^  typescript-parity:/m);
+  assert.match(soak, /schedule:\n    - cron:/);
+});
+
 test("release commands mirror TypeScript's create, sync, and bump boundaries", () => {
   for (const command of [create, sync, bump]) {
     assert.match(command, /workflow_dispatch:/);
