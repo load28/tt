@@ -1079,12 +1079,12 @@ impl Project {
             };
             // A suggestion (an unused name, a deprecated call) is about the
             // text it covers. Only text the user wrote can be faded or
-            // struck through; one landing in glue is about ttc's emission.
-            if !exact
-                && matches!(
-                    severity,
-                    ServiceSeverity::Information | ServiceSeverity::Hint
-                )
+            // struck through; one landing in glue, or covering a construct's
+            // glue, is about ttc's emission.
+            if matches!(
+                severity,
+                ServiceSeverity::Information | ServiceSeverity::Hint
+            ) && (!exact || covers_construct_glue(&doc, start, end))
             {
                 continue;
             }

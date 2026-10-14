@@ -843,7 +843,8 @@
 | TASK-800 | Fix the crashes the scheduled mutation pass found | In progress | 2026-10-13 | — | [TASK-800](./TASK-800-scheduled-mutation-crashes.md) |
 | TASK-801 | Keep a snapshot's files in source path order | In progress | 2026-10-14 | — | [TASK-801](./TASK-801-snapshot-files-in-path-order.md) |
 | TASK-802 | Regenerate the verify-failed matrix baseline TASK-764 left stale | Complete | 2026-10-14 | 2026-10-14 | [TASK-802](./TASK-802-stale-verify-failed-matrix-baseline.md) |
+| TASK-803 | Drop a suggestion that covers a construct's glue again | Complete | 2026-10-14 | 2026-10-14 | [TASK-803](./TASK-803-suggestion-over-construct-glue.md) |
 
 ## Next task number
 
-**TASK-803**
+**TASK-804**

@@ -1,0 +1,8 @@
+=== diagnostics aSuggestionOverAConstructsGlueIsNotShown.tt ===
+diagnostics: 2 diagnostic(s)
+  4:45-4:51 "unused" hint TS6133: 'unused' is declared but its value is never read. [unnecessary]
+  7:10-7:17 "await n" hint TS80007: 'await' has no effect on the type of this expression.
+published: 2 diagnostic(s)
+  4:45-4:51 "unused" hint TS6133 (ts): 'unused' is declared but its value is never read. [unnecessary]
+  7:10-7:17 "await n" hint TS80007 (ts): 'await' has no effect on the type of this expression.
+
