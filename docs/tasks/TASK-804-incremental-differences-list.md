@@ -65,7 +65,9 @@ or work around the service in ttc.
 - **Cause**: With `didOpen`/`didChange` and completion logged in
   `typescript::service`, two fresh workspaces sent byte-identical messages
   and tsgo answered `bad:15, good:15` in one and `bad:11` in the other.
-- **Resolution**: Listed `unstable`.
+- **Resolution**: Listed `unstable`; the second full run also showed
+  `missingDelimiter.tt` of the same case (2 of 4 reruns differ), listed
+  likewise.
 
 ### Issue 2: An unresolved dynamic import's definition depends on earlier edits
 

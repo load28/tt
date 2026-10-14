@@ -846,7 +846,8 @@
 | TASK-803 | Drop a suggestion that covers a construct's glue again | Complete | 2026-10-14 | 2026-10-14 | [TASK-803](./TASK-803-suggestion-over-construct-glue.md) |
 | TASK-804 | List the incremental differences the TypeScript service causes | Complete | 2026-10-14 | 2026-10-14 | [TASK-804](./TASK-804-incremental-differences-list.md) |
 | TASK-805 | Record the pipeline step completion TypeScript's `Symbol` entry differs in | Complete | 2026-10-14 | 2026-10-14 | [TASK-805](./TASK-805-pipeline-step-symbol-completion.md) |
+| TASK-806 | Keep an arm after one that always matches out of the conditional-expression form | Complete | 2026-10-14 | 2026-10-14 | [TASK-806](./TASK-806-arm-after-total-arm-inline.md) |
 
 ## Next task number
 
-**TASK-806**
+**TASK-807**

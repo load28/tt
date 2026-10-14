@@ -1,0 +1,16 @@
+// @run: runtimeAnArmAfterAnArmThatAlwaysMatchesKeepsItsValueInAnAssignment.tt
+
+variant Dir { Up, Down }
+function pick(a: Dir, b: Dir): unknown {
+  let v: unknown;
+  v = match (a, b) { (Up, Down) => "up-down", (_, _) => "any", _ => "never" };
+  return v;
+}
+const target = { value: 0 as unknown };
+function assign(a: Dir, b: Dir): unknown {
+  target.value = match (a, b) { (_, _) => 1, _ => 2 };
+  return target.value;
+}
+console.log(pick(Dir.Up, Dir.Down), pick(Dir.Down, Dir.Up), assign(Dir.Up, Dir.Up));
+
+export {};
