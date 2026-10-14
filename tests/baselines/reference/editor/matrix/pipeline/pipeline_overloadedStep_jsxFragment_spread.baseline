@@ -5,3 +5,8 @@ differences from pipeline_overloadedStep_jsxFragment_spread at the questions lis
   |                                                       ^ /*call*/
   tt only: (alias) function shape(s: string): number
 
+=== completions /*member*/ main.ttx:4:65 ===
+  |   return <>{note("before", "[")}{first(...[input]) |> shape |> .length}{note("after", "]")}</>;
+  |                                                                 ^ /*member*/
+  ts only: Symbol (Variable)
+

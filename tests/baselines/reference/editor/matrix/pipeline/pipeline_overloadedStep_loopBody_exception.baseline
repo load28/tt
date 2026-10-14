@@ -5,3 +5,8 @@ differences from pipeline_overloadedStep_loopBody_exception at the questions lis
   |                                      ^ /*call*/
   tt only: (alias) function shape(s: string): number
 
+=== completions /*member*/ main.tt:7:48 ===
+  |       collected.push(risky(input) |> shape |> .length);
+  |                                                ^ /*member*/
+  ts only: Symbol (Variable)
+

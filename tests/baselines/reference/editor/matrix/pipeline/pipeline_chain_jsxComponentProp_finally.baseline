@@ -6,6 +6,11 @@ differences from pipeline_chain_jsxComponentProp_finally at the questions listed
   tt only: var String: StringConstructor
   ts only: var String: (value?: any) => string
 
+=== completions /*member*/ main.ttx:5:72 ===
+  |     return <Show value={note("operand", input) |> double |> String |> .padStart(4, "*")} />;
+  |                                                                        ^ /*member*/
+  ts only: Symbol (Variable)
+
 === definition /*call2*/ main.ttx:5:61 ===
   |     return <Show value={note("operand", input) |> double |> String |> .padStart(4, "*")} />;
   |                                                             ^ /*call2*/

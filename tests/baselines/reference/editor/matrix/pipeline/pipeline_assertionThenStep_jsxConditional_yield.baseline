@@ -11,3 +11,8 @@ differences from pipeline_assertionThenStep_jsxConditional_yield at the question
   |                                          ^ /*call*/
   ts only: <external>/lib.es5.d.ts 534:5-534:27
 
+=== completions /*member*/ main.ttx:4:63 ===
+  |   return <p>{flip() && ((yield input) |> String as string |> .length)}</p>;
+  |                                                               ^ /*member*/
+  ts only: Symbol (Variable)
+

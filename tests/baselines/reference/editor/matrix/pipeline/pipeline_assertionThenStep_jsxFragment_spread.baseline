@@ -11,3 +11,8 @@ differences from pipeline_assertionThenStep_jsxFragment_spread at the questions 
   |                                                       ^ /*call*/
   ts only: <external>/lib.es5.d.ts 534:5-534:27
 
+=== completions /*member*/ main.ttx:4:76 ===
+  |   return <>{note("before", "[")}{first(...[input]) |> String as string |> .length}{note("after", "]")}</>;
+  |                                                                            ^ /*member*/
+  ts only: Symbol (Variable)
+

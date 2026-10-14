@@ -11,3 +11,8 @@ differences from pipeline_assertionThenStep_jsxChild_await at the questions list
   |                                    ^ /*call*/
   ts only: <external>/lib.es5.d.ts 534:5-534:27
 
+=== completions /*member*/ main.ttx:4:57 ===
+  |   return <p>{await later(input) |> String as string |> .length}</p>;
+  |                                                         ^ /*member*/
+  ts only: Symbol (Variable)
+

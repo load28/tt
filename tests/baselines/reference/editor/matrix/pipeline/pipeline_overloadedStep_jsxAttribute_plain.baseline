@@ -5,3 +5,8 @@ differences from pipeline_overloadedStep_jsxAttribute_plain at the questions lis
   |                                                     ^ /*call*/
   tt only: (alias) function shape(s: string): number
 
+=== completions /*member*/ main.ttx:4:63 ===
+  |   return <div data-value={note("operand", input) |> shape |> .length} />;
+  |                                                               ^ /*member*/
+  ts only: Symbol (Variable)
+

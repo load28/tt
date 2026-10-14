@@ -5,3 +5,8 @@ differences from pipeline_overloadedStep_callArgument_optionalChain at the quest
   |                                                         ^ /*call*/
   tt only: (alias) function shape(s: string): number
 
+=== completions /*member*/ main.tt:4:67 ===
+  |   return pack(note("a", 1), box(input)?.inner.value! |> shape |> .length, note("c", 3));
+  |                                                                   ^ /*member*/
+  ts only: Symbol (Variable)
+

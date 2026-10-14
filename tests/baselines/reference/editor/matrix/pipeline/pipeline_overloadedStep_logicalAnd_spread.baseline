@@ -5,3 +5,8 @@ differences from pipeline_overloadedStep_logicalAnd_spread at the questions list
   |                                          ^ /*call*/
   tt only: (alias) function shape(s: string): number
 
+=== completions /*member*/ main.tt:4:52 ===
+  |   return flip() && (first(...[input]) |> shape |> .length);
+  |                                                    ^ /*member*/
+  ts only: Symbol (Variable)
+

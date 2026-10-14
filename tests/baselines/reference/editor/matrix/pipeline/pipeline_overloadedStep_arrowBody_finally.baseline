@@ -5,3 +5,8 @@ differences from pipeline_overloadedStep_arrowBody_finally at the questions list
   |                                                                ^ /*call*/
   tt only: (alias) function shape(s: string): number
 
+=== completions /*member*/ main.tt:5:74 ===
+  |     const inner = (input: number) => note("operand", input) |> shape |> .length;
+  |                                                                          ^ /*member*/
+  ts only: Symbol (Variable)
+

@@ -11,3 +11,8 @@ differences from pipeline_assertionThenStep_nullish_spread at the questions list
   |                                                                         ^ /*call*/
   ts only: <external>/lib.es5.d.ts 534:5-534:27
 
+=== completions /*member*/ main.tt:4:94 ===
+  |   return (flip() ? null : note("left", "set")) ?? (first(...[input]) |> String as string |> .length);
+  |                                                                                              ^ /*member*/
+  ts only: Symbol (Variable)
+

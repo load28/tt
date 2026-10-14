@@ -5,3 +5,8 @@ differences from pipeline_overloadedStep_topLevel_spread at the questions listed
   |                                   ^ /*call*/
   tt only: (alias) function shape(s: string): number
 
+=== completions /*member*/ main.tt:4:45 ===
+  | const top0 = first(...[input]) |> shape |> .length;
+  |                                             ^ /*member*/
+  ts only: Symbol (Variable)
+

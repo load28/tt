@@ -5,3 +5,8 @@ differences from pipeline_overloadedStep_matchArm_exception at the questions lis
   |                                                     ^ /*call*/
   tt only: (alias) function shape(s: string): number
 
+=== completions /*member*/ main.tt:5:63 ===
+  |     return match (flip()) { true => risky(input) |> shape |> .length, false => note("other arm", 0) };
+  |                                                               ^ /*member*/
+  ts only: Symbol (Variable)
+

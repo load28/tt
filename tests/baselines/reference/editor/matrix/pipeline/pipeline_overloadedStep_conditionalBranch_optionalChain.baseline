@@ -5,3 +5,8 @@ differences from pipeline_overloadedStep_conditionalBranch_optionalChain at the 
   |                                                ^ /*call*/
   tt only: (alias) function shape(s: string): number
 
+=== completions /*member*/ main.tt:4:58 ===
+  |   return flip() ? (box(input)?.inner.value! |> shape |> .length) : note("else", "skipped");
+  |                                                          ^ /*member*/
+  ts only: Symbol (Variable)
+

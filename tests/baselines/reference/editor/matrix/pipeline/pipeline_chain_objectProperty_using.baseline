@@ -11,3 +11,8 @@ differences from pipeline_chain_objectProperty_using at the questions listed in 
   |                                                                        ^ /*call2*/
   ts only: <external>/lib.es5.d.ts 534:5-534:27
 
+=== completions /*member*/ main.tt:5:83 ===
+  |   return { a: note("a", 1), value: note("operand", input) |> double |> String |> .padStart(4, "*"), c: note("c", 3) };
+  |                                                                                   ^ /*member*/
+  ts only: Symbol (Variable)
+

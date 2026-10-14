@@ -11,3 +11,8 @@ differences from pipeline_chain_templateLiteral_finally at the questions listed 
   |                                                                         ^ /*call2*/
   ts only: <external>/lib.es5.d.ts 534:5-534:27
 
+=== completions /*member*/ main.tt:5:84 ===
+  |     return `<${note("left", "L")}|${note("operand", input) |> double |> String |> .padStart(4, "*")}|${note("right", "R")}>`;
+  |                                                                                    ^ /*member*/
+  ts only: Symbol (Variable)
+

@@ -5,3 +5,8 @@ differences from pipeline_overloadedStep_jsxComponentProp_using at the questions
   |                                                 ^ /*call*/
   tt only: (alias) function shape(s: string): number
 
+=== completions /*member*/ main.ttx:5:59 ===
+  |   return <Show value={note("operand", input) |> shape |> .length} />;
+  |                                                           ^ /*member*/
+  ts only: Symbol (Variable)
+

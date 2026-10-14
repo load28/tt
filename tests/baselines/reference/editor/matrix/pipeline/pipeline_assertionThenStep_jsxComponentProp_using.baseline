@@ -6,6 +6,11 @@ differences from pipeline_assertionThenStep_jsxComponentProp_using at the questi
   tt only: var String: StringConstructor
   ts only: var String: (value?: any) => string
 
+=== completions /*member*/ main.ttx:5:70 ===
+  |   return <Show value={note("operand", input) |> String as string |> .length} />;
+  |                                                                      ^ /*member*/
+  ts only: Symbol (Variable)
+
 === definition /*call*/ main.ttx:5:49 ===
   |   return <Show value={note("operand", input) |> String as string |> .length} />;
   |                                                 ^ /*call*/

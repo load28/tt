@@ -5,3 +5,8 @@ differences from pipeline_overloadedStep_getter_using at the questions listed in
   |                                        ^ /*call*/
   tt only: (alias) function shape(s: string): number
 
+=== completions /*member*/ main.tt:7:50 ===
+  |       return note("operand", input) |> shape |> .length;
+  |                                                  ^ /*member*/
+  ts only: Symbol (Variable)
+

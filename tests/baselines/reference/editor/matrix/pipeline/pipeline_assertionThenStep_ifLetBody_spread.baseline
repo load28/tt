@@ -11,3 +11,8 @@ differences from pipeline_assertionThenStep_ifLetBody_spread at the questions li
   |                                     ^ /*call*/
   ts only: <external>/lib.es5.d.ts 534:5-534:27
 
+=== completions /*member*/ main.tt:5:58 ===
+  |     return [n, first(...[input]) |> String as string |> .length];
+  |                                                          ^ /*member*/
+  ts only: Symbol (Variable)
+
