@@ -839,9 +839,9 @@
 | TASK-796 | Carry out the round-nine design decisions | Complete | 2026-10-08 | 2026-10-08 | [TASK-796](./TASK-796-round-nine-decisions.md) |
 | TASK-797 | Bound the checker requests of contextual storage | Complete | 2026-10-08 | 2026-10-09 | [TASK-797](./TASK-797-contextual-checker-round-trips.md) |
 | TASK-798 | Project only the candidates the program contains | Complete | 2026-10-09 | 2026-10-09 | [TASK-798](./TASK-798-project-only-program-members.md) |
-| TASK-799 | Show typed-parity paths outside the case as the CLI does | In progress | 2026-10-13 | — | [TASK-799](./TASK-799-typed-parity-paths-outside-the-case.md) |
-| TASK-800 | Fix the crashes the scheduled mutation pass found | In progress | 2026-10-13 | — | [TASK-800](./TASK-800-scheduled-mutation-crashes.md) |
-| TASK-801 | Keep a snapshot's files in source path order | In progress | 2026-10-14 | — | [TASK-801](./TASK-801-snapshot-files-in-path-order.md) |
+| TASK-799 | Show typed-parity paths outside the case as the CLI does | Complete | 2026-10-13 | 2026-10-14 | [TASK-799](./TASK-799-typed-parity-paths-outside-the-case.md) |
+| TASK-800 | Fix the crashes the scheduled mutation pass found | Complete | 2026-10-13 | 2026-10-14 | [TASK-800](./TASK-800-scheduled-mutation-crashes.md) |
+| TASK-801 | Keep a snapshot's files in source path order | Complete | 2026-10-14 | 2026-10-14 | [TASK-801](./TASK-801-snapshot-files-in-path-order.md) |
 | TASK-802 | Regenerate the verify-failed matrix baseline TASK-764 left stale | Complete | 2026-10-14 | 2026-10-14 | [TASK-802](./TASK-802-stale-verify-failed-matrix-baseline.md) |
 | TASK-803 | Drop a suggestion that covers a construct's glue again | Complete | 2026-10-14 | 2026-10-14 | [TASK-803](./TASK-803-suggestion-over-construct-glue.md) |
 | TASK-804 | List the incremental differences the TypeScript service causes | Complete | 2026-10-14 | 2026-10-14 | [TASK-804](./TASK-804-incremental-differences-list.md) |

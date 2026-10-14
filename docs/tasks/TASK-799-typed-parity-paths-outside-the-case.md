@@ -1,9 +1,9 @@
 # TASK-799: Show typed-parity paths outside the case as the CLI does
 
-- **Status**: In progress
+- **Status**: Complete
 - **Started**: 2026-10-13
-- **Completed**: —
-- **Commit**: —
+- **Completed**: 2026-10-14
+- **Commit**: `TASK-799: Show typed-parity paths outside the case as the CLI does`
 
 ## Purpose
 
@@ -75,12 +75,14 @@ diagnostic in a TypeScript library file fails as `transport`.
 
 ## Verification
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] `TTC_TYPED_CASES=all cargo test --release --test corpus typescript_cases_type_check`
-- [ ] Baseline changes reviewed and committed with the change
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test`
+- [x] `TTC_TYPED_CASES=all cargo test --release --test corpus typescript_cases_type_check`:
+  all 12831 cases, 8721 compared, 8 differ (8 listed), passed. That run's
+  `ttc` was built before TASK-800's compiler changes.
+- [x] Baseline changes reviewed and committed with the change (none)
 
 ## Result
 
-Pending.
+`tests/corpus.rs` (`shown_from`); the typed-parity sweep passes.

@@ -1,9 +1,9 @@
 # TASK-801: Keep a snapshot's files in source path order
 
-- **Status**: In progress
+- **Status**: Complete
 - **Started**: 2026-10-14
-- **Completed**: —
-- **Commit**: —
+- **Completed**: 2026-10-14
+- **Commit**: `TASK-801: Keep a snapshot's files in source path order`
 
 ## Purpose
 
@@ -62,11 +62,12 @@ the order of the emitted files.
 
 ## Verification
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] Baseline changes reviewed and committed with the change
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test`
+- [x] `TT_INCREMENTAL=all`: no order-only difference remains
+- [x] Baseline changes reviewed and committed with the change (none)
 
 ## Result
 
-Pending.
+`src/engine/project.rs`, `src/engine/snapshot.rs`.

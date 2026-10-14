@@ -65,7 +65,7 @@ over `await (match ...)` that the twin comparison had not shown before.
 
 - [x] `TT_MATRIX_CASES=all TT_CASES=match_blockArm_awaitOperand_optionalChain cargo test --release --test editor_cases`
 - [x] `TT_CASES=aSuggestionOverAConstructsGlueIsNotShown cargo test --release --test editor_cases`
-- [ ] `cargo test` (run with the branch's other changes)
+- [x] `cargo test` (run with the branch's other changes)
 - [x] Baseline changes reviewed and committed with the change
 
 ## Result

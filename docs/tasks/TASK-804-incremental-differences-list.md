@@ -104,7 +104,9 @@ TypeScript service causes.
   `noSubstitution…#8186ecf6d407bc71` and `nestedNamespace…#68379a725fd9558`
   samples
 - [x] `cargo test --release --test incremental` (default sample)
-- [ ] `TT_INCREMENTAL=all cargo test --release --test incremental` (full run, with TASK-801)
+- [x] `TT_INCREMENTAL=all cargo test --release --test incremental` (with
+  TASK-801 and TASK-806): every listed unit accepted; two unlisted samples
+  failed on 8 s service timeouts and pass 4/4 alone (see Issue 3)
 
 ## Result
 

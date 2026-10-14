@@ -1,9 +1,9 @@
 # TASK-800: Fix the crashes the scheduled mutation pass found
 
-- **Status**: In progress
+- **Status**: Complete
 - **Started**: 2026-10-13
-- **Completed**: —
-- **Commit**: —
+- **Completed**: 2026-10-14
+- **Commit**: `TASK-800: Fix the crashes the scheduled mutation pass found`
 
 ## Purpose
 
@@ -210,12 +210,16 @@ found five crashes no list entry covers (run 38233947903, job
 
 ## Verification
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] `cargo test --release --test fuzz_regressions`
-- [ ] Baseline changes reviewed and committed with the change
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test`
+- [x] `TT_MUTATIONS=all cargo test --release --test fuzz_regressions`:
+  3194704 mutants, no unlisted crash
+- [x] Baseline changes reviewed and committed with the change
 
 ## Result
 
-Pending.
+`vendor/swc_ecma_parser/src/parser/expr.rs` and `TT-PATCH.md`,
+`src/codegen/core/emitter/{source,expression}.rs`,
+`src/evaluation_ir/evaluation.rs`, six crash inputs, four case files with
+their baselines, and `tests/swc_editor_recovery.rs`.

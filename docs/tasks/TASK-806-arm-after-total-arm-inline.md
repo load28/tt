@@ -66,7 +66,7 @@ raises: `v = match (a, b) { (Up, Down) => 0, (_, _) => 1, _ => 2 };`.
 
 - [x] The 17 incremental samples with `TT_INCREMENTAL_ONLY`
 - [x] `TT_CASES=runtimeAnArmAfterAnArm… cargo test --release --test case_baselines`
-- [ ] `cargo test` (run with the branch's other changes)
+- [x] `cargo test` (run with the branch's other changes)
 
 ## Result
 
