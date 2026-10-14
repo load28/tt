@@ -106,6 +106,9 @@ PR을 `main`에 squash merge합니다. `main`과 `release-X.Y`는 항상 빌드 
 CI는 `main`·`release-X.Y` push와 이들을 대상으로 하는 PR에서 자동 실행합니다.
 push CI는 정확한 커밋의 5개 플랫폼 바이너리, VSIX, 버전·SHA 메타데이터를 30일간
 보관합니다. 게시 액션은 다시 빌드하지 않고 성공한 CI run ID의 산출물만 사용합니다.
+The test gates run on pull requests; push, scheduled, and manual CI on
+`main`·`release-X.Y` only build those artifacts. The exhaustive sweeps run in
+`Soak` and do not gate a Nightly.
 Nightly는 예약 CI 성공 후 자동 게시합니다. 정식 릴리스는 성공한 `release-X.Y` CI가
 `production` Environment 승인을 만들며, 승인자가 `Approve and deploy`한 뒤 게시합니다.
 run ID와 npm tag는 CI 메타데이터에서 자동으로 선택하므로 직접 입력하지 않습니다.

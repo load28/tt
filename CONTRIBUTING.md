@@ -90,6 +90,12 @@ GitHub Actions의 [`CI`](./.github/workflows/ci.yml)는 `main`과 `release-X.Y`�
 push·PR에서 자동으로 돕니다. `scripts/ci`는 같은 핵심 게이트를 로컬에서 재현하며,
 PR을 열기 전에 먼저 실행해야 합니다.
 
+The gates run on pull requests, the merge queue, and a manual run on any
+branch other than `main` and `release-X.Y`. A push to `main` or
+`release-X.Y`, the schedule, and a manual run on those branches are the
+deploy path: they only build the release artifacts, because the change
+already passed the gates on its pull request (TASK-808).
+
 | 단계 | 내용 |
 | --- | --- |
 | `agents` | 에이전트 진입점 계약(`CLAUDE.md`, `scripts/doctor`) |
@@ -334,7 +340,7 @@ UPDATE_EXPECT=1 TT_MATRIX_CASES=all cargo test --test case_baselines
 `tests/case_baselines.rs` fails when the committed cases differ from what
 the spec generates. A pull request runs a fixed-seed sample of the matrix
 (`TT_MATRIX_CASES=<count>` and `TT_MATRIX_SEED=<number>` choose another);
-the nightly `exhaustive` job runs every case with `TT_MATRIX_CASES=all`, as
+the nightly `exhaustive` job of `Soak` runs every case with `TT_MATRIX_CASES=all`, as
 `TT_CASES=<fragment>` also runs every matching case. The baselines of the
 cases a run did not sample are recorded as not sampled, so
 `scripts/check-baselines` neither judges nor flags them. The fuzz
@@ -369,7 +375,7 @@ records it). A case name there may contain `*`. The suite fails on a
 difference the file does not list, on a listed question that agrees with
 its twin, and, unfiltered, on a line that names no question. A pull
 request runs a fixed-seed sample of the editor matrix too, and the nightly
-job runs all of it with `TT_MATRIX_CASES=all`.
+`Soak` job runs all of it with `TT_MATRIX_CASES=all`.
 
 ```sh
 node scripts/generate-cases                        # also rewrites tests/cases/editor/matrix
@@ -417,7 +423,7 @@ does a listed code that has one.
 
 A pull request runs every explanation case and one invalid and one fixed
 case of each code, chosen by a fixed seed (`TT_MATRIX_SEED` chooses
-another); the nightly `exhaustive` job runs all of them with
+another); the nightly `exhaustive` job of `Soak` runs all of them with
 `TT_MATRIX_CASES=all`. A disagreement is listed in
 `tests/oracle-failures.txt` like the case matrix's.
 
@@ -688,8 +694,8 @@ TT_MUTATIONS=5000 TT_MUTATION_SEED=7 cargo test --test fuzz_regressions  # anoth
 node scripts/fuzz-seed-corpus                                        # seed fuzz/corpus/compile_any_bytes
 ```
 
-CI runs the sample in `cargo test`, and every mutant in the scheduled run's
-`exhaustive` job. The `Soak` workflow fuzzes each target for two minutes a
+CI runs the sample in `cargo test`, and every mutant runs in the `Soak`
+workflow's nightly `exhaustive` job. `Soak` also fuzzes each target for two minutes a
 night from the seeded corpus and the committed crash inputs.
 
 ### The real-world diagnostic delta
@@ -760,12 +766,15 @@ rustdoc과 doctest도 갱신하세요. doctest는 `cargo test`에서 함께 실�
   `cargo bench`. 임계값의 근거는
   [`docs/tasks/TASK-225`](./docs/tasks/TASK-225-performance-benchmarks.md).
 
-`CI` 워크플로에도 같은 두 잡이 있고, 위의 트리거대로 자동으로 함께 돕니다.
+The `CI` workflow has the same two jobs and runs them on pull requests, as
+its other gates.
 
 ### 버그를 찾으러 가는 것 — `Soak`
 
 [`Soak`](./.github/workflows/soak.yml) 워크플로는 전체 코퍼스 차등 테스트와
-퍼저 두 개를 돌립니다. 알려진 답을 확인하는 게 아니라 **모르는 것을 찾는**
+퍼저 두 개를 돌립니다. Every night it also runs the `exhaustive` sweeps and
+the TypeScript parity suites over their whole sets; a failure there does not
+hold back the Nightly. 알려진 답을 확인하는 게 아니라 **모르는 것을 찾는**
 쪽이라 시간이 들고 수확은 예측할 수 없습니다 — 파서·스캐너·codegen처럼 tt가
 무엇을 주장하는지를 바꾼 변경에 dispatch하세요. 로컬 실행 명령은 그 파일의
 머리말에 있습니다. 무엇을 어떻게 찾는지는

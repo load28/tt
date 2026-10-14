@@ -17,6 +17,10 @@
 # the case corpus and the committed crash inputs (docs/tasks/TASK-637). It is
 # a workflow of its own so that a finding, which depends on luck, never
 # decides whether CI's scheduled run publishes a Nightly.
+#
+# The exhaustive sweeps and the TypeScript parity run every night here too.
+# Pull requests run fixed samples of the same suites; the whole sets are a
+# search for what the samples missed, not a gate on the Nightly (TASK-808).
 name: Soak
 
 on:
@@ -109,3 +113,101 @@ jobs:
           name: fuzz-artifacts-${{ matrix.target }}
           path: fuzz/artifacts
           if-no-files-found: ignore
+
+  exhaustive:
+    name: exhaustive regression sweeps (nightly)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the pinned Rust toolchain
+        run: rustup show active-toolchain
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install TypeScript
+        run: npm ci
+
+      - name: Every deletion and every prefix of the case corpus
+        env:
+          TT_MUTATIONS: all
+        run: cargo test --release --test fuzz_regressions -- --nocapture
+
+      - name: Every edit sequence answers as a fresh project
+        env:
+          TTC_REQUIRE_TSGO: "1"
+          TT_INCREMENTAL: all
+        run: cargo test --release --test incremental -- --nocapture
+
+      - name: Fetch TypeScript's test cases at the pinned commit
+        run: scripts/fetch-typescript-cases
+
+      - name: Every TypeScript test case comes back unchanged
+        env:
+          TTC_REQUIRE_TSGO: "1"
+          TTC_REQUIRE_TYPESCRIPT_CASES: "1"
+          TTC_TYPESCRIPT_CASES: all
+        run: cargo test --release --test corpus typescript_test_cases -- --nocapture
+
+      - name: Every generated matrix case runs against its twin, and every diagnostics case reports its code at its range
+        env:
+          TTC_REQUIRE_TSGO: "1"
+          TT_MATRIX_CASES: all
+        run: cargo test --release --test case_baselines -- --nocapture
+
+      - name: Build the extension's language server
+        run: |
+          npm ci --prefix editors/vscode
+          npm --prefix editors/vscode run compile
+
+      - name: Every generated editor matrix case answers as its twin
+        env:
+          TTC_REQUIRE_TSGO: "1"
+          TT_REQUIRE_EXTENSION: "1"
+          TT_MATRIX_CASES: all
+        run: cargo test --release --test editor_cases -- --nocapture
+
+  typescript-parity:
+    name: TypeScript's own tests through the typed check and the editor (nightly)
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the pinned Rust toolchain
+        run: rustup show active-toolchain
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install TypeScript
+        run: npm ci
+
+      - name: Fetch TypeScript's tests at the pinned commit
+        run: scripts/fetch-typescript-cases
+
+      - name: Every TypeScript test case type-checks as the pinned tsc does
+        env:
+          TTC_REQUIRE_TSGO: "1"
+          TTC_REQUIRE_TYPESCRIPT_CASES: "1"
+          TTC_TYPED_CASES: all
+        run: cargo test --release --test corpus typescript_cases_type_check -- --nocapture
+
+      - name: Every TypeScript fourslash test answers as tsgo --lsp does
+        env:
+          TTC_REQUIRE_TSGO: "1"
+          TTC_REQUIRE_TYPESCRIPT_CASES: "1"
+          TT_FOURSLASH: all
+        run: cargo test --release --test editor_cases typescript_fourslash -- --nocapture
