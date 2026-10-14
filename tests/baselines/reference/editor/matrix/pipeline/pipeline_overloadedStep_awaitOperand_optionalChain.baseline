@@ -5,6 +5,11 @@ differences from pipeline_overloadedStep_awaitOperand_optionalChain at the quest
   |                                             ^ /*call*/
   tt only: (alias) function shape(s: string): number
 
+=== completions /*member*/ main.tt:4:55 ===
+  |   return await (box(input)?.inner.value! |> shape |> .length);
+  |                                                       ^ /*member*/
+  ts only: Symbol (Variable)
+
 === diagnostics main.tt ===
   ts only: main "await (shape(box(input)?.inner.value!).length)" hint TS80007: 'await' has no effect on the type of this expression.
 

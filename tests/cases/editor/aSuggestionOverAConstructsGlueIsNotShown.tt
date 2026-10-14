@@ -1,0 +1,9 @@
+// @diagnostics: *
+variant S { A(n: number), B }
+declare const s: S;
+export async function covered() {
+  return await (match (s) { A(n) => { const unused = n; return n; }, B => 0 });
+}
+export async function written(n: number) {
+  return await n;
+}

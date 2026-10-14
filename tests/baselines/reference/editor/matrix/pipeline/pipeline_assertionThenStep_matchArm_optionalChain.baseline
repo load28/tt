@@ -11,3 +11,8 @@ differences from pipeline_assertionThenStep_matchArm_optionalChain at the questi
   |                                                               ^ /*call*/
   ts only: <external>/lib.es5.d.ts 534:5-534:27
 
+=== completions /*member*/ main.tt:4:84 ===
+  |   return match (flip()) { true => box(input)?.inner.value! |> String as string |> .length, false => note("other arm", 0) };
+  |                                                                                    ^ /*member*/
+  ts only: Symbol (Variable)
+

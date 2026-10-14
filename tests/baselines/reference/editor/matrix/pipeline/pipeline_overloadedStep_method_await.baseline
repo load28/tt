@@ -5,3 +5,8 @@ differences from pipeline_overloadedStep_method_await at the questions listed in
   |                                    ^ /*call*/
   tt only: (alias) function shape(s: string): number
 
+=== completions /*member*/ main.tt:8:46 ===
+  |       return await later(input) |> shape |> .length;
+  |                                              ^ /*member*/
+  ts only: Symbol (Variable)
+

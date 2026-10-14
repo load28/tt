@@ -5,3 +5,8 @@ differences from pipeline_overloadedStep_declarationInitializer_finally at the q
   |                                             ^ /*call*/
   tt only: (alias) function shape(s: string): number
 
+=== completions /*member*/ main.tt:5:55 ===
+  |     const value = note("operand", input) |> shape |> .length;
+  |                                                       ^ /*member*/
+  ts only: Symbol (Variable)
+

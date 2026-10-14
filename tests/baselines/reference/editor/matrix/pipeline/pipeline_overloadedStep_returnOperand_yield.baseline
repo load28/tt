@@ -5,3 +5,8 @@ differences from pipeline_overloadedStep_returnOperand_yield at the questions li
   |                           ^ /*call*/
   tt only: (alias) function shape(s: string): number
 
+=== completions /*member*/ main.tt:4:37 ===
+  |   return (yield input) |> shape |> .length;
+  |                                     ^ /*member*/
+  ts only: Symbol (Variable)
+

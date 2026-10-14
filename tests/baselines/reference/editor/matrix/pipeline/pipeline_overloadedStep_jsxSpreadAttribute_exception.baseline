@@ -5,3 +5,8 @@ differences from pipeline_overloadedStep_jsxSpreadAttribute_exception at the que
   |                                              ^ /*call*/
   tt only: (alias) function shape(s: string): number
 
+=== completions /*member*/ main.ttx:5:56 ===
+  |     return <div {...{ value: risky(input) |> shape |> .length }} />;
+  |                                                        ^ /*member*/
+  ts only: Symbol (Variable)
+

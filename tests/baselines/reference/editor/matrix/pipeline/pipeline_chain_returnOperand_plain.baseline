@@ -11,3 +11,8 @@ differences from pipeline_chain_returnOperand_plain at the questions listed in t
   |                                              ^ /*call2*/
   ts only: <external>/lib.es5.d.ts 534:5-534:27
 
+=== completions /*member*/ main.tt:4:57 ===
+  |   return note("operand", input) |> double |> String |> .padStart(4, "*");
+  |                                                         ^ /*member*/
+  ts only: Symbol (Variable)
+

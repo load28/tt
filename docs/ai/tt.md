@@ -207,6 +207,7 @@ const f = (val u: U) => u.name;     // arrows, methods, catch (val e), for (val 
 - Update: `npm i -D @openload28/tt-lang@next` (binary follows package version); verify `npx ttc -v`; then run the project's mapper-enabled type check and rebuild.
 - Editor: download the VSIX from the newest GitHub Releases pre-release. Everything TypeScript answers comes from the compiler's own language server (`tsgo --lsp`), driven by the project's installed TypeScript — the same package the build uses, with no environment variable or editor setting able to name another.
 - Editor suggestions: a TypeScript suggestion diagnostic (an unused name, an `await` that has no effect, a deprecated call) is shown only when its span maps exactly onto text you wrote; one whose span covers a tt construct's generated code (`await (match ...)`) is dropped, because only written text can be faded or struck through.
+- Editor completions: at the `.` that starts a pipeline step (`x |> .length`), an entry that would replace the `.` with anything but a member access is not offered — TypeScript's `Symbol` entry, which writes the bracket access `[Symbol]`, would leave a step that no longer starts with `.` or `?.`.
 
 ## Setup
 

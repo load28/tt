@@ -508,6 +508,16 @@ impl EvaluationFile {
                         &value.context,
                         &value.schedule,
                     );
+                    if value.capability == TargetCapability::StatementRegion
+                        && whole_operation_step(&value.schedule).is_some()
+                        && !operations
+                            .iter()
+                            .any(|operation| operation.values.contains(&value.expr))
+                    {
+                        value.capability = TargetCapability::ExpressionBoundary(
+                            ExpressionBoundaryReason::ConditionalOperationNotStructurable,
+                        );
+                    }
                 }
             }
             slot_anchors.resize(slot_names.len(), Some(owner.statement()));

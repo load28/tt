@@ -11,3 +11,8 @@ differences from pipeline_assertionThenStep_jsxNested_finally at the questions l
   |                                                                          ^ /*call*/
   ts only: <external>/lib.es5.d.ts 534:5-534:27
 
+=== completions /*member*/ main.ttx:5:95 ===
+  |     return <ul><li>{note("first", 1)}</li><li>{note("operand", input) |> String as string |> .length}</li></ul>;
+  |                                                                                               ^ /*member*/
+  ts only: Symbol (Variable)
+

@@ -11,3 +11,8 @@ differences from pipeline_chain_callArgument_await at the questions listed in te
   |                                                             ^ /*call2*/
   ts only: <external>/lib.es5.d.ts 534:5-534:27
 
+=== completions /*member*/ main.tt:4:72 ===
+  |   return pack(note("a", 1), await later(input) |> double |> String |> .padStart(4, "*"), note("c", 3));
+  |                                                                        ^ /*member*/
+  ts only: Symbol (Variable)
+

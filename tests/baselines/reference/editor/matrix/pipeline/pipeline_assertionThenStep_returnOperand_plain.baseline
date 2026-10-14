@@ -11,3 +11,8 @@ differences from pipeline_assertionThenStep_returnOperand_plain at the questions
   |                                    ^ /*call*/
   ts only: <external>/lib.es5.d.ts 534:5-534:27
 
+=== completions /*member*/ main.tt:4:57 ===
+  |   return note("operand", input) |> String as string |> .length;
+  |                                                         ^ /*member*/
+  ts only: Symbol (Variable)
+

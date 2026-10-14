@@ -11,3 +11,8 @@ differences from pipeline_chain_jsxTernary_yield at the questions listed in test
   |                                                   ^ /*call2*/
   ts only: <external>/lib.es5.d.ts 534:5-534:27
 
+=== completions /*member*/ main.ttx:4:62 ===
+  |   return <p>{flip() ? ((yield input) |> double |> String |> .padStart(4, "*")) : <i>none</i>}</p>;
+  |                                                              ^ /*member*/
+  ts only: Symbol (Variable)
+

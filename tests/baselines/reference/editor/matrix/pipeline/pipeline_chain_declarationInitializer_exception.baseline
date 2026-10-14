@@ -11,3 +11,8 @@ differences from pipeline_chain_declarationInitializer_exception at the question
   |                                             ^ /*call2*/
   ts only: <external>/lib.es5.d.ts 534:5-534:27
 
+=== completions /*member*/ main.tt:5:56 ===
+  |     const value = risky(input) |> double |> String |> .padStart(4, "*");
+  |                                                        ^ /*member*/
+  ts only: Symbol (Variable)
+

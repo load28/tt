@@ -11,3 +11,8 @@ differences from pipeline_assertionThenStep_templateLiteral_finally at the quest
   |                                                               ^ /*call*/
   ts only: <external>/lib.es5.d.ts 534:5-534:27
 
+=== completions /*member*/ main.tt:5:84 ===
+  |     return `<${note("left", "L")}|${note("operand", input) |> String as string |> .length}|${note("right", "R")}>`;
+  |                                                                                    ^ /*member*/
+  ts only: Symbol (Variable)
+

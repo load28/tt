@@ -742,8 +742,17 @@ fn can_defer_arm_values(
         DecisionKind::Match { .. } => true,
         _ => false,
     };
+    // A conditional expression ends at the first arm that always matches;
+    // an arm after it would have no place to write its value.
+    let total_only_last = decision
+        .arms
+        .iter()
+        .rev()
+        .skip(1)
+        .all(|arm| !arm.always_matches());
     supported_dispatch
         && !decision.arms.is_empty()
+        && total_only_last
         && decision
             .subjects
             .iter()

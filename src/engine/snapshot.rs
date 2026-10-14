@@ -85,7 +85,7 @@ impl Snapshot {
         self.id
     }
 
-    /// The project's `.tt` files, projected, in project order.
+    /// The project's `.tt` files, projected, in source path order.
     pub fn files(&self) -> &[Arc<ProjectedDocument>] {
         &self.files
     }

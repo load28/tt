@@ -5,3 +5,8 @@ differences from pipeline_overloadedStep_objectProperty_plain at the questions l
   |                                                              ^ /*call*/
   tt only: (alias) function shape(s: string): number
 
+=== completions /*member*/ main.tt:4:72 ===
+  |   return { a: note("a", 1), value: note("operand", input) |> shape |> .length, c: note("c", 3) };
+  |                                                                        ^ /*member*/
+  ts only: Symbol (Variable)
+

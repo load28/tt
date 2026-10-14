@@ -1,0 +1,44 @@
+=== aCommentInsideAPipelineOperandIsWrittenOnce.tt ===
+variant O { A }
+>O : type O = {
+>       kind: "A";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+declare const o: O;
+>o : const o: O
+>O : type O = {
+>       kind: "A";
+>   }
+declare const f: () => (x: number) => number;
+>f : const f: () => (x: number) => number
+>x : (parameter) x: number
+declare const g: (x: number) => number;
+>g : const g: (x: number) => number
+>x : (parameter) x: number
+declare const h: (x: number) => (y: number) => number;
+>h : const h: (x: number) => (y: number) => number
+>x : (parameter) x: number
+>y : (parameter) y: number
+declare const a: number;
+>a : const a: number
+export const head = match (o) { A => f }// after the head's value
+>head : const head: number
+>o : const o: O
+>f : const f: () => (x: number) => number
+() |> g;
+>g : const g: (x: number) => number
+export const step = a |> match (o) { A => f }/* inside the step */() |> g;
+>step : const step: number
+>a : const a: number
+>o : const o: O
+>f : const f: () => (x: number) => number
+>g : const g: (x: number) => number
+export const call = a |> h/* before the argument */(match (o) { A => 1 }) |> g;
+>call : const call: number
+>a : const a: number
+>h : const h: (x: number) => (y: number) => number
+>o : const o: O
+>g : const g: (x: number) => number
+

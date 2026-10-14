@@ -6,6 +6,11 @@ differences from pipeline_assertionThenStep_jsxAttribute_plain at the questions 
   tt only: var String: StringConstructor
   ts only: var String: (value?: any) => string
 
+=== completions /*member*/ main.ttx:4:74 ===
+  |   return <div data-value={note("operand", input) |> String as string |> .length} />;
+  |                                                                          ^ /*member*/
+  ts only: Symbol (Variable)
+
 === definition /*call*/ main.ttx:4:53 ===
   |   return <div data-value={note("operand", input) |> String as string |> .length} />;
   |                                                     ^ /*call*/

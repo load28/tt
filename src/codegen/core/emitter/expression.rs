@@ -25,11 +25,9 @@ impl<'a> Emitter<'a> {
                 // label on a rejected value points back at.
                 let mut produced = self.span(apply.node);
                 let mut shape: Option<String> = None;
-                let mut previous_end = super::structured_expr_span(self.semantic, self.core, head)
-                    .map(|span| span.end);
+                let mut previous_end = self.operand_extent(head).map(|span| span.end);
                 for step in &apply.steps {
-                    let value_span =
-                        super::structured_expr_span(self.semantic, self.core, step.value);
+                    let value_span = self.operand_extent(step.value);
                     let gap = previous_end
                         .zip(value_span)
                         .filter(|(end, value)| *end <= value.start)
@@ -210,6 +208,13 @@ impl<'a> Emitter<'a> {
         let mut out = Rope::new();
         out.anchored(AnchorKind::Pipe, start, end, end, inner);
         out
+    }
+
+    fn operand_extent(&self, expr: ExprId) -> Option<SourceSpan> {
+        match &self.core.exprs[expr.index()] {
+            Expr::Sequence(body) => Some(self.body_extent(*body)),
+            _ => super::structured_expr_span(self.semantic, self.core, expr),
+        }
     }
 
     fn source_group(&self, emitted: &Rope<'_>) -> bool {
@@ -1011,10 +1016,9 @@ impl<'a> Emitter<'a> {
             );
             inner.push_lit(";");
         }
-        let mut previous_end =
-            super::structured_expr_span(self.semantic, self.core, head).map(|span| span.end);
+        let mut previous_end = self.operand_extent(head).map(|span| span.end);
         for (index, step) in apply.steps.iter().enumerate() {
-            let value_span = super::structured_expr_span(self.semantic, self.core, step.value);
+            let value_span = self.operand_extent(step.value);
             let gap = previous_end
                 .zip(value_span)
                 .filter(|(end, value)| *end <= value.start)

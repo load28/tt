@@ -1,0 +1,117 @@
+=== runtimeATemplateSubstitutionBeforeAMatchInAPipelineStepRunsOnce.tt ===
+variant S { A, B }
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const log: string[] = [];
+>log : const log: string[]
+function head(): string {
+>head : function head(): string
+  log.push("head");
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+function wrap(text: string): (input: string) => string {
+>wrap : function wrap(text: string): (input: string) => string
+>text : (parameter) text: string
+>input : (parameter) input: string
+  log.push("wrap");
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  return (input) => `${input}:${text}`;
+>input : (parameter) input: string
+>input : (parameter) input: string
+>text : (parameter) text: string
+function run(s: S): string {
+>run : function run(s: S): string
+>s : (parameter) s: S
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+  return "in" |> wrap(`${head()}${match (s) { A => (log.push("A"), 1), B => 2 }}`);
+>wrap : function wrap(text: string): (input: string) => string
+>head : function head(): string
+>s : (parameter) s: S
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+function spaced(s: S): string {
+>spaced : function spaced(s: S): string
+>s : (parameter) s: S
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+  return "in" |> wrap(`${ head() /* first */ }${match (s) { A => (log.push("A"), 1), B => 2 }}`);
+>wrap : function wrap(text: string): (input: string) => string
+>head : function head(): string
+>s : (parameter) s: S
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+console.log(run(S.A), log.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>run : function run(s: S): string
+>S : const S: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+log.length = 0;
+>log : const log: string[]
+>length : (property) Array<string>.length: number
+console.log(run(S.B), log.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>run : function run(s: S): string
+>S : const S: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+log.length = 0;
+>log : const log: string[]
+>length : (property) Array<string>.length: number
+console.log(spaced(S.A), log.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>spaced : function spaced(s: S): string
+>S : const S: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

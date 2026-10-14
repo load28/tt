@@ -1,0 +1,139 @@
+=== runtimeAnArmAfterAnArmThatAlwaysMatchesKeepsItsValueInAnAssignment.tt ===
+variant Dir { Up, Down }
+>Dir : type Dir = {
+>       kind: "Up";
+>   } | {
+>       kind: "Down";
+>   }
+>Up : (property) Up: {
+>       readonly kind: "Up";
+>   }
+>Down : (property) Down: {
+>       readonly kind: "Down";
+>   }
+function pick(a: Dir, b: Dir): unknown {
+>pick : function pick(a: Dir, b: Dir): unknown
+>a : (parameter) a: Dir
+>Dir : type Dir = {
+>       kind: "Up";
+>   } | {
+>       kind: "Down";
+>   }
+>b : (parameter) b: Dir
+>Dir : type Dir = {
+>       kind: "Up";
+>   } | {
+>       kind: "Down";
+>   }
+  let v: unknown;
+>v : let v: unknown
+  v = match (a, b) { (Up, Down) => "up-down", (_, _) => "any", _ => "never" };
+>v : let v: unknown
+>a : (parameter) a: Dir
+>b : (parameter) b: Dir
+  return v;
+>v : let v: unknown
+const target = { value: 0 as unknown };
+>target : const target: {
+>       value: unknown;
+>   }
+>value : (property) value: unknown
+function assign(a: Dir, b: Dir): unknown {
+>assign : function assign(a: Dir, b: Dir): unknown
+>a : (parameter) a: Dir
+>Dir : type Dir = {
+>       kind: "Up";
+>   } | {
+>       kind: "Down";
+>   }
+>b : (parameter) b: Dir
+>Dir : type Dir = {
+>       kind: "Up";
+>   } | {
+>       kind: "Down";
+>   }
+  target.value = match (a, b) { (_, _) => 1, _ => 2 };
+>target : const target: {
+>       value: unknown;
+>   }
+>value : (property) value: unknown
+>a : (parameter) a: Dir
+>b : (parameter) b: Dir
+  return target.value;
+>target : const target: {
+>       value: unknown;
+>   }
+>value : (property) value: unknown
+console.log(pick(Dir.Up, Dir.Down), pick(Dir.Down, Dir.Up), assign(Dir.Up, Dir.Up));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>pick : function pick(a: Dir, b: Dir): unknown
+>Dir : const Dir: {
+>       Up: {
+>           readonly kind: "Up";
+>       };
+>       Down: {
+>           readonly kind: "Down";
+>       };
+>   }
+>Up : (property) Up: {
+>       readonly kind: "Up";
+>   }
+>Dir : const Dir: {
+>       Up: {
+>           readonly kind: "Up";
+>       };
+>       Down: {
+>           readonly kind: "Down";
+>       };
+>   }
+>Down : (property) Down: {
+>       readonly kind: "Down";
+>   }
+>pick : function pick(a: Dir, b: Dir): unknown
+>Dir : const Dir: {
+>       Up: {
+>           readonly kind: "Up";
+>       };
+>       Down: {
+>           readonly kind: "Down";
+>       };
+>   }
+>Down : (property) Down: {
+>       readonly kind: "Down";
+>   }
+>Dir : const Dir: {
+>       Up: {
+>           readonly kind: "Up";
+>       };
+>       Down: {
+>           readonly kind: "Down";
+>       };
+>   }
+>Up : (property) Up: {
+>       readonly kind: "Up";
+>   }
+>assign : function assign(a: Dir, b: Dir): unknown
+>Dir : const Dir: {
+>       Up: {
+>           readonly kind: "Up";
+>       };
+>       Down: {
+>           readonly kind: "Down";
+>       };
+>   }
+>Up : (property) Up: {
+>       readonly kind: "Up";
+>   }
+>Dir : const Dir: {
+>       Up: {
+>           readonly kind: "Up";
+>       };
+>       Down: {
+>           readonly kind: "Down";
+>       };
+>   }
+>Up : (property) Up: {
+>       readonly kind: "Up";
+>   }
+

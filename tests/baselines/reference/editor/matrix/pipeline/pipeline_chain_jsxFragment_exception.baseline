@@ -11,3 +11,8 @@ differences from pipeline_chain_jsxFragment_exception at the questions listed in
   |                                                              ^ /*call2*/
   ts only: <external>/lib.es5.d.ts 534:5-534:27
 
+=== completions /*member*/ main.ttx:5:73 ===
+  |     return <>{note("before", "[")}{risky(input) |> double |> String |> .padStart(4, "*")}{note("after", "]")}</>;
+  |                                                                         ^ /*member*/
+  ts only: Symbol (Variable)
+

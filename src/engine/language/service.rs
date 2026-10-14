@@ -1681,6 +1681,17 @@ pub(super) fn diagnostic_source_span(
     ))
 }
 
+/// Whether the emitted UTF-16 span `start..end` holds the whole glue of a
+/// tt construct: a span over generated code, though its ends map onto text
+/// the user wrote (`await (match ...)` reading the match's slot).
+pub(super) fn covers_construct_glue(doc: &ServiceDoc, start: usize, end: usize) -> bool {
+    let sb = doc.code_utf16().to_byte(start);
+    let eb = doc.code_utf16().to_byte(end);
+    doc.anchors
+        .iter()
+        .any(|anchor| sb <= anchor.out && anchor.end <= eb && anchor.out < anchor.end)
+}
+
 pub(super) fn recovery_intersects(doc: &ServiceDoc, start: usize, end: usize) -> bool {
     let end = end.max(start + 1);
     doc.recovered.iter().any(|&(recovery_start, recovery_end)| {

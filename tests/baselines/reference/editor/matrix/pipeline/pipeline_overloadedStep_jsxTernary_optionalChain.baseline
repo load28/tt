@@ -5,3 +5,8 @@ differences from pipeline_overloadedStep_jsxTernary_optionalChain at the questio
   |                                                    ^ /*call*/
   tt only: (alias) function shape(s: string): number
 
+=== completions /*member*/ main.ttx:4:62 ===
+  |   return <p>{flip() ? (box(input)?.inner.value! |> shape |> .length) : <i>none</i>}</p>;
+  |                                                              ^ /*member*/
+  ts only: Symbol (Variable)
+

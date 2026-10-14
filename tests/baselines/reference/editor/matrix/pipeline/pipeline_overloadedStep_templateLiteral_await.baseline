@@ -5,3 +5,8 @@ differences from pipeline_overloadedStep_templateLiteral_await at the questions 
   |                                                         ^ /*call*/
   tt only: (alias) function shape(s: string): number
 
+=== completions /*member*/ main.tt:4:67 ===
+  |   return `<${note("left", "L")}|${await later(input) |> shape |> .length}|${note("right", "R")}>`;
+  |                                                                   ^ /*member*/
+  ts only: Symbol (Variable)
+

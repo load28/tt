@@ -5,3 +5,8 @@ differences from pipeline_overloadedStep_nullish_using at the questions listed i
   |                                                                              ^ /*call*/
   tt only: (alias) function shape(s: string): number
 
+=== completions /*member*/ main.tt:5:88 ===
+  |   return (flip() ? null : note("left", "set")) ?? (note("operand", input) |> shape |> .length);
+  |                                                                                        ^ /*member*/
+  ts only: Symbol (Variable)
+

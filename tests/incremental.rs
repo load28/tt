@@ -22,9 +22,17 @@
 //! sample, `TT_INCREMENTAL=<count>` and `TT_INCREMENTAL_SEED=<number>`
 //! choose another sample, and `TT_INCREMENTAL_ONLY=<sample>` runs the one a
 //! failure names.
+//!
+//! `tests/incremental-differences.txt` lists the units whose edited project
+//! is known to answer differently, by case and unit name (`<case>#<unit>`),
+//! so a line survives cases added to the corpus. A `stable` line expects a
+//! difference, and a run of every sample fails when none of the unit's
+//! samples differs; an `unstable` line accepts either outcome, for an answer
+//! the TypeScript service does not give deterministically.
 
 mod common;
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -762,8 +770,10 @@ fn an_edited_project_answers_as_a_fresh_one() {
     let inputs = corpus();
     let (samples, description) = samples(&inputs);
     eprintln!("incremental equivalence: {description}");
+    let listed = listed_differences();
     let next = AtomicUsize::new(0);
     let failures: Mutex<Vec<String>> = Mutex::new(Vec::new());
+    let outcomes: Mutex<BTreeMap<String, (usize, usize)>> = Mutex::new(BTreeMap::new());
     let workers = std::thread::available_parallelism()
         .map_or(1, |n| n.get())
         .min(4);
@@ -779,6 +789,20 @@ fn an_edited_project_answers_as_a_fresh_one() {
                     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                         run(input, sample)
                     }));
+                    let unit = unit_key(&inputs, sample);
+                    let differed = !matches!(outcome, Ok(Ok(())));
+                    {
+                        let mut outcomes = outcomes.lock().unwrap();
+                        let entry = outcomes.entry(unit.clone()).or_default();
+                        if differed {
+                            entry.1 += 1;
+                        } else {
+                            entry.0 += 1;
+                        }
+                    }
+                    if listed.contains_key(&unit) {
+                        continue;
+                    }
                     let message = match outcome {
                         Ok(Ok(())) => continue,
                         Ok(Err(message)) => message,
@@ -797,11 +821,92 @@ fn an_edited_project_answers_as_a_fresh_one() {
             });
         }
     });
-    let failures = failures.into_inner().unwrap();
+    let mut failures = failures.into_inner().unwrap();
+    let outcomes = outcomes.into_inner().unwrap();
+    let full = std::env::var("TT_INCREMENTAL").is_ok_and(|value| value == "all")
+        && std::env::var("TT_INCREMENTAL_ONLY").is_err();
+    for (unit, entry) in &listed {
+        match outcomes.get(unit) {
+            Some(&(_, 0)) if entry.stable && full => failures.push(format!(
+                "{unit} now answers as a fresh project in every sample: remove it from \
+                 tests/{INCREMENTAL_DIFFERENCES} ({})",
+                entry.reason
+            )),
+            Some(_) => {}
+            None if full => failures.push(format!(
+                "tests/{INCREMENTAL_DIFFERENCES} lists {unit}, which no sample of the corpus edits"
+            )),
+            None => {}
+        }
+    }
     assert!(
         failures.is_empty(),
         "{} sample(s) answered differently after edits than when opened fresh:\n\n{}",
         failures.len(),
         failures.join("\n\n")
     );
+}
+
+const INCREMENTAL_DIFFERENCES: &str = "incremental-differences.txt";
+
+struct Listed {
+    stable: bool,
+    reason: String,
+}
+
+fn unit_key(inputs: &[Input], sample: &Sample) -> String {
+    let input = &inputs[sample.input];
+    format!("{}#{}", input.name, input.units[sample.unit].name)
+}
+
+fn listed_differences() -> BTreeMap<String, Listed> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join(INCREMENTAL_DIFFERENCES);
+    let text = fs::read_to_string(&path).unwrap_or_default();
+    let mut out = BTreeMap::new();
+    for line in text.lines() {
+        if line.trim().is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let fields: Vec<&str> = line.splitn(4, '\t').collect();
+        let [unit, stability, class, reason] = fields[..] else {
+            panic!(
+                "tests/{INCREMENTAL_DIFFERENCES}: `{line}` is not \
+                 `<case>#<unit>\\t<stable|unstable>\\t<by-design|defect>\\t<reason>`"
+            );
+        };
+        let stable = match stability {
+            "stable" => true,
+            "unstable" => false,
+            other => panic!(
+                "tests/{INCREMENTAL_DIFFERENCES}: `{unit}` is `{other}`, neither stable nor unstable"
+            ),
+        };
+        match class {
+            "by-design" => assert!(
+                reason.contains("docs/"),
+                "tests/{INCREMENTAL_DIFFERENCES}: `{unit}` is by design but cites no document under docs/"
+            ),
+            "defect" => assert!(
+                reason.starts_with("TASK-"),
+                "tests/{INCREMENTAL_DIFFERENCES}: `{unit}` is a defect but names no TASK-NNN"
+            ),
+            other => panic!(
+                "tests/{INCREMENTAL_DIFFERENCES}: `{unit}` is `{other}`, neither by-design nor defect"
+            ),
+        }
+        let previous = out.insert(
+            unit.to_string(),
+            Listed {
+                stable,
+                reason: reason.to_string(),
+            },
+        );
+        assert!(
+            previous.is_none(),
+            "tests/{INCREMENTAL_DIFFERENCES}: `{unit}` is listed twice"
+        );
+    }
+    out
 }

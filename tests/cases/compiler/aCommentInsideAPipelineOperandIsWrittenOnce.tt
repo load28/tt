@@ -1,0 +1,11 @@
+variant O { A }
+declare const o: O;
+declare const f: () => (x: number) => number;
+declare const g: (x: number) => number;
+declare const h: (x: number) => (y: number) => number;
+declare const a: number;
+
+export const head = match (o) { A => f }// after the head's value
+() |> g;
+export const step = a |> match (o) { A => f }/* inside the step */() |> g;
+export const call = a |> h/* before the argument */(match (o) { A => 1 }) |> g;

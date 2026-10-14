@@ -11,3 +11,8 @@ differences from pipeline_chain_logicalAnd_yield at the questions listed in test
   |                                                ^ /*call2*/
   ts only: <external>/lib.es5.d.ts 534:5-534:27
 
+=== completions /*member*/ main.tt:4:59 ===
+  |   return flip() && ((yield input) |> double |> String |> .padStart(4, "*"));
+  |                                                           ^ /*member*/
+  ts only: Symbol (Variable)
+

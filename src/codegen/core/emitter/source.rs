@@ -559,6 +559,7 @@ impl<'a> Emitter<'a> {
             }
             push_source_edit(&mut out, edit);
             cursor = edit.span.end;
+            self.close_owner_blocks_at(cursor, &mut out);
         }
         if cursor < span.end {
             out.append(self.source_range_rope(hir::Span::new(cursor, span.end)));
@@ -665,8 +666,9 @@ impl<'a> Emitter<'a> {
                         },
                         text: if starts_own_line {
                             format!(
-                                "{close}{};\n{line_indent}{generated_indent}{leave}",
+                                "{close}{};\n{line_indent}{generated_indent}{leave}{}",
                                 continuation.assignment_suffix(self.source, grouped),
+                                if exit.requires_block { " }" } else { "" }
                             )
                         } else {
                             format!(
@@ -682,9 +684,11 @@ impl<'a> Emitter<'a> {
                     span: exit.statement,
                     text: if starts_own_line {
                         format!(
-                            "{generated_indent}{}undefined{};\n{line_indent}{generated_indent}{leave}",
+                            "{generated_indent}{}{}undefined{};\n{line_indent}{generated_indent}{leave}{}",
+                            if exit.requires_block { "{ " } else { "" },
                             continuation.assignment_prefix(self.source, false),
-                            continuation.assignment_suffix(self.source, false)
+                            continuation.assignment_suffix(self.source, false),
+                            if exit.requires_block { " }" } else { "" }
                         )
                     } else {
                         format!(
@@ -1262,7 +1266,30 @@ impl<'a> Emitter<'a> {
         let mut captured = CapturedSlots::default();
         let mut scheduled = Vec::new();
         let mut operations: Vec<&PlannedConditionalOperation> = Vec::new();
-        let substitutions = self.template_substitution_captures(span, templates);
+        let planned: Vec<SourceSpan> = nested
+            .iter()
+            .flat_map(|(inner, _)| self.scheduled_steps_within(*inner, span))
+            .flat_map(|step| step.inputs.iter())
+            .filter_map(|input| match input {
+                PlannedEvaluationInput::Source { source, .. } => Some(*source),
+                PlannedEvaluationInput::Slot { .. } | PlannedEvaluationInput::Stable { .. } => None,
+            })
+            .collect();
+        let substitutions: Vec<_> = self
+            .template_substitution_captures(span, templates)
+            .into_iter()
+            .filter(|(source, ..)| {
+                let bytes = self.source.as_bytes();
+                !planned.iter().any(|captured| {
+                    source.start <= captured.start
+                        && captured.end <= source.end
+                        && crate::scanner::skip_ws_comments(bytes, source.start, captured.start)
+                            == captured.start
+                        && crate::scanner::skip_ws_comments(bytes, captured.end, source.end)
+                            == source.end
+                })
+            })
+            .collect();
         let mut pending = substitutions.iter().peekable();
         for (inner, slot) in nested {
             if self.emitted_owner_rewrites.contains(*inner) {
@@ -1336,7 +1363,7 @@ impl<'a> Emitter<'a> {
         ))
     }
 
-    fn body_extent(&self, body: hir::BodyId) -> SourceSpan {
+    pub(super) fn body_extent(&self, body: hir::BodyId) -> SourceSpan {
         if let Some(node) = self.core.sequence_node(body) {
             return SourceSpan::from(self.span(node));
         }

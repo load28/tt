@@ -5,3 +5,8 @@ differences from pipeline_overloadedStep_jsxChild_await at the questions listed 
   |                                    ^ /*call*/
   tt only: (alias) function shape(s: string): number
 
+=== completions /*member*/ main.ttx:4:46 ===
+  |   return <p>{await later(input) |> shape |> .length}</p>;
+  |                                              ^ /*member*/
+  ts only: Symbol (Variable)
+

@@ -11,3 +11,8 @@ differences from pipeline_assertionThenStep_arrowBody_exception at the questions
   |                                                      ^ /*call*/
   ts only: <external>/lib.es5.d.ts 534:5-534:27
 
+=== completions /*member*/ main.tt:5:75 ===
+  |     const inner = (input: number) => risky(input) |> String as string |> .length;
+  |                                                                           ^ /*member*/
+  ts only: Symbol (Variable)
+
