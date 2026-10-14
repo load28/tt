@@ -844,7 +844,9 @@
 | TASK-801 | Keep a snapshot's files in source path order | In progress | 2026-10-14 | — | [TASK-801](./TASK-801-snapshot-files-in-path-order.md) |
 | TASK-802 | Regenerate the verify-failed matrix baseline TASK-764 left stale | Complete | 2026-10-14 | 2026-10-14 | [TASK-802](./TASK-802-stale-verify-failed-matrix-baseline.md) |
 | TASK-803 | Drop a suggestion that covers a construct's glue again | Complete | 2026-10-14 | 2026-10-14 | [TASK-803](./TASK-803-suggestion-over-construct-glue.md) |
+| TASK-804 | List the incremental differences the TypeScript service causes | Complete | 2026-10-14 | 2026-10-14 | [TASK-804](./TASK-804-incremental-differences-list.md) |
+| TASK-805 | Record the pipeline step completion TypeScript's `Symbol` entry differs in | Complete | 2026-10-14 | 2026-10-14 | [TASK-805](./TASK-805-pipeline-step-symbol-completion.md) |
 
 ## Next task number
 
-**TASK-804**
+**TASK-806**
