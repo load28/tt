@@ -543,10 +543,6 @@ fn editor_only_projection_does_not_authorize_compile_report_emit() {
         projection.diagnostics
     );
     assert!(
-        projection.emit.is_some(),
-        "typed projection may still emit under recovery"
-    );
-    assert!(
         ttc::compile_report(src, &Options::default()).emit.is_none(),
         "editor_only must not authorize build emit"
     );

@@ -218,10 +218,26 @@ fn leaves_tt_text_is_every_projection_blocker_but_typescripts_own_verdict() {
     // emission as the tt text the user wrote, which no TypeScript reader
     // reads as written: every projection blocker but TypeScript's own
     // syntax verdict."
+    //
+    // Membership is the blocks_projection set minus the restates_typescript_syntax
+    // pair (VerifyFailed, SourceNotTypeScript), listed explicitly so a joint
+    // drift in those two helpers cannot keep this test green.
+    let leaves = [
+        DiagnosticCode::StrayPipe,
+        DiagnosticCode::MalformedPipelinePostfix,
+        DiagnosticCode::InvalidOptionalReceiver,
+        DiagnosticCode::StrayIfLet,
+        DiagnosticCode::IfLetPlacement,
+        DiagnosticCode::MalformedVariant,
+        DiagnosticCode::VariantDefaultExport,
+        DiagnosticCode::MalformedMatch,
+        DiagnosticCode::MatchControlCrossing,
+        DiagnosticCode::VariantInvalidFieldType,
+    ];
     for code in DiagnosticCode::ALL {
         assert_eq!(
             code.leaves_tt_text(),
-            code.blocks_projection() && !code.restates_typescript_syntax(),
+            leaves.contains(code),
             "{}: leaves_tt_text={}",
             code.as_str(),
             code.leaves_tt_text(),
