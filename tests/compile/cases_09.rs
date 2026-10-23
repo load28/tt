@@ -509,3 +509,41 @@ fn a_destructuring_default_value_stays_inside_the_default() {
     );
     assert_eq!(diagnostics[0].code, ttc::DiagnosticCode::MatchPlacement);
 }
+
+#[test]
+fn clean_projection_is_not_editor_only() {
+    // ProjectionReport::editor_only:
+    // "This projection retains malformed host syntax for the editor only.
+    // It must never authorize build or declaration output."
+    // A file that `compile_report` already emits is ordinary compilation
+    // output, so the projection must not be marked editor_only.
+    let src = "const n = 1;\n";
+    let projection = ttc::compile_projection_report(src, &Options::default());
+    let report = ttc::compile_report(src, &Options::default());
+    assert!(report.emit.is_some());
+    assert!(projection.emit.is_some());
+    assert!(!projection.editor_only);
+}
+
+#[test]
+fn editor_only_projection_does_not_authorize_compile_report_emit() {
+    // ProjectionReport::editor_only:
+    // "This projection retains malformed host syntax for the editor only.
+    // It must never authorize build or declaration output."
+    // `compile_report` is the build/check emission (`CompileReport`); when
+    // the projection is editor_only, that path must withhold emit.
+    // ProjectionReport itself: "Recovery is intentionally not part of
+    // normal compilation: only the typed projection may substitute
+    // parser-owned error nodes so later independent code remains checkable."
+    let src = "const v = 1 |> add(2, \nconst w = 1;\n";
+    let projection = ttc::compile_projection_report(src, &Options::default());
+    assert!(
+        projection.editor_only,
+        "structural host recovery is editor_only: {:?}",
+        projection.diagnostics
+    );
+    assert!(
+        ttc::compile_report(src, &Options::default()).emit.is_none(),
+        "editor_only must not authorize build emit"
+    );
+}
