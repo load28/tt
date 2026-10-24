@@ -308,6 +308,61 @@ mod editor_only_declarations {
         assert!(declarations.modules.is_empty());
     }
 
+    /// `b.tt` importing `a.tt`, written to disk: `reaches_placeholders`
+    /// resolves imports with `canonicalize()`. Returns the workspace and the
+    /// two canonical paths.
+    fn importer_of(a_source: &str) -> (crate::test_workspace::Workspace, PathBuf, PathBuf) {
+        let dir = crate::test_workspace::Workspace::new("editor-only-importer");
+        std::fs::write(dir.join("a.tt"), a_source).expect("writes a.tt");
+        std::fs::write(dir.join("b.tt"), IMPORTER).expect("writes b.tt");
+        let a = dir.join("a.tt").canonicalize().expect("a.tt exists");
+        let b = dir.join("b.tt").canonicalize().expect("b.tt exists");
+        (dir, a, b)
+    }
+
+    const IMPORTER: &str = "import { w } from \"./a.tt\";\nexport const x = w;\n";
+
+    #[test]
+    fn an_importer_of_a_closed_editor_only_file_writes_no_declaration() {
+        // reaches_placeholders (semantics/declarations.rs): "a blocked file
+        // served as an empty module), and every file whose `.tt` imports
+        // reach one. Their declarations are not written". b.tt is clean and
+        // requested; only its import of the blocked a.tt can drop it.
+        let (_dir, a, b) = importer_of(EDITOR_ONLY);
+        let blocked =
+            match ProjectedDocument::project_for_snapshot(&a, EDITOR_ONLY.to_string(), false) {
+                Err(blocked) => blocked,
+                Ok(_) => panic!("a closed editor_only projection must not join the program"),
+            };
+        let importer = ProjectedDocument::project_for_snapshot(&b, IMPORTER.to_string(), false)
+            .expect("the importer projects");
+        assert!(!importer.unparsed && !importer.recovered_declaration);
+        assert!(!importer.tt_imports().is_empty(), "b.tt imports a.tt");
+        let module = importer.module_path.clone();
+        let snapshot = snapshot(vec![Arc::new(importer)], vec![Arc::new(blocked)]);
+        let requested: HashSet<PathBuf> = [a, b].into_iter().collect();
+        let declarations = match_declarations(&snapshot, &emitted_for(module), &requested);
+        assert!(declarations.modules.is_empty());
+    }
+
+    #[test]
+    fn an_importer_of_a_clean_file_writes_its_declaration() {
+        // Control for the test above: the same b.tt, with a.tt clean, keeps
+        // the declaration emitted for it, so the blocked a.tt is what drops b.
+        const CLEAN: &str = "export const w = 1;\n";
+        let (_dir, a, b) = importer_of(CLEAN);
+        let clean = ProjectedDocument::project_for_snapshot(&a, CLEAN.to_string(), false)
+            .expect("a clean file projects");
+        let importer = ProjectedDocument::project_for_snapshot(&b, IMPORTER.to_string(), false)
+            .expect("the importer projects");
+        let module = importer.module_path.clone();
+        let snapshot = snapshot(vec![Arc::new(clean), Arc::new(importer)], Vec::new());
+        let requested: HashSet<PathBuf> = [a, b.clone()].into_iter().collect();
+        let declarations = match_declarations(&snapshot, &emitted_for(module), &requested);
+        assert_eq!(declarations.modules.len(), 1);
+        assert_eq!(declarations.modules[0].file.source_path, b);
+    }
+
     #[test]
     fn a_clean_file_still_writes_its_declaration() {
         // Control: match_declarations keeps a requested file's emitted
