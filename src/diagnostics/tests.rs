@@ -147,3 +147,100 @@ fn the_let_else_placement_explanation_allows_the_result_block_it_is_allowed_in()
         "{explanation}"
     );
 }
+
+#[test]
+fn blocks_projection_matches_the_documented_exception_set() {
+    // DiagnosticCode::blocks_projection:
+    // "Most tt errors are *recoverable*: the emitter still produces plain
+    // TypeScript for the file (codegen is infallible), so the typed pass
+    // can run and its diagnostics are reported **alongside** the tt ones —
+    // a duplicate arm no longer hides the file's other exhaustiveness
+    // holes, type errors and `val` violations (TASK-117 symptom 3).
+    //
+    // The exceptions are the diagnostics whose presence means the output
+    // cannot be valid TypeScript at all: text the parser could not claim
+    // (a stray `|>`, or a pipeline whose optional postfix tail is
+    // malformed, passes through verbatim and is not TS), a field type
+    // that would be emitted verbatim into a type position, and the output
+    // self-check itself."
+    //
+    // Membership is exactly the `matches!` arm of `blocks_projection`.
+    let blockers = [
+        DiagnosticCode::StrayPipe,
+        DiagnosticCode::MalformedPipelinePostfix,
+        DiagnosticCode::InvalidOptionalReceiver,
+        DiagnosticCode::StrayIfLet,
+        DiagnosticCode::IfLetPlacement,
+        DiagnosticCode::MalformedVariant,
+        DiagnosticCode::VariantDefaultExport,
+        DiagnosticCode::MalformedMatch,
+        DiagnosticCode::MatchControlCrossing,
+        DiagnosticCode::VariantInvalidFieldType,
+        DiagnosticCode::VerifyFailed,
+        DiagnosticCode::SourceNotTypeScript,
+    ];
+    for code in DiagnosticCode::ALL {
+        assert_eq!(
+            code.blocks_projection(),
+            blockers.contains(code),
+            "{}: blocks_projection={}",
+            code.as_str(),
+            code.blocks_projection(),
+        );
+    }
+}
+
+#[test]
+fn restates_typescript_syntax_is_only_verify_and_source_not_typescript() {
+    // DiagnosticCode::restates_typescript_syntax:
+    // "Whether the diagnostic restates TypeScript's own verdict on the
+    // file's syntax: the file's TypeScript (`source-not-typescript`) or the
+    // module lowered from it (`verify-failed`) does not parse."
+    let restaters = [
+        DiagnosticCode::VerifyFailed,
+        DiagnosticCode::SourceNotTypeScript,
+    ];
+    for code in DiagnosticCode::ALL {
+        assert_eq!(
+            code.restates_typescript_syntax(),
+            restaters.contains(code),
+            "{}: restates_typescript_syntax={}",
+            code.as_str(),
+            code.restates_typescript_syntax(),
+        );
+    }
+}
+
+#[test]
+fn leaves_tt_text_is_every_projection_blocker_but_typescripts_own_verdict() {
+    // DiagnosticCode::leaves_tt_text:
+    // "Whether a diagnostic with this code leaves its construct in the
+    // emission as the tt text the user wrote, which no TypeScript reader
+    // reads as written: every projection blocker but TypeScript's own
+    // syntax verdict."
+    //
+    // Membership is the blocks_projection set minus the restates_typescript_syntax
+    // pair (VerifyFailed, SourceNotTypeScript), listed explicitly so a joint
+    // drift in those two helpers cannot keep this test green.
+    let leaves = [
+        DiagnosticCode::StrayPipe,
+        DiagnosticCode::MalformedPipelinePostfix,
+        DiagnosticCode::InvalidOptionalReceiver,
+        DiagnosticCode::StrayIfLet,
+        DiagnosticCode::IfLetPlacement,
+        DiagnosticCode::MalformedVariant,
+        DiagnosticCode::VariantDefaultExport,
+        DiagnosticCode::MalformedMatch,
+        DiagnosticCode::MatchControlCrossing,
+        DiagnosticCode::VariantInvalidFieldType,
+    ];
+    for code in DiagnosticCode::ALL {
+        assert_eq!(
+            code.leaves_tt_text(),
+            leaves.contains(code),
+            "{}: leaves_tt_text={}",
+            code.as_str(),
+            code.leaves_tt_text(),
+        );
+    }
+}
